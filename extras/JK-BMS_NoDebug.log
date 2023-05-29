@@ -1,0 +1,96 @@
+START ../src/JK-BMSToPylontechCAN.cpp
+Version 1.0 from May 29 2023
+Serial to JK-BMS started with 115200 bit/s!
+CAN started with 500 kbit/s!
+If you connect debug pin DEBUG_BUTTON_PIN to ground, additional debug data is printed
+
+*** BMS INFO ***
+Protocol Version Number=1
+Software Version Number=11.XW_S11.26___
+Modify Parameter Password=123456
+# External Temperature Sensors=2
+
+*** BATTERY INFO ***
+Manufacturer Id=123456789012JK_B2A20S20P
+Manufacturer Date=2305
+Device ID String=12345678
+Device Address=1
+Total Battery Capacity[Ah]=30, Low Capacity Alarm Percent=20
+Charging Cycles=0
+Total Charging Cycle Capacity=0
+# Battery Cells=10, Cell Count=10
+
+*** VOLTAGE PROTECTION INFO ***
+Battery Overvoltage Protection[mV]=42000, Undervoltage=28200
+Cell Overvoltage Protection[mV]=4200, Recovery=4180, Delay[s]=5
+Cell Undervoltage Protection[mV]=2820, Recovery=2850, Delay[s]=5
+Cell Voltage Difference Protection[mV]=300
+Discharging Overcurrent Protection[A]=1, Delay[s]=20
+Charging Overcurrent Protection[A]=1, Delay[s]=30
+
+*** TEMPERATURE PROTECTION INFO ***
+Power MosFet Temperature Protection=55, Recovery=50
+Sensor1 Temperature Protection=100, Recovery=100
+Sensor1 to Sensor2 Temperature Difference Protection=20
+Charge Overtemperature Protection=80, Discharge=70
+Charge Undertemperature Protection=-5, Recovery=0
+Discharge Undertemperature Protection=-20, Recovery=-10
+
+*** MISC INFO ***
+Balance Starting Cell Voltage=[mV]3000
+Balance Opening Voltage Difference[mV]=10
+
+Current Calibration[mA]=1039
+Sleep Wait Time[s]=10
+
+Dedicated Charge Switch Active=0
+Start Current Calibration State=0
+Battery Actual Capacity[Ah]=30
+
+*** CELL INFO ***
+ 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3968 mV, 
+ 9=3969 mV, 10=3969 mV, 
+Minimum=3965 mV at cell #2, Maximum=3969 mV at cell #9
+Delta=4 mV, Average=3966 mV
+
+*** DYNAMIC INFO ***
+Total Runtime Minutes=1640 ->    1D 3H20M
+Temperature: Power MosFet=26, Sensor 1=44, Sensor 2=57
+
+SOC[%]=83 -> Remaining Capacity[Ah]=24
+Battery Voltage[V]=39.66, Current[A]=0.00, Power[W]=0
+
+Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, not active
+
+
+*** CELL INFO ***
+ 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3967 mV, 
+ 9=3969 mV, 10=3968 mV, 
+Minimum=3965 mV at cell #2, Maximum=3969 mV at cell #9
+Delta=4 mV, Average=3966 mV
+
+*** DYNAMIC INFO ***
+Total Runtime Minutes=1641 ->    1D 3H21M
+Temperature: Power MosFet=26, Sensor 1=44, Sensor 2=57
+
+SOC[%]=83 -> Remaining Capacity[Ah]=24
+Battery Voltage[V]=39.66, Current[A]=0.00, Power[W]=0
+
+Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, not active
+
+
+*** CELL INFO ***
+ 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3967 mV, 
+ 9=3969 mV, 10=3968 mV, 
+Minimum=3965 mV at cell #2, Maximum=3969 mV at cell #9
+Delta=4 mV, Average=3966 mV
+
+*** DYNAMIC INFO ***
+Temperature: Power MosFet=26, Sensor 1=44, Sensor 2=57
+
+SOC[%]=83 -> Remaining Capacity[Ah]=24
+Battery Voltage[V]=39.66, Current[A]=0.00, Power[W]=0
+
+Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, not active
+
+
