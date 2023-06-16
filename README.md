@@ -44,15 +44,16 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
  <br/>
 
 # Principle of operation
-1. A request is sent to the BMS.
+1. A request to deliver all informations is sent to the BMS.
 2. The BMS reply frame is stored in a buffer and parity and other plausi checks are made.
 3. The cell data are converted and enhanced to fill the JKConvertedCellInfoStruct.
+   Other frame data are mapped to a C structure.
+   But all words and longs in this structure are filled with big endian and thus cannot be read directly but must be swapped on reading.
 4. Other frame data are converted and enhanced to fill the JKComputedDataStruct.
 5. The content of the result frame is printed. After reset, all info is printed once, then only dynamic info is printed.
 6. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
 7. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
 8. CAN data is sent.
-
 <br/>
 
 # Compile with the Arduino IDE
@@ -63,17 +64,17 @@ All libraries, especially the modified ones, are included in this project.
 This program uses the following libraries, which are included in this repository:
 
 - [SoftwareSerialTX](https://reference.arduino.cc/reference/en/libraries/liquidcrystal-i2c/) for sending Serial to JK-BMS.
-- Modified [LiquidCrystal_I2C]() for I2C connected LCD.
+- Modified [LiquidCrystal_I2C](https://reference.arduino.cc/reference/en/libraries/liquidcrystal-i2c/) for LCD connected by I2C.
+- [SoftI2CMaster](https://github.com/felias-fogg/SoftI2CMaster) for LCD minimal I2C functions.
 - [LCDBigNumbers](https://github.com/ArminJo/LCDBigNumbers) for LCD big number generation.
 - [EasyButtonAtInt01](https://github.com/ArminJo/EasyButtonAtInt01) for LCD page switching button.
-- [SoftI2CMaster](https://github.com/felias-fogg/SoftI2CMaster) for minimal I2C functions.
 - Modified mcp_can_dfs.h file from Seed-Studio [Seeed_Arduino_CAN](https://github.com/Seeed-Studio/Seeed_Arduino_CAN).
 
  <br/>
  
 # Disclaimer
-Currently (1.6.2023) the program is tested only with a JK-BMS JK-B2A20S20P and a 10 cell LiIon battery.<br/>
-It was not connected to a Deye inverter so far, since the target 16 cell LiFePo battery is stil on its way.
+Currently (16.6.2023) the program is tested only with a JK-BMS JK-B2A20S20P and a 10 cell LiIon battery.<br/>
+It was not connected to a Deye inverter so far, since the target 16 cell LiFePo battery is under contruction.
 
  <br/>
 
@@ -85,12 +86,13 @@ It was not connected to a Deye inverter so far, since the target 16 cell LiFePo 
 - Shottky diode e.g. BAT 43.
 - Arduino Nano.
 - 16 (or 20) MHz crystal.
-- MCP2515 / TJA1050 kit for Arduino. !!! You must replace the assembled 8 MHz crystal with a 16 MHz one !!!
+- MCP2515 / TJA1050 kit for Arduino. !!! You must replace the assembled 8 MHz crystal with a 16 MHz (20 MHz) one !!!
 
 ### Optional
 - 2004 LCD with serial I2C interface adapter.
+- 2 pin female header for automatic LCD brightness control.
 - LDR for automatic LCD brightness control.
-- BC 549C or any type with hFe > 250 for automatic LCD brightness control.
+- BC 549C or any type with hFE > 250 for automatic LCD brightness control.
 
 <br/>
 

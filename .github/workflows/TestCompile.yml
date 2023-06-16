@@ -21,12 +21,29 @@ jobs:
   build:
     name: Test compiling examples for UNO
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        arduino-boards-fqbn:
+          - arduino:avr:uno
+          - arduino:avr:uno|CRYSTAL_20MHZ_ASSEMBLED
+          - arduino:avr:uno|LOCAL_DEBUG
+
+        include:
+          - arduino-boards-fqbn: arduino:avr:uno|CRYSTAL_20MHZ_ASSEMBLED
+            build-properties:
+              All: -DCRYSTAL_20MHZ_ASSEMBLED
+
+          - arduino-boards-fqbn: arduino:avr:uno|LOCAL_DEBUG
+            build-properties:
+              All: -DLOCAL_DEBUG
+
     steps:
       - name: Checkout
         uses: actions/checkout@master
 
       - name: Compile all examples
         uses: ArminJo/arduino-test-compile@master
-#        with:
+        with:
 #          required-libraries: EasyButtonAtInt01,SoftI2CMaster
-#          build-properties: -DCRYSTAL_20MHZ_ASSEMBLED
+          build-properties: ${{ toJson(matrix.build-properties) }}

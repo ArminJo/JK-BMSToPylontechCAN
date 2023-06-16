@@ -14,11 +14,13 @@
  *  !!! So you must replace the crystal of the module with a 16 (or 20) MHz one !!!
  *  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *
- *  Internal operation:
- *  1. A request is sent to the BMS.
+ *  Internal operation (every n seconds):
+ *  1. A request to deliver all informations is sent to the BMS.
  *  2. The BMS reply frame is stored in a buffer and parity and other plausi checks are made.
  *  3. The cell data are converted and enhanced to fill the JKConvertedCellInfoStruct.
- *  4. Other frame data are converted and enhanced to fill the JKComputedDataStruct.
+ *     Other frame data are mapped to a C structure.
+ *     But all words and longs in this structure are filled with big endian and thus cannot be read directly but must be swapped on reading.
+ *  4. Some other frame data are converted and enhanced to fill the JKComputedDataStruct.
  *  5. The content of the result frame is printed. After reset, all info is printed once, then only dynamic info is printed.
  *  6. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
  *  7. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
@@ -57,24 +59,24 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program. If not, see <http://www.gnu.org/licenses/gpl.html>.
  *
- UART-TTL
- __________                  _________
- |          |<----- RX ----->|         |
- |  JK-BMS  |<----- TX ----->|  UNO/   |
- |          |<----- GND ---->|  NANO   |<-- 5V
- |          |                |         |<-- GND
- |__________|                |_________|
-
- # UART-TTL socket (4 Pin, JST 1.25mm pitch)
- ___ ________ ___
- |                |
- | O   O   O   O  |
- |GND  RX  TX VBAT|
- |________________|
- |   |   |
- |   |   ----- RX
- |   --------- D4 (or other)
- --------------GND
+ * UART-TTL
+ *  __________                  _________            _________             _________
+ * |          |<----- RX ----->|         |<-- SPI ->|         |           |         |
+ * |  JK-BMS  |<----- TX ----->|  UNO/   |          | MCP2515 |           |         |
+ * |          |                |  NANO   |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
+ * |          |<----- GND ---->|         |<-- GND-->|         |           |         |
+ * |__________|                |_________|          |_________|           |_________|
+ *
+ * # UART-TTL socket (4 Pin, JST 1.25mm pitch)
+ *  ___ ________ ___
+ * |                |
+ * | O   O   O   O  |
+ * |GND  RX  TX VBAT|
+ * |________________|
+ *   |   |   |
+ *   |   |   ----- RX
+ *   |   --------- D4 (or other)
+ *   --------------GND
  */
 
 #include <Arduino.h>
@@ -116,7 +118,7 @@ bool sStaticInfoWasSent = false; // Flag to send static Info only once after res
 #include "SoftwareSerialTX.h"
 SoftwareSerialTX TxToJKBMS(4);          // Use a 115200 baud software serial for the short request frame
 bool sFrameIsRequested = false;         // If true, request was recently sent so now check for serial input
-uint32_t sMillisOfLastRequestedFrame = -MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS; // // For BMS timing. Initial value to start first request immediately
+uint32_t sMillisOfLastRequestedJKDataFrame = -MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS; // Initial value to start first request immediately
 uint32_t sMillisOfLastReceivedByte = 0; // For timeout
 bool sFrameHasTimeout = false;          // If true BMS is likely switched off.
 uint16_t sFrameTimeoutCounter = 0;
@@ -328,8 +330,8 @@ void loop() {
     /*
      * Request status frame every n seconds
      */
-    if (millis() - sMillisOfLastRequestedFrame >= MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-        sMillisOfLastRequestedFrame = millis();
+    if (millis() - sMillisOfLastRequestedJKDataFrame >= MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+        sMillisOfLastRequestedJKDataFrame = millis();
         /*
          * Flush input buffer and send request to JK-BMS
          */

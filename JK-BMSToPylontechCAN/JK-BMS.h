@@ -23,6 +23,16 @@
  *
  */
 
+/*
+ * The protocol at the display connector RS485 is 2400 baud 294 bytes in 1.2 seconds with a pause of 0.5 s.
+ * It starts with A5 5A 5D 82 10 00 0F 7C-7E
+ * at 0x16 there are 10 words 0F 7C-7F
+ * At 0x32 there are 46 bytes 0x00 for error flags, (tested with sensor over temperature resulting in a 01 at 0x57)
+ * At 0x60 there are 24 Values A5 5A 05 82 2 (0 0 to 1 7) 3 for 24 cell values
+ * of 16 bit each (for the status display page) followed by the END token A5 5A 03 80 01 00
+ *
+ *
+ */
 #ifndef _JK_BMS_H
 #define _JK_BMS_H
 
