@@ -1,6 +1,6 @@
 <div align = center>
 
-# [JK-BMS To Pylontech CAN Protocol Converter](https://github.com/ArminJo/JK-BMSToPylontechCAN)
+# [Arduino JK-BMS To Pylontech CAN Protocol Converter](https://github.com/ArminJo/JK-BMSToPylontechCAN)
 
 Converts the JK-BMS RS485 data to Pylontech CAN data for inverters which are not compatible with JK-BMS protocol but with Pylontech protocol, like Deye inverters.<br/>
 Display of many BMS information and alarms on a locally attached 2004 LCD.<br/>
@@ -40,6 +40,31 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 | ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
 | Big Info Page | Cell Info Page |
 | ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.jpg) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.jpg) |
+
+# Connection schematic
+The standard RX of the Arduino is used for the JK_BMS connection.
+A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
+
+```
+  __________  Schottky diode  _________            _________             _________
+ |          |<----- RX -|<|->|1        |<-- SPI ->|         |           |         |
+ |  JK-BMS  |<----- TX ----->|4 UNO/   |          | MCP2515 |           |         |
+ |          |                |  NANO   |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
+ |          |<----- GND ---->|         |<-- GND-->|         |           |         |
+ |__________|                |_________|          |_________|           |_________|
+
+ # UART-TTL socket (4 Pin, JST 1.25mm pitch)
+  ___ ________ ___
+ |                |
+ | O   O   O   O  |
+ |GND  RX  TX VBAT|
+ |________________|
+   |   |   |
+   |   |   ----- RX
+   |   --------- D4 (or other)
+   --------------GND
+
+```
 
  <br/>
 
@@ -83,7 +108,7 @@ It was not connected to a Deye inverter so far, since the target 16 cell LiFePo 
 - Breadboard.
 - Jumper wire.
 - Pin header to connect cables to breadboard.
-- Shottky diode e.g. BAT 43.
+- Schottky diode e.g. BAT 43.
 - Arduino Nano.
 - 16 (or 20) MHz crystal.
 - MCP2515 / TJA1050 kit for Arduino. !!! You must replace the assembled 8 MHz crystal with a 16 MHz (20 MHz) one !!!

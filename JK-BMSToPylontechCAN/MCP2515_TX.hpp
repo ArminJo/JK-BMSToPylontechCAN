@@ -87,7 +87,7 @@ void writeMCP2515Register(uint8_t address, uint8_t value) {
 /*
  * return true if error happens
  */
-bool initializeCAN() {
+bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz) {
     pinMode(SPI_CS_PIN, OUTPUT);
 
     SPI.begin(); // start SPI
@@ -103,15 +103,36 @@ bool initializeCAN() {
     /*
      * Set timing for 16 MHz crystal and 500 kBit/s
      */
-#if defined(CRYSTAL_20MHZ_ASSEMBLED)
-    writeMCP2515Register(MCP_CNF1, MCP_20MHz_500kBPS_CFG1); // Baud Rate Prescaler
-    writeMCP2515Register(MCP_CNF2, MCP_20MHz_500kBPS_CFG2); // 0x80 is BTLMODE and always set
-    writeMCP2515Register(MCP_CNF3, MCP_20MHz_500kBPS_CFG3);
-#else
-    writeMCP2515Register(MCP_CNF1, MCP_16MHz_500kBPS_CFG1); // Baud Rate Prescaler
-    writeMCP2515Register(MCP_CNF2, MCP_16MHz_500kBPS_CFG2); // 0x80 is BTLMODE and always set
-    writeMCP2515Register(MCP_CNF3, MCP_16MHz_500kBPS_CFG3);
-#endif
+    if (aBaudrate == 500000) {
+        /*
+         * Set timing for 16 MHz crystal and 500 kBit/s
+         */
+        if (aCrystalMHz == 20) {
+            writeMCP2515Register(MCP_CNF1, MCP_20MHz_500kBPS_CFG1); // Baud Rate Prescaler
+            writeMCP2515Register(MCP_CNF2, MCP_20MHz_500kBPS_CFG2); // 0x80 is BTLMODE and always set
+            writeMCP2515Register(MCP_CNF3, MCP_20MHz_500kBPS_CFG3);
+        } else if (aCrystalMHz == 16) {
+            writeMCP2515Register(MCP_CNF1, MCP_16MHz_500kBPS_CFG1); // Baud Rate Prescaler
+            writeMCP2515Register(MCP_CNF2, MCP_16MHz_500kBPS_CFG2); // 0x80 is BTLMODE and always set
+            writeMCP2515Register(MCP_CNF3, MCP_16MHz_500kBPS_CFG3);
+        } else {
+            return true; // 500 kB is not working stable with 8 MHz crystal
+        }
+    } else if (aBaudrate == 250000) {
+        if (aCrystalMHz == 16) {
+            writeMCP2515Register(MCP_CNF1, MCP_16MHz_250kBPS_CFG1); // Baud Rate Prescaler
+            writeMCP2515Register(MCP_CNF2, MCP_16MHz_250kBPS_CFG2); // 0x80 is BTLMODE and always set
+            writeMCP2515Register(MCP_CNF3, MCP_16MHz_250kBPS_CFG3);
+        } else {
+            writeMCP2515Register(MCP_CNF1, MCP_8MHz_250kBPS_CFG1); // Baud Rate Prescaler
+            writeMCP2515Register(MCP_CNF2, MCP_8MHz_250kBPS_CFG2); // 0x80 is BTLMODE and always set
+            writeMCP2515Register(MCP_CNF3, MCP_8MHz_250kBPS_CFG3);
+        }
+        /*
+         * Other baud rates and crystal combinations can be added like above
+         * The compiler optimizer only uses the active code :-)
+         */
+    }
 
     // Reset Configuration mode
     writeMCP2515Register(MCP_CANCTRL, MCP2515_CAN_CONTROL_REGISTER_CONTENT);

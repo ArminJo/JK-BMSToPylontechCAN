@@ -59,9 +59,12 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program. If not, see <http://www.gnu.org/licenses/gpl.html>.
  *
- * UART-TTL
- *  __________                  _________            _________             _________
- * |          |<----- RX ----->|         |<-- SPI ->|         |           |         |
+ *
+ * # Connection schematic
+ * A shottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
+ *
+ *  __________   Shottky diode  _________            _________             _________
+ * |          |<----- RX -|<|->|         |<-- SPI ->|         |           |         |
  * |  JK-BMS  |<----- TX ----->|  UNO/   |          | MCP2515 |           |         |
  * |          |                |  NANO   |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
  * |          |<----- GND ---->|         |<-- GND-->|         |           |         |
@@ -87,7 +90,18 @@
 
 #define VERSION_EXAMPLE "1.0"
 
-#define BUZZER_PIN                  A2 // To signal errors
+#define BUZZER_PIN                 A2 // To signal errors
+#define JK_BMS_TX_PIN               4
+// The standard RX of the Arduino is used for the JK_BMS connection.
+#define BUTTON_PIN                  2 // Not used in program, only for documentation
+/*
+ * The SPI pins for connection to CAN converter and the I2C / TWI pins for the LCD are determined by hardware.
+ * For UNO / Nano:
+ *   SPI: MOSI - 11, MISO - 12, SCK - 13.
+ *   I2C: SDA - A4, SCL - A3.
+ */
+#define SPI_CS_PIN                  9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
+//#define SPI_CS_PIN                 10 // Otherwise pin 9 is assumed. Must be specified before #include "MCP2515_TX.hpp"
 
 // Debug stuff
 #define DEBUG_PIN                   8 // If low, print additional info
@@ -116,20 +130,23 @@ bool sStaticInfoWasSent = false; // Flag to send static Info only once after res
 #include "JK-BMS.h"
 
 #include "SoftwareSerialTX.h"
-SoftwareSerialTX TxToJKBMS(4);          // Use a 115200 baud software serial for the short request frame
-bool sFrameIsRequested = false;         // If true, request was recently sent so now check for serial input
+SoftwareSerialTX TxToJKBMS(JK_BMS_TX_PIN);  // Use a 115200 baud software serial for the short request frame
+bool sFrameIsRequested = false;             // If true, request was recently sent so now check for serial input
 uint32_t sMillisOfLastRequestedJKDataFrame = -MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS; // Initial value to start first request immediately
-uint32_t sMillisOfLastReceivedByte = 0; // For timeout
-bool sFrameHasTimeout = false;          // If true BMS is likely switched off.
+uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
+bool sFrameHasTimeout = false;              // If true BMS is likely switched off.
 uint16_t sFrameTimeoutCounter = 0;
 
 /*
  * CAN stuff
  */
 #include "Pylontech_CAN.h" // Must be before #include "MCP2515_TX.hpp"
-//#define CRYSTAL_20MHZ_ASSEMBLED  // Otherwise a 16 MHz crystal is assumed. Must be specified before #include "MCP2515_TX.hpp"
-// Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
-//#define SPI_CS_PIN                  10 // Otherwise pin 9 is assumed. Must be specified before #include "MCP2515_TX.hpp"
+#define CAN_BAUDRATE    500000  // 500 kB
+#if !defined(MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE)
+// Must be specified before #include "MCP2515_TX.hpp"
+//#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE  16 // 16 MHz is default for the Arduino CAN bus shield
+#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE   8 // 8 MHz is default for the Chinese breakout board
+#endif
 #include "MCP2515_TX.hpp" // my reduced tx only driver
 bool sCanDataIsInitialized = false;
 uint32_t sMillisOfLastCANFrameSent = 0; // For CAN timing
@@ -138,9 +155,10 @@ uint32_t sMillisOfLastCANFrameSent = 0; // For CAN timing
  * LCD stuff
  */
 #define LCD_COLUMNS     20
+#define LCD_ROWS         4
 #define LCD_I2C_ADDRESS 0x27            // Default LCD address is 0x27 for a 20 chars and 4 line / 2004 display
 #include "LiquidCrystal_I2C.hpp" // This defines USE_SOFT_I2C_MASTER, if SoftI2CMasterConfig.h is available. Use only the modified version delivered with this program!
-LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, 4);
+LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 bool sSerialLCDAvailable;
 /*
  * Big numbers for LCD JK_BMS_PAGE_BIG_INFO page
@@ -148,14 +166,14 @@ bool sSerialLCDAvailable;
 #define USE_SERIAL_2004_LCD             // required by LCDBigNumbers.hpp
 #include "LCDBigNumbers.hpp"            // Include sources for LCD big number generation
 LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_1); // Use 2x3 numbers, 2. variant
-const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };     // char 1: top block
-const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F };     // char 2: bottom block
+const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };       // char 1: top block for maximum cell voltage marker
+const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F };    // char 2: bottom block for minimum cell voltage marker
 /*
- * Button for switching LCD pages
+ * Button at INT0 / D2 for switching LCD pages
  */
 #define USE_BUTTON_0  // Enable code for 1. button at INT0 / D2
 #include "EasyButtonAtInt01.hpp"
-EasyButton Button0AtPin2; // Only 1. button (USE_BUTTON_0) enabled -> button is connected to INT0
+EasyButton Button0AtPin2;   // Only 1. button (USE_BUTTON_0) enabled -> button is connected to INT0
 #define JK_BMS_PAGE_OVERVIEW    0 // is displayed in case of error
 #define JK_BMS_PAGE_CELL_INFO   1
 #define JK_BMS_PAGE_BIG_INFO    2
@@ -257,7 +275,8 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
      * CAN initialization
      */
 //    if (CAN.begin(500000)) { // Resets the device and start the CAN bus at 500 kbps
-    byte tCanInitResult = initializeCAN();
+    byte tCanInitResult = initializeCAN(CAN_BAUDRATE, MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE);
+
     if (tCanInitResult == MCP2515_RETURN_OK) { // Resets the device and start the CAN bus at 500 kbps
         Serial.println(F("CAN started with 500 kbit/s!"));
         if (sSerialLCDAvailable) {

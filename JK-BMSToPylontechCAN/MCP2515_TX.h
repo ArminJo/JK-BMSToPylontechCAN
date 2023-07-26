@@ -27,6 +27,6 @@
 
 #include <inttypes.h>
 
-bool initializeCAN(); // Return true if error happens
+bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz); // Return true if error happens
 bool sendCANMessage(uint16_t aCANId, uint8_t aLengthOfBuffer, const uint8_t *aSendDataBufferPointer); // Return true if error happens
 #endif // _MCP2515_TX_H
