@@ -103,7 +103,7 @@ struct PylontechCANSohSocFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID, 4 };
     struct {
         uint16_t SOCPercent;
-        uint16_t SOHPercent = 95; // fixed 95
+        uint16_t SOHPercent = 100; // fixed 100
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         FrameData.SOCPercent = aJKFAllReply->SOCPercent;
@@ -254,13 +254,13 @@ struct PylontechCANErrorsWarningsFrameStruct {
 struct PylontechCANCurrentValuesFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID, 6 };
     struct {
-        int16_t Voltage100Millivolt;        // 0 to 32767
+        int16_t Voltage10Millivolt;        // 0 to 32767
         int16_t Current100Milliampere;      // -2500 to 2500
         int16_t Temperature100Millicelsius; // -500 to 750
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         (void) aJKFAllReply; // To avoid [-Wunused-parameter] warning
-        FrameData.Voltage100Millivolt = JKComputedData.BatteryVoltage10Millivolt / 10;
+        FrameData.Voltage10Millivolt = JKComputedData.BatteryVoltage10Millivolt;
         FrameData.Current100Milliampere = JKComputedData.Battery10MilliAmpere / 10;
         FrameData.Temperature100Millicelsius = JKComputedData.TemperatureMaximum * 10;
     }

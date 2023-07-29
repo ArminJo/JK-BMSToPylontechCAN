@@ -42,26 +42,28 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 | ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.jpg) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.jpg) |
 
 # Connection schematic
-The standard RX of the Arduino is used for the JK_BMS connection.
-A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
+The standard RX of the Arduino is used for the JK_BMS connection.<br/>
+A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.<br/>
+If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to swap the lines for RX and TX on the nano.<br/>
+On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for CAN is `00`.
 
 ```
-  __________  Schottky diode  _________            _________             _________
- |          |<----- RX -|<|->|1        |<-- SPI ->|         |           |         |
- |  JK-BMS  |<----- TX ----->|4 UNO/   |          | MCP2515 |           |         |
- |          |                |  NANO   |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
- |          |<----- GND ---->|         |<-- GND-->|         |           |         |
- |__________|                |_________|          |_________|           |_________|
+  __________ Schottky diode  _________            _________             _________
+ |        TX|----|<|-- RX ->|RX       |<-- SPI ->|         |           |         |
+ |        RX|<-------- TX --|4  UNO/  |          | MCP2515 |           |         |
+ |  JK-BMS  |               |   Nano  |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
+ |          |<------- GND ->|         |<-- GND-->|         |           |         |
+ |__________|               |_________|          |_________|           |_________|
 
- # UART-TTL socket (4 Pin, JST 1.25mm pitch)
+ # JK-BMS UART-TTL socket (4 Pin, JST 1.25mm pitch)
   ___ ________ ___
  |                |
  | O   O   O   O  |
  |GND  RX  TX VBAT|
  |________________|
    |   |   |
-   |   |   ----- RX
-   |   --------- D4 (or other)
+   |   |   ----- RX of UNO / Nano
+   |   --------- D4 (or other pin, if specified)
    --------------GND
 
 ```

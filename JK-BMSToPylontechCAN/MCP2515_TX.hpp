@@ -87,7 +87,7 @@ void writeMCP2515Register(uint8_t address, uint8_t value) {
 /*
  * return true if error happens
  */
-bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz) {
+bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { // Using Print class saves 95 bytes flash
     pinMode(SPI_CS_PIN, OUTPUT);
 
     SPI.begin(); // start SPI
@@ -97,6 +97,9 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz) {
     // Set Configuration mode
     writeMCP2515Register(MCP_CANCTRL, MODE_CONFIG);
     if (readMCP2515Register(MCP_CANCTRL) != MODE_CONFIG) {
+        if(aSerial != NULL) {
+            aSerial->println(F("First access to MCP2515 config mode register failed"));
+        }
         return true;
     }
 
@@ -116,7 +119,10 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz) {
             writeMCP2515Register(MCP_CNF2, MCP_16MHz_500kBPS_CFG2); // 0x80 is BTLMODE and always set
             writeMCP2515Register(MCP_CNF3, MCP_16MHz_500kBPS_CFG3);
         } else {
-            return true; // 500 kB is not working stable with 8 MHz crystal
+            if(aSerial != NULL) {
+                aSerial->println(F("500 kB is not working stable with 8 MHz crystal"));
+            }
+            return true;
         }
     } else if (aBaudrate == 250000) {
         if (aCrystalMHz == 16) {
@@ -137,6 +143,9 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz) {
     // Reset Configuration mode
     writeMCP2515Register(MCP_CANCTRL, MCP2515_CAN_CONTROL_REGISTER_CONTENT);
     if (readMCP2515Register(MCP_CANCTRL) != MCP2515_CAN_CONTROL_REGISTER_CONTENT) {
+        if(aSerial != NULL) {
+            aSerial->println(F("Last access to MCP2515 config mode register failed"));
+        }
         return true;
     }
 

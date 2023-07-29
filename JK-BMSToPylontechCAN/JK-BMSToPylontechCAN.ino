@@ -40,6 +40,7 @@
  *  modified mcp_can_dfs.h file from Seed-Studio Seeed_Arduino_CAN
  *
  *  Based on https://github.com/syssi/esphome-jk-bms and https://github.com/maxx-ukoo/jk-bms2pylontech
+ *  Tested with SUN-5K-SG03LP1-EU
  *
  *  Copyright (C) 2023  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
@@ -61,14 +62,14 @@
  *
  *
  * # Connection schematic
- * A shottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
+ * A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
  *
- *  __________   Shottky diode  _________            _________             _________
- * |          |<----- RX -|<|->|         |<-- SPI ->|         |           |         |
- * |  JK-BMS  |<----- TX ----->|  UNO/   |          | MCP2515 |           |         |
- * |          |                |  NANO   |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
- * |          |<----- GND ---->|         |<-- GND-->|         |           |         |
- * |__________|                |_________|          |_________|           |_________|
+ *  __________ Schottky diode  _________            _________             _________
+ * |        TX|----|<|-- RX ->|RX       |<-- SPI ->|         |           |         |
+ * |        RX|<-------- TX --|4  UNO/  |          | MCP2515 |           |         |
+ * |  JK-BMS  |               |   Nano  |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
+ * |          |<------- GND ->|         |<-- GND-->|         |           |         |
+ * |__________|               |_________|          |_________|           |_________|
  *
  * # UART-TTL socket (4 Pin, JST 1.25mm pitch)
  *  ___ ________ ___
@@ -77,7 +78,7 @@
  * |GND  RX  TX VBAT|
  * |________________|
  *   |   |   |
- *   |   |   ----- RX
+ *   |   |   ----- RX of UNO / Nano
  *   |   --------- D4 (or other)
  *   --------------GND
  */
@@ -88,20 +89,21 @@
 //#define LOCAL_DEBUG
 #endif
 
-#define VERSION_EXAMPLE "1.0"
+#define VERSION_EXAMPLE "1.1"
 
 #define BUZZER_PIN                 A2 // To signal errors
-#define JK_BMS_TX_PIN               4
+#define BUTTON_PIN                  2
 // The standard RX of the Arduino is used for the JK_BMS connection.
-#define BUTTON_PIN                  2 // Not used in program, only for documentation
+#define JK_BMS_RX_PIN               0 // We use the Serial RX pin. Not used in program, only for documentation
+#define JK_BMS_TX_PIN               4
 /*
  * The SPI pins for connection to CAN converter and the I2C / TWI pins for the LCD are determined by hardware.
  * For UNO / Nano:
  *   SPI: MOSI - 11, MISO - 12, SCK - 13.
- *   I2C: SDA - A4, SCL - A3.
+ *   I2C: SDA - A4, SCL - A5.
  */
 #define SPI_CS_PIN                  9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
-//#define SPI_CS_PIN                 10 // Otherwise pin 9 is assumed. Must be specified before #include "MCP2515_TX.hpp"
+//#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
 
 // Debug stuff
 #define DEBUG_PIN                   8 // If low, print additional info
@@ -130,7 +132,11 @@ bool sStaticInfoWasSent = false; // Flag to send static Info only once after res
 #include "JK-BMS.h"
 
 #include "SoftwareSerialTX.h"
-SoftwareSerialTX TxToJKBMS(JK_BMS_TX_PIN);  // Use a 115200 baud software serial for the short request frame
+/*
+ * Use a 115200 baud software serial for the short request frame.
+ * If available, we also can use a second hardware serial here :-).
+ */
+SoftwareSerialTX TxToJKBMS(JK_BMS_TX_PIN);
 bool sFrameIsRequested = false;             // If true, request was recently sent so now check for serial input
 uint32_t sMillisOfLastRequestedJKDataFrame = -MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS; // Initial value to start first request immediately
 uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
@@ -166,8 +172,8 @@ bool sSerialLCDAvailable;
 #define USE_SERIAL_2004_LCD             // required by LCDBigNumbers.hpp
 #include "LCDBigNumbers.hpp"            // Include sources for LCD big number generation
 LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_1); // Use 2x3 numbers, 2. variant
-const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };       // char 1: top block for maximum cell voltage marker
-const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F };    // char 2: bottom block for minimum cell voltage marker
+const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // char 1: top block for maximum cell voltage marker
+const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F }; // char 2: bottom block for minimum cell voltage marker
 /*
  * Button at INT0 / D2 for switching LCD pages
  */
@@ -190,11 +196,12 @@ void LCDClearLine(uint8_t aLineNumber);
 void processReceivedData();
 
 //#define STANDALONE_TEST
-#if defined(STANDALONE_TEST) //
-uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x01,
+#if defined(STANDALONE_TEST)
+#define LCD_PAGES_TEST
+const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x01,
 /*Cell voltages*/0x79, 0x3C, 0x01, 0x0E, 0xED, 0x02, 0x0E, 0xFA, 0x03, 0x0E, 0xF7, 0x04, 0x0E, 0xEC, 0x05, 0x0E, 0xF8, 0x06, 0x0E,
         0xFA, 0x07, 0x0E, 0xF1, 0x08, 0x0E, 0xF8, 0x09, 0x0E, 0xE3, 0x0A, 0x0E, 0xFA, 0x0B, 0x0E, 0xF1, 0x0C, 0x0E, 0xFB, 0x0D,
-        0x0E, 0xFB, 0x0E, 0x0E, 0xF2, 0x0F, 0x0E, 0xF2, 0x10, 0x0E, 0xF2, 0x11, 0x0E, 0xF2, 0x12, 0x0E, 0xF2, 0x13, 0x0E, 0xF2,
+        0x0E, 0xFB, 0x0E, 0x0E, 0xF2, 0x0F, 0x0E, 0xF2, 0x10, 0x0E, 0xF2, 0x11, 0x0E, 0xF2, 0x12, 0x0E, 0xD8, 0x13, 0x0F, 0xA0,
         0x14, 0x0E, 0xF2,
         /*JKFrameAllDataStruct*/0x80, 0x00, 0x16, 0x81, 0x00, 0x15, 0x82, 0x00, 0x15, 0x83, 0x0F, 0xF8, 0x84, 0x80, 0xD0, 0x85,
         0x0F, 0x86, 0x02, 0x87, 0x00, 0x04, 0x89, 0x00, 0x00, 0x01, 0xE0, 0x8A, 0x00, 0x0E, 0x8B, 0x00, 0x00, 0x8C, 0x00, 0x07,
@@ -275,17 +282,14 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
      * CAN initialization
      */
 //    if (CAN.begin(500000)) { // Resets the device and start the CAN bus at 500 kbps
-    byte tCanInitResult = initializeCAN(CAN_BAUDRATE, MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE);
-
-    if (tCanInitResult == MCP2515_RETURN_OK) { // Resets the device and start the CAN bus at 500 kbps
+    if (initializeCAN(CAN_BAUDRATE, MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE, &Serial) == MCP2515_RETURN_OK) { // Resets the device and start the CAN bus at 500 kbps
         Serial.println(F("CAN started with 500 kbit/s!"));
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("CAN started"));
         }
     } else {
-        Serial.print(F("Starting CAN failed with result="));
-        Serial.println(tCanInitResult);
+        Serial.print(F("Starting CAN failed!"));
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("Starting CAN failed!"));
@@ -337,12 +341,11 @@ void loop() {
                         || (!sDebugModeActive && sDisplayPageNumber > JK_BMS_PAGE_MAX)) {
                     // wrap around
                     sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-                    sForcePrintUpTime = true; // force printing uptime
                 }
 
                 Serial.print(F("Set LCD display page to: "));
                 Serial.println(sDisplayPageNumber);
-                myLCD.clear();
+//                myLCD.clear();
             }
         }
     }
@@ -383,7 +386,6 @@ void loop() {
                     }
                     sFrameHasTimeout = false;
                     sFrameTimeoutCounter = 0;
-                    sForcePrintUpTime = true; // to force printing on LCD
                     processReceivedData();
                 } else {
                     /*
@@ -407,17 +409,21 @@ void loop() {
             if (sReplyFrameBufferIndex != 0 || sFrameTimeoutCounter == 0 || sDebugModeActive) {
                 Serial.print(F("Receive timeout at sReplyFrameBufferIndex="));
                 Serial.println(sReplyFrameBufferIndex);
+#if !defined(STANDALONE_TEST)
                 if (sSerialLCDAvailable) {
                     myLCD.clear();
                     myLCD.setCursor(0, 0);
                     myLCD.print(F("Receive timeout"));
                 }
+#endif
             }
 
+#if !defined(STANDALONE_TEST)
             if (sSerialLCDAvailable) {
                 myLCD.setCursor(16, 0);
                 myLCD.print(sFrameTimeoutCounter);
             }
+#endif
 
             sFrameHasTimeout = true;
             sFrameTimeoutCounter++;
@@ -435,6 +441,91 @@ void loop() {
                 printJKReplyFrameBuffer();
                 Serial.println();
                 processReceivedData();
+                if (sSerialLCDAvailable) {
+#if defined(LCD_PAGES_TEST)
+                    delay(2000);
+                    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+                    printBMSDataOnLCD();
+
+                    sDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    sDisplayPageNumber = JK_BMS_PAGE_CAN_INFO;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    /*
+                     * Check display of maximum values
+                     */
+                    sJKFAllReplyPointer->SOCPercent = 100;
+                    JKComputedData.BatteryLoadCurrentFloat = -210.98;
+                    JKComputedData.BatteryLoadPower = -11000;
+                    JKComputedData.TemperaturePowerMosFet = 111;
+                    JKComputedData.TemperatureSensor1 = 99;
+
+                    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    /*
+                     * Test other values
+                     */
+                    sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;
+                    printAlarmInfo(); // this sets the LCD alarm string
+                    sJKFAllReplyPointer->SOCPercent = 1;
+                    JKComputedData.BatteryLoadCurrentFloat = -10;
+                    JKComputedData.BatteryLoadPower = 12345;
+
+                    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
+                    printAlarmInfo(); // this sets the LCD alarm string
+                    sJKFAllReplyPointer->SOCPercent = 100;
+                    JKComputedData.BatteryLoadCurrentFloat = -100;
+
+                    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+                    delay(2000);
+                    printBMSDataOnLCD();
+
+                    sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+
+                    for (int j = 0; j < 3; ++j) {
+                        // Test with 100 %  and 42 %
+
+                        /*
+                         * test with positive numbers
+                         */
+                        JKComputedData.BatteryLoadPower = 12345;
+                        for (int i = 0; i < 5; ++i) {
+                            delay(4000);
+                            printBMSDataOnLCD();
+                            JKComputedData.BatteryLoadPower /= 10; // 1234 -> 12
+                        }
+                        /*
+                         * test with negative numbers
+                         */
+                        JKComputedData.BatteryLoadPower = -12345;
+                        for (int i = 0; i < 5; ++i) {
+                            delay(4000);
+                            printBMSDataOnLCD();
+                            JKComputedData.BatteryLoadPower /= 10; // 1234 -> 12
+                        }
+
+                        sJKFAllReplyPointer->SOCPercent /= 10;
+                    }
+#endif
+                }
             }
 #endif
         }
@@ -455,7 +546,7 @@ void loop() {
         /*
          * Signaling errors
          */
-        if (ErrorStringForLCD != NULL) {
+        if (sErrorStringForLCD != NULL) {
             tone(BUZZER_PIN, 2200, 50);
             delay(200);
             tone(BUZZER_PIN, 2200, 50);
@@ -487,16 +578,20 @@ void processReceivedData() {
         printBMSDataOnLCD();
     }
 }
+
 /*
  * Print selected data on a 2004 LCD display
  */
+char sStringBuffer[7]; // For rendering numbers with sprintf()
 void printBMSDataOnLCD() {
 
+    myLCD.clear();
+
     myLCD.setCursor(0, 0);
-    if (ErrorStringForLCD != NULL) {
+    if (sErrorStringForLCD != NULL) {
         // print not more than 20 characters
         char t20CharacterString[LCD_COLUMNS + 1];
-        memcpy_P(t20CharacterString, ErrorStringForLCD, LCD_COLUMNS);
+        memcpy_P(t20CharacterString, sErrorStringForLCD, LCD_COLUMNS);
         t20CharacterString[LCD_COLUMNS] = '\0';
         // Allow error flags to be seen on page CAN info
         if (sDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
@@ -507,16 +602,15 @@ void printBMSDataOnLCD() {
 
     if (sDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
         /*
-         * Top line 0 - Error message or up time, which is only printed if changed
+         * Top row 1 - Error message or up time
          */
-        if (ErrorStringForLCD == NULL && sForcePrintUpTime) {
-            sForcePrintUpTime = false;
+        if (sErrorStringForLCD == NULL) {
             myLCD.print(F("Uptime:  "));
             myLCD.print(&sUpTimeString[4]);
         }
 
         /*
-         * Line 1 - SOC and remaining capacity and state of MosFets or Error
+         * Row 2 - SOC and remaining capacity and state of MosFets or Error
          */
         myLCD.setCursor(0, 1);
 // Percent of charge
@@ -525,8 +619,12 @@ void printBMSDataOnLCD() {
 
 // Remaining capacity
         myLCD.print(JKComputedData.RemainingCapacityAmpereHour);
-        myLCD.print(F("Ah  "));
+        myLCD.print(F("Ah "));
+        if (JKComputedData.RemainingCapacityAmpereHour < 100) {
+            myLCD.print(' ');
+        }
 
+        myLCD.setCursor(11, 1);
         if (sJKFAllReplyPointer->StatusUnion.StatusBits.ChargeMosFetActive) {
             myLCD.print(F("CH "));
         } else {
@@ -534,9 +632,9 @@ void printBMSDataOnLCD() {
         }
 
         if (sJKFAllReplyPointer->StatusUnion.StatusBits.DischargeMosFetActive) {
-            myLCD.print(F("-CH "));
+            myLCD.print(F("DC "));
         } else {
-            myLCD.print(F("    "));
+            myLCD.print(F("   "));
         }
 
         if (sJKFAllReplyPointer->StatusUnion.StatusBits.BalancerActive) {
@@ -546,24 +644,40 @@ void printBMSDataOnLCD() {
         }
 
         /*
-         * Line 2 - Voltage, Current and Power
+         * Row 3 - Voltage, Current and Power
          */
         myLCD.setCursor(0, 2);
 // Voltage
-        uint_fast8_t tCharactersPrinted = myLCD.print(JKComputedData.BatteryVoltageFloat, 2);
+        myLCD.print(JKComputedData.BatteryVoltageFloat, 2);
         myLCD.print(F("V "));
 
 // Current
-        tCharactersPrinted += myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 2);
+        uint16_t tBatteryLoadCurrentInt = JKComputedData.BatteryLoadCurrentFloat;
+        tBatteryLoadCurrentInt = abs(tBatteryLoadCurrentInt);
+        if (tBatteryLoadCurrentInt < 10) {
+            myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 2);
+        } else if (tBatteryLoadCurrentInt < 100) {
+            myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 1);
+        } else {
+            myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 0);
+        }
+
         myLCD.print(F("A "));
 
 // Power
-        tCharactersPrinted += myLCD.print(JKComputedData.BatteryLoadPower);
+        if (JKComputedData.BatteryLoadPower < -10000) {
+            // over 10 kW
+            myLCD.setCursor(13, 2);
+            myLCD.print(JKComputedData.BatteryLoadPower); // requires 6 columns
+        } else {
+            myLCD.setCursor(14, 2);
+            sprintf(sStringBuffer, "%5d", JKComputedData.BatteryLoadPower); // force use of 5 columns
+            myLCD.print(sStringBuffer);
+        }
         myLCD.print('W');
-        LCDPrintSpaces((LCD_COLUMNS - 5) - tCharactersPrinted);
 
         /*
-         * Line 3 - 3 Temperatures
+         * Row 4 - 3 Temperatures and 3 enable states
          */
         myLCD.setCursor(0, 3);
         // 3 temperatures
@@ -574,19 +688,46 @@ void printBMSDataOnLCD() {
         myLCD.print(JKComputedData.TemperatureSensor2);
         myLCD.print(F("\xDF" "C "));
 
+        // Last 3 characters are the enable states
+        myLCD.setCursor(17, 3);
+        if (sJKFAllReplyPointer->ChargeIsEnabled) {
+            myLCD.print('C');
+        } else {
+            myLCD.print(' ');
+        }
+        if (sJKFAllReplyPointer->ChargeIsEnabled) {
+            myLCD.print('D');
+        } else {
+            myLCD.print(' ');
+        }
+        if (sJKFAllReplyPointer->BalancingIsEnabled) {
+            myLCD.print('B');
+        } else {
+            myLCD.print(' ');
+        }
+
     } else if (sDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+        /*
+         * We can display only up to 16 cell values on the LCD :-(
+         */
         uint_fast8_t tRowNumber;
-        if (JKConvertedCellInfo.NumberOfCellInfoEnties > 12) {
+        auto tNumberOfCellInfoEnties = JKConvertedCellInfo.NumberOfCellInfoEnties;
+        if (tNumberOfCellInfoEnties > 12) {
             tRowNumber = 0;
+            if (tNumberOfCellInfoEnties > 16) {
+                tNumberOfCellInfoEnties = 16;
+            }
         } else {
             myLCD.print(F("    -CELL INFO-"));
             tRowNumber = 1;
         }
-        for (uint8_t i = 0; i < JKConvertedCellInfo.NumberOfCellInfoEnties; ++i) {
+        for (uint8_t i = 0; i < tNumberOfCellInfoEnties; ++i) {
             if (i % 4 == 0) {
                 myLCD.setCursor(0, tRowNumber);
                 tRowNumber++;
             }
+
+            // print maximum or minimum indicator
             if (i == JKConvertedCellInfo.MaximumVoltagCellIndex) {
                 myLCD.print((char) 0x1);
             } else if (i == JKConvertedCellInfo.MinimumVoltagCellIndex) {
@@ -595,35 +736,89 @@ void printBMSDataOnLCD() {
                 myLCD.print(' ');
             }
             myLCD.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt);
-
         }
-    } else if (sDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
 
+    } else if (sDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
         bigNumberLCD.setBigNumberCursor(0, 0);
         bigNumberLCD.print(sJKFAllReplyPointer->SOCPercent);
-        myLCD.setCursor(6, 2);
+        uint8_t tColumn;
+        if (sJKFAllReplyPointer->SOCPercent < 10) {
+            tColumn = 3;
+        } else if (sJKFAllReplyPointer->SOCPercent < 100) {
+            tColumn = 6;
+        } else {
+            tColumn = 8; // 100%
+        }
+        myLCD.setCursor(tColumn, 2); // 3, 6 or 8
         myLCD.print('%');
 
-        if (JKComputedData.BatteryLoadCurrentFloat < 0.0) {
-            // position the '-' with a space before the number
-            bigNumberLCD.writeAt('-', 7, 0);
-            bigNumberLCD.setBigNumberCursor(9, 0);
-            if (JKComputedData.BatteryLoadCurrentFloat < -10.0) {
-                bigNumberLCD.print(-JKComputedData.BatteryLoadCurrentFloat, 1);
+        /*
+         * Here we can start the power string at column 4, 7 or 9
+         */
+        uint8_t tAvailableColumns = (LCD_COLUMNS - 2) - tColumn;
+        char tKiloWattChar = ' ';
+        int16_t tBatteryLoadPower = JKComputedData.BatteryLoadPower;
+
+        /*
+         * First print string to buffer
+         */
+        if (tBatteryLoadPower >= 1000 || tBatteryLoadPower <= -1000) {
+            tKiloWattChar = 'k';
+            float tBatteryLoadPowerFloat = tBatteryLoadPower * 0.001; // convert to kW
+            dtostrf(tBatteryLoadPowerFloat, 5, 2, sStringBuffer);
+        } else {
+            sprintf(sStringBuffer, "%d", JKComputedData.BatteryLoadPower);
+        }
+
+        /*
+         * Then compute maximum possible string length
+         */
+        uint8_t tColumnsRequiredForString = 0;
+        uint8_t i = 0;
+        while (true) {
+            char tChar = sStringBuffer[i];
+            uint8_t tCharacterWidth;
+            if (tChar == '\0') {
+                break; // end of string
+            } else if (tChar == '.') {
+                tCharacterWidth = 1; // decimal point
+            } else if (tChar == '-') {
+                tCharacterWidth = 2; // minus sign
             } else {
-                bigNumberLCD.print(-JKComputedData.BatteryLoadCurrentFloat, 2);
+                tCharacterWidth = 3; // plain number
             }
 
-        } else {
-            bigNumberLCD.setBigNumberCursor(9, 0);
-            if (JKComputedData.BatteryLoadCurrentFloat > 10.0) {
-                bigNumberLCD.print(JKComputedData.BatteryLoadCurrentFloat, 1);
+            /*
+             * Check if next character can be rendered
+             */
+            if (tAvailableColumns >= tCharacterWidth) {
+                tColumnsRequiredForString += tCharacterWidth;
+                tAvailableColumns -= tCharacterWidth;
             } else {
-                bigNumberLCD.print(JKComputedData.BatteryLoadCurrentFloat, 2);
+                /*
+                 * Next character cannot be rendered here
+                 */
+                if (sStringBuffer[i - 1] == '.') {
+                    // do not render trailing decimal point
+                    tColumnsRequiredForString--;
+                    tAvailableColumns++;
+                    i--;
+                }
+                // Terminate string and exit
+                sStringBuffer[i] = '\0';
+                break;
             }
+            i++;
         }
+
+        bigNumberLCD.setBigNumberCursor((LCD_COLUMNS - 1) - tColumnsRequiredForString, 0);
+        bigNumberLCD.print(sStringBuffer);
+
+        // Print units
+        myLCD.setCursor(19, 1);
+        myLCD.print(tKiloWattChar);
         myLCD.setCursor(19, 2);
-        myLCD.print('A');
+        myLCD.print('W');
 
     } else {
         /*
@@ -633,7 +828,7 @@ void printBMSDataOnLCD() {
                 reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame);
         if (tCANFrameDataPointer->FrameData.ULong.LowLong == 0) {
             /*
-             * Caption and "No error" in row 1 and 2
+             * Caption in row 1 and "No errors / warnings" in row 2
              */
             myLCD.print(F(" -CAN INFO- "));
             if (PylontechCANSohSocFrame.FrameData.SOCPercent < 100) {
@@ -647,14 +842,14 @@ void printBMSDataOnLCD() {
 
         } else {
             /*
-             * Errors and Warnings in row 1 and 2
+             * Errors in row 1 and warnings in row 2
              */
             myLCD.print(F("Errors: 0x"));
             myLCD.print(tCANFrameDataPointer->FrameData.UBytes[0], HEX);
             myLCD.print(F(" 0x"));
             myLCD.print(tCANFrameDataPointer->FrameData.UBytes[1], HEX);
-            myLCD.setCursor(0, 1);
 
+            myLCD.setCursor(0, 1);
             myLCD.print(F("Warnings: 0x"));
             myLCD.print(tCANFrameDataPointer->FrameData.UBytes[2], HEX);
             myLCD.print(F(" 0x"));
@@ -666,21 +861,34 @@ void printBMSDataOnLCD() {
          */
         myLCD.setCursor(0, 2);
         // Voltage
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Voltage100Millivolt / 10);
+        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Voltage10Millivolt / 100);
         myLCD.print('.');
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Voltage100Millivolt % 10);
+        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Voltage10Millivolt % 100);
         myLCD.print(F("V "));
 
         // Current
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere / 10);
-        myLCD.print('.');
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere % 10);
+        int16_t tCurrent100Milliampere = PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere;
+        myLCD.print(tCurrent100Milliampere / 10);
+        if (tCurrent100Milliampere < 0) {
+            // avoid negative numbers after decimal point
+            tCurrent100Milliampere = -tCurrent100Milliampere;
+        }
+        if (PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere < 100) {
+            // Print fraction if value < 100
+            myLCD.print('.');
+            myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere % 10);
+        }
+
         myLCD.print(F("A "));
 
-        // Current
+        // Temperature
+        myLCD.setCursor(14, 2);
         myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius / 10);
-        myLCD.print('.');
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius % 10);
+        if (PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius < 100) {
+            // Print fraction if value < 100
+            myLCD.print('.');
+            myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius % 10);
+        }
         myLCD.print(F("\xDF" "C "));
 
         /*
@@ -694,20 +902,18 @@ void printBMSDataOnLCD() {
             myLCD.print(F("   "));
         }
         if (PylontechCANBatteryRequesFrame.FrameData.DischargeEnable) {
-            myLCD.print(F("-CH "));
-        } else {
-            myLCD.print(F("    "));
+            myLCD.print(F("DC"));
         }
+
+        myLCD.setCursor(10, 3);
         if (PylontechCANBatteryRequesFrame.FrameData.FullChargeRequest) {
-            myLCD.print(F("FULL "));
-        } else {
-            myLCD.print(F("     "));
+            myLCD.print(F("FULL"));
         }
+
+        myLCD.setCursor(15, 3);
         if (PylontechCANBatteryRequesFrame.FrameData.ForceChargeRequestI
                 || PylontechCANBatteryRequesFrame.FrameData.ForceChargeRequestII) {
             myLCD.print(F("FORCE "));
-        } else {
-            myLCD.print(F("      "));
         }
 
     }

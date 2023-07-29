@@ -51,7 +51,6 @@ JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian c
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
 char sUpTimeString[16]; // " -> 1000D23H12M" is 15 bytes long
 char sLastUpTimeCharacter;  // for detecting changes in string
-bool sForcePrintUpTime = true; // for LCD printing
 
 /*
  * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
@@ -77,7 +76,7 @@ const char *const JK_BMSErrorStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
         chargingOvervoltage, dischargingUndervoltage, Sensor2Overtemperature, chargingOvercurrent, dischargingOvercurrent,
         CellVoltageDifference, Sensor1Overtemperature, Sensor2LowLemperature, CellOvervoltage, CellUndervoltage, _309AProtection,
         _309BProtection };
-const char *ErrorStringForLCD; // store of the error string of the highest error bit, NULL otherwise
+const char *sErrorStringForLCD; // store of the error string of the highest error bit, NULL otherwise
 
 void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive) {
     for (uint8_t i = 0; i < sizeof(JKRequestStatusFrame); ++i) {
@@ -235,12 +234,32 @@ uint32_t swap(uint32_t aLongToSwapBytes) {
             | (aLongToSwapBytes >> 24));
 }
 
+void myPrintln(const __FlashStringHelper *aPGMString, uint8_t a8BitValue) {
+    Serial.print(aPGMString);
+    Serial.println(a8BitValue);
+}
+
+void myPrint(const __FlashStringHelper *aPGMString, uint8_t a8BitValue) {
+    Serial.print(aPGMString);
+    Serial.print(a8BitValue);
+}
+
 void myPrintln(const __FlashStringHelper *aPGMString, uint16_t a16BitValue) {
     Serial.print(aPGMString);
     Serial.println(a16BitValue);
 }
 
 void myPrint(const __FlashStringHelper *aPGMString, uint16_t a16BitValue) {
+    Serial.print(aPGMString);
+    Serial.print(a16BitValue);
+}
+
+void myPrintln(const __FlashStringHelper *aPGMString, int16_t a16BitValue) {
+    Serial.print(aPGMString);
+    Serial.println(a16BitValue);
+}
+
+void myPrint(const __FlashStringHelper *aPGMString, int16_t a16BitValue) {
     Serial.print(aPGMString);
     Serial.print(a16BitValue);
 }
@@ -386,7 +405,8 @@ void printJKCellInfo() {
     myPrint(F("Minimum="), JKConvertedCellInfo.CellInfoStructArray[JKConvertedCellInfo.MinimumVoltagCellIndex].CellMillivolt);
     myPrint(F(" mV at cell #"), JKConvertedCellInfo.MinimumVoltagCellIndex + 1);
     myPrint(F(", Maximum="), JKConvertedCellInfo.CellInfoStructArray[JKConvertedCellInfo.MaximumVoltagCellIndex].CellMillivolt);
-    myPrintln(F(" mV at cell #"), JKConvertedCellInfo.MaximumVoltagCellIndex + 1);
+    myPrint(F(" mV at cell #"), JKConvertedCellInfo.MaximumVoltagCellIndex + 1);
+    myPrintln(F(" of "), tNumberOfCellInfo);
     myPrint(F("Delta="), JKConvertedCellInfo.DeltaCellMillivolt);
     myPrint(F(" mV, Average="), JKConvertedCellInfo.AverageCellMillivolt);
     Serial.println(F(" mV"));
@@ -488,7 +508,7 @@ void printMiscelaneousInfo() {
 
 /*
  * Token 0x8B. Prints info only if errors existent and changed from last value
- * Stores error string for LCD in ErrorStringForLCD
+ * Stores error string for LCD in sErrorStringForLCD
  */
 void printAlarmInfo() {
     static uint16_t sLastAlarms = 0;
@@ -499,8 +519,7 @@ void printAlarmInfo() {
     if (sLastAlarms != tAlarms) {
         sLastAlarms = tAlarms;
         if (tAlarms == 0) {
-            ErrorStringForLCD = NULL;
-            sForcePrintUpTime = true; // to force overwriting of alarm
+            sErrorStringForLCD = NULL;
         }
     }
 
@@ -518,7 +537,7 @@ void printAlarmInfo() {
                 Serial.print(tAlarmMask, BIN);
                 Serial.print(F(" -> "));
                 const char *tErrorStringPtr = (char*) (pgm_read_word(&JK_BMSErrorStringsArray[i]));
-                ErrorStringForLCD = tErrorStringPtr;
+                sErrorStringForLCD = tErrorStringPtr;
                 Serial.println(reinterpret_cast<const __FlashStringHelper*>(tErrorStringPtr));
             }
             tAlarmMask <<= 1;
@@ -607,8 +626,9 @@ void printJKDynamicInfo() {
             (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
     if (sLastUpTimeCharacter != sUpTimeString[13]) {
         sLastUpTimeCharacter = sUpTimeString[13];
-        sForcePrintUpTime = true;
-        myPrint(F("Total Runtime Minutes="), tSystemWorkingMinutes);
+        Serial.print(F("Total Runtime Minutes="));
+        Serial.print(tSystemWorkingMinutes);
+        Serial.print(F(" -> "));
         Serial.println(sUpTimeString);
     }
 

@@ -31,6 +31,9 @@
 #define ONE_COLUMN_SPACE_CHARACTER      '|' // This input character is printed as a one column space. Normal spaces are printed as a space with the width of the number.
 #define ONE_COLUMN_SPACE_STRING         "|" // This input string is printed as a one column space. Normal spaces are printed as a space with the width of the number.
 
+#define ONE_COLUMN_HYPHEN_CHARACTER      '_' // This input character is printed as a one column hyphen. Normal hyphen / minus are printed as a hyphen with the width of the number - 1.
+#define ONE_COLUMN_HYPHEN_STRING         "_" // This input string is printed as a one column hyphen. Normal hyphen / minus are printed as a hyphen with the width of the number - 1.
+
 //#define USE_PARALLEL_2004_LCD // Is default
 //#define USE_PARALLEL_1602_LCD
 //#define USE_SERIAL_2004_LCD
@@ -64,6 +67,10 @@
 #define DEFAULT_TEST_DELAY  3000
 #define NUMBER_OF_SPECIAL_CHARACTERS_IN_FONT_ARRAY  3
 
+#define COLUMN_MASK     0x0C // Number of columns = shifted masked value + 1
+#define ROW_MASK        0x03 // Number of rows = masked value + 1
+#define VARIANT_MASK    0x30
+// Numbers are created by using the above masks
 #define BIG_NUMBERS_FONT_1_COLUMN_2_ROWS_VARIANT_1  0x01
 #define BIG_NUMBERS_FONT_2_COLUMN_2_ROWS_VARIANT_1  0x05
 #define BIG_NUMBERS_FONT_3_COLUMN_2_ROWS_VARIANT_1  0x09
@@ -74,9 +81,6 @@
 #define BIG_NUMBERS_FONT_3_COLUMN_3_ROWS_VARIANT_1  0x0A
 #define BIG_NUMBERS_FONT_3_COLUMN_4_ROWS_VARIANT_1  0x0B
 #define BIG_NUMBERS_FONT_3_COLUMN_4_ROWS_VARIANT_2  0x1B
-#define COLUMN_MASK     0x0C // Number of columns = shifted masked value + 1
-#define ROW_MASK        0x03 // Number of rows = masked value + 1
-#define VARIANT_MASK    0x30
 
 //#define LOCAL_DEBUG // To debug/understand the writeBigNumber() function
 
@@ -271,9 +275,10 @@ public:
     const uint8_t (*bigNumbersCustomPatterns)[8];
     uint8_t NumberOfCustomPatterns;
     const uint8_t *bigNumbersFont;
-    bool forceGapBetweenNumbers;
-    uint8_t upperLeftColumnIndex;
-    uint8_t upperLeftRowIndex;
+    bool forceGapBetweenNumbers;    // The default depends on the font used
+    uint8_t upperLeftColumnIndex;   // Start of the next character
+    uint8_t maximumColumnIndex; // Maximum of columns to be written. Used to not clear the gap after a number which ends at the last column. ( 44 bytes program space)
+    uint8_t upperLeftRowIndex;      // Start of the next character
 
     /*
      *
@@ -284,15 +289,15 @@ public:
     }
 
     size_t write(uint8_t aBigNumberValue) {
-        writeBigNumber(aBigNumberValue);
-        return 1; // assume success
+        return writeBigNumber(aBigNumberValue);
     }
 
     /*
      * Creates custom character used for generating big numbers
      */
     void begin() {
-        // create (8) custom characters
+        maximumColumnIndex = 0;
+        // create maximum 8 custom characters
         for (uint_fast8_t i = 0; i < NumberOfCustomPatterns; i++) {
             _createChar(i, bigNumbersCustomPatterns[i]);
         }
@@ -313,10 +318,10 @@ public:
      */
     void init(const uint8_t aBigNumberFontIdentifier) {
         setBigNumberCursor(0);
-        forceGapBetweenNumbers = true;
         NumberWidth = ((aBigNumberFontIdentifier & COLUMN_MASK) >> 2) + 1;
         NumberHeight = (aBigNumberFontIdentifier & ROW_MASK) + 1;
         NumberOfCustomPatterns = 8;
+        forceGapBetweenNumbers = true;
         switch (aBigNumberFontIdentifier) {
         case BIG_NUMBERS_FONT_1_COLUMN_2_ROWS_VARIANT_1:
             bigNumbersCustomPatterns = bigNumbers1x2CustomPatterns_1;
@@ -395,42 +400,43 @@ public:
     /**
      * Draws a big digit of size aNumberWidth x aNumberHeight at cursor position
      * Special characters always have the width of 1!
-     * After each number one column gap is inserted. The gap is not cleared!
-     * @param aNumber - Number or one of " ", "-", "." and ":" special characters to display
+     * After each number one column gap is inserted. The gap is cleared, if not at the (last + 1) column!
+     * @param aNumber - byte 0x00 to 0x09 or ASCII number or one of ' ', '|', '-', '_', '.' and ':' special characters to display
+     * @return  The number of columns written (1 to 4 currently)
      */
-    void writeBigNumber(uint8_t aNumber) {
-        uint_fast8_t tCharacterWidth;
+    size_t writeBigNumber(uint8_t aNumberOrSpecialCharacter) {
         uint_fast8_t tFontArrayOffset = 0;
+        uint_fast8_t tCharacterWidth = 1;
         /*
          * First 3 entries are the special characters
+         * All non characters not compared with here, are mapped to a space with the width of the number
          */
-        if (aNumber == '-') {
-            tCharacterWidth = 1;
-        } else if (aNumber == '.') {
+        if (aNumberOrSpecialCharacter == '-' || aNumberOrSpecialCharacter == ONE_COLUMN_HYPHEN_CHARACTER) {
+            // here we have the initial values: tFontArrayOffset = 0; and tCharacterWidth = 1;
+        } else if (aNumberOrSpecialCharacter == '.') {
             tFontArrayOffset = 1;
-            tCharacterWidth = 1;
-        } else if (aNumber == ':') {
+        } else if (aNumberOrSpecialCharacter == ':') {
             tFontArrayOffset = 2;
-            tCharacterWidth = 1;
-        } else if (aNumber == ' ') {
+        } else if (aNumberOrSpecialCharacter == ' ') {
             tCharacterWidth = NumberWidth;
-        } else if (aNumber == ONE_COLUMN_SPACE_CHARACTER) {
+        } else if (aNumberOrSpecialCharacter == ONE_COLUMN_SPACE_CHARACTER) {
             // print a one column space
-            tCharacterWidth = 1;
-            aNumber = ' ';
+            aNumberOrSpecialCharacter = ' ';
         } else {
-            if (aNumber > 9) {
-                aNumber -= '0'; // convert ASCII value to number
+            if (aNumberOrSpecialCharacter > 9) {
+                // if not byte 0x00 to 0x09, convert number character to ASCII
+                aNumberOrSpecialCharacter -= '0'; // convert ASCII value to number
             }
-            if (aNumber > 9) {
-                aNumber = ' '; // convert all non numbers to spaces with the width of the number
+            if (aNumberOrSpecialCharacter > 9) {
+                // If we have a non number character now, we convert it to a space with the width of the number
+                aNumberOrSpecialCharacter = ' ';
             }
             tCharacterWidth = NumberWidth;
-            tFontArrayOffset = NUMBER_OF_SPECIAL_CHARACTERS_IN_FONT_ARRAY + (aNumber * tCharacterWidth);
+            tFontArrayOffset = NUMBER_OF_SPECIAL_CHARACTERS_IN_FONT_ARRAY + (aNumberOrSpecialCharacter * tCharacterWidth);
         }
 #if defined(LOCAL_DEBUG)
         Serial.print(F("Number="));
-        Serial.print(aNumber);
+        Serial.print(aNumberOrSpecialCharacter);
         Serial.print(F(" CharacterWidth="));
         Serial.print(tCharacterWidth);
         Serial.print(F(" FontArrayOffset="));
@@ -443,8 +449,8 @@ public:
             LCD->setCursor(upperLeftColumnIndex, upperLeftRowIndex + tRow);
             for (uint_fast8_t i = 0; i < tCharacterWidth; i++) {
                 uint8_t tCharacterIndex;
-                if (aNumber == ' ') {
-                    tCharacterIndex = aNumber; // Blank
+                if (aNumberOrSpecialCharacter == ' ') {
+                    tCharacterIndex = ' '; // Blank
                 } else {
                     tCharacterIndex = pgm_read_byte(tArrayPtr);
                 }
@@ -464,23 +470,41 @@ public:
         }
         upperLeftColumnIndex += tCharacterWidth;
 
-        if (forceGapBetweenNumbers && tCharacterWidth > 1) {
-            upperLeftColumnIndex++; // This provides one column gap between big numbers, but not between special characters. The gap is not cleared!
+        if (maximumColumnIndex < upperLeftColumnIndex) {
+            // find maximum column at runtime
+            maximumColumnIndex = upperLeftColumnIndex;
+        }
+
+        /*
+         * Implement the gap after the character
+         */
+        if (forceGapBetweenNumbers && (tCharacterWidth > 1 || aNumberOrSpecialCharacter == '-')) {
+            if (maximumColumnIndex != upperLeftColumnIndex) {
+                // We are not at the last column, so clear the gap after the number
+                for (uint_fast8_t tRow = 0; tRow < NumberHeight; tRow++) {
+                    LCD->setCursor(upperLeftColumnIndex + 1, upperLeftRowIndex + tRow);
+                    LCD->write(' '); // Blank
+                }
+                tCharacterWidth++;
+            }
+            upperLeftColumnIndex++; // This provides one column gap between big numbers, but not between special characters.
         }
 
 #if defined(LOCAL_DEBUG)
         Serial.println();
 #endif
+        return tCharacterWidth;
     }
+
     /**
      * Draws a big digit of size aNumberWidth x aNumberHeight
      * @param aNumber - Number to display, if > 9 a blank character is drawn
      * @param aUpperLeftColumnIndex - Starts with 0, no check!
      * @param aStartRowIndex - Starts with 0, no check!
      */
-    void writeAt(uint8_t aNumber, uint8_t aUpperLeftColumnIndex, uint8_t aUpperLeftRowIndex = 0) {
+    size_t writeAt(uint8_t aNumber, uint8_t aUpperLeftColumnIndex, uint8_t aUpperLeftRowIndex = 0) {
         setBigNumberCursor(aUpperLeftColumnIndex, aUpperLeftRowIndex);
-        writeBigNumber(aNumber);
+        return writeBigNumber(aNumber);
     }
 
 };
@@ -591,6 +615,10 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     LCDBigNumbers bigNumberLCD(aLCD, BIG_NUMBERS_FONT_1_COLUMN_2_ROWS_VARIANT_1);
     bigNumberLCD.begin(); // Generate font symbols in LCD controller
     bigNumberLCD.print(F("0123456789 -.:")); // no special space required, we have an 1 column font
+
+    // Print "-47.11 :"
+    bigNumberLCD.setBigNumberCursor(0, 2);
+    bigNumberLCD.print(F("-47.11"));
     delay(DEFAULT_TEST_DELAY);
 
     /*
@@ -614,8 +642,14 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
 #endif
     delay(DEFAULT_TEST_DELAY);
 
+    aLCD->clear(); // Clear display
+    // Print "-47.11 :"
+    bigNumberLCD.setBigNumberCursor(0);
+    bigNumberLCD.print(F("-47.11"));
+    delay(DEFAULT_TEST_DELAY);
+
     /*
-     * 3 X 2
+     * 3 X 2 1. variant
      */
     aLCD->clear(); // Clear display
     bigNumberLCD.init(BIG_NUMBERS_FONT_3_COLUMN_2_ROWS_VARIANT_1);
@@ -638,8 +672,7 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     aLCD->clear(); // Clear display
     // Print "-47.11 :"
     bigNumberLCD.setBigNumberCursor(0);
-    bigNumberLCD.print(F("--" ONE_COLUMN_SPACE_STRING "47.11"));
-    bigNumberLCD.writeAt(':', 19); // Keep in mind that numbers always have a trailing but no leading gap.
+    bigNumberLCD.print(F("-47.11:"));
 #endif
 
     delay(DEFAULT_TEST_DELAY);
@@ -660,8 +693,14 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     bigNumberLCD.print(F("-.: "));
 #else
     bigNumberLCD.setBigNumberCursor(0, 2);
-    bigNumberLCD.print(F("56789" ONE_COLUMN_SPACE_STRING "-.:"));
+    bigNumberLCD.print(F("56789")); // we have a space between this characters, i.e. forceGapBetweenNumbers is true
 #endif
+    delay(DEFAULT_TEST_DELAY);
+
+    aLCD->clear(); // Clear display
+    // Print "-47.11 :"
+    bigNumberLCD.setBigNumberCursor(0);
+    bigNumberLCD.print(F("-47.11:"));
     delay(DEFAULT_TEST_DELAY);
 
     /*
@@ -684,6 +723,12 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
 #endif
     delay(DEFAULT_TEST_DELAY);
 
+    aLCD->clear(); // Clear display
+    // Print "-47.11 :"
+    bigNumberLCD.setBigNumberCursor(0);
+    bigNumberLCD.print(F("-47.11"));
+    delay(DEFAULT_TEST_DELAY);
+
 #if LCD_ROWS > 2
     /****************
      * 3 line numbers
@@ -701,6 +746,12 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     bigNumberLCD.print(F("56789" ONE_COLUMN_SPACE_STRING "-.:"));
     delay(DEFAULT_TEST_DELAY);
 
+    aLCD->clear(); // Clear display
+    // Print "-47.11 :"
+    bigNumberLCD.setBigNumberCursor(0, 1);
+    bigNumberLCD.print(F("-47.11"));
+    delay(DEFAULT_TEST_DELAY);
+
     /*
      * 2 X 3 Space below
      */
@@ -712,6 +763,12 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     delay(DEFAULT_TEST_DELAY);
     bigNumberLCD.setBigNumberCursor(0, 1);
     bigNumberLCD.print(F("56789" ONE_COLUMN_SPACE_STRING "-.:"));
+    delay(DEFAULT_TEST_DELAY);
+
+    aLCD->clear(); // Clear display
+    // Print "-47.11 :"
+    bigNumberLCD.setBigNumberCursor(0, 1);
+    bigNumberLCD.print(F("-47.11"));
     delay(DEFAULT_TEST_DELAY);
 
     /*
@@ -730,8 +787,7 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     aLCD->clear(); // Clear display
     // Print "-47.11 :"
     bigNumberLCD.setBigNumberCursor(0, 1);
-    bigNumberLCD.print(F("--" ONE_COLUMN_SPACE_STRING "47.11"));
-    bigNumberLCD.writeAt(':', 19, 1); // Keep in mind that numbers always have a trailing but no leading gap.
+    bigNumberLCD.print(F("-47.11:"));
     delay(DEFAULT_TEST_DELAY);
 
     /****************
@@ -752,8 +808,7 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     aLCD->clear(); // Clear display
     // Print "-47.11 :"
     bigNumberLCD.setBigNumberCursor(0);
-    bigNumberLCD.print(F("--" ONE_COLUMN_SPACE_STRING "47.11"));
-    bigNumberLCD.writeAt(':', 19); // Keep in mind that numbers always have a trailing but no leading gap.
+    bigNumberLCD.print(F("-47.11:"));
     delay(DEFAULT_TEST_DELAY);
 
     /*
@@ -771,8 +826,7 @@ void testBigNumbers(LiquidCrystal_I2C *aLCD)
     aLCD->clear(); // Clear display
     // Print "-47.11 :"
     bigNumberLCD.setBigNumberCursor(0);
-    bigNumberLCD.print(F("--" ONE_COLUMN_SPACE_STRING "47.11"));
-    bigNumberLCD.writeAt(':', 19); // Keep in mind that numbers always have a trailing but no leading gap.
+    bigNumberLCD.print(F("-47.11:"));
     delay(DEFAULT_TEST_DELAY);
 #endif // LCD_ROWS > 2
 }

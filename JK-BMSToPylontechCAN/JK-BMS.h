@@ -63,9 +63,8 @@ extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as
 extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
-extern const char *ErrorStringForLCD;
+extern const char *sErrorStringForLCD;
 extern char sUpTimeString[16]; // " -> 1000D23H12M" is 15 bytes long
-extern bool sForcePrintUpTime; // for LCD printing
 
 int16_t getTemperature(uint16_t aJKRAWTemperature);
 int16_t getCurrent(uint16_t aJKRAWCurrent);
@@ -73,8 +72,21 @@ int16_t getCurrent(uint16_t aJKRAWCurrent);
 uint8_t swap(uint8_t aByte);
 uint16_t swap(uint16_t aWordToSwapBytes);
 uint32_t swap(uint32_t aLongToSwapBytes);
+
+void myPrintln(const __FlashStringHelper *aPGMString, uint8_t a8BitValue);
+void myPrint(const __FlashStringHelper *aPGMString, uint8_t a8BitValue);
+void myPrintln(const __FlashStringHelper *aPGMString, uint16_t a16BitValue);
+void myPrint(const __FlashStringHelper *aPGMString, uint16_t a16BitValue);
+void myPrintln(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
+void myPrint(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
+void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint16_t a16BitValue);
+void myPrintlnSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
+void myPrintSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
+void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue);
+
 void printJKStaticInfo();
 void printJKDynamicInfo();
+void printAlarmInfo();
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
 #define JK_BMS_FRAME_TRAILER_LENGTH             9
@@ -195,8 +207,8 @@ struct JKReplyStruct {
              * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
              * Retry is done after "OCPR Time(S)"
              */
-            bool ChargeOvercurrentAlarm :1;         // 0x20 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
-            bool DischargeOvercurrentAlarm :1;      // 0x40 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
+            bool ChargeOvercurrentAlarm :1;  // 0x20 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
+            bool DischargeOvercurrentAlarm :1; // 0x40 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
             bool CellVoltageDifferenceAlarm :1;     // 0x80
         } AlarmBits;
     } AlarmUnion;
