@@ -33,13 +33,25 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardAndOverviewPage.jpg)
 
+<br/>
+
+# Example on Wokwi
+- [Wokwi JK-BMSToPylontechCAN example](https://wokwi.com/projects/371657348012321793).
+
  <br/>
+ The screenshots are taken from the Wokwi example with `STANDALONE_TEST` enabled and therefore contain random data.
  
 | Breadboard detail | Automatic brightness |
 | :-: | :-: |
 | ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
 | Big Info Page | Cell Info Page |
-| ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.jpg) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.jpg) |
+| ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) |
+| Overview Page | CAN Info Page |
+| ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) | ![CAN Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |
+| Error Page |  |
+| ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |  |
+
+<br/>
 
 # Connection schematic
 The standard RX of the Arduino is used for the JK_BMS connection.<br/>
@@ -88,7 +100,7 @@ Download and extract the repository. In the Arduino IDE open the sketch with Fil
 All libraries, especially the modified ones, are included in this project.
 
 # Libraries used
-This program uses the following libraries, which are included in this repository:
+This program uses the following libraries, which are already included in this repository:
 
 - [SoftwareSerialTX](https://reference.arduino.cc/reference/en/libraries/liquidcrystal-i2c/) for sending Serial to JK-BMS.
 - Modified [LiquidCrystal_I2C](https://reference.arduino.cc/reference/en/libraries/liquidcrystal-i2c/) for LCD connected by I2C.
@@ -96,12 +108,6 @@ This program uses the following libraries, which are included in this repository
 - [LCDBigNumbers](https://github.com/ArminJo/LCDBigNumbers) for LCD big number generation.
 - [EasyButtonAtInt01](https://github.com/ArminJo/EasyButtonAtInt01) for LCD page switching button.
 - Modified mcp_can_dfs.h file from Seed-Studio [Seeed_Arduino_CAN](https://github.com/Seeed-Studio/Seeed_Arduino_CAN).
-
- <br/>
- 
-# Disclaimer
-Currently (16.6.2023) the program is tested only with a JK-BMS JK-B2A20S20P and a 10 cell LiIon battery.<br/>
-It was not connected to a Deye inverter so far, since the target 16 cell LiFePo battery is under contruction.
 
  <br/>
 
@@ -119,7 +125,7 @@ It was not connected to a Deye inverter so far, since the target 16 cell LiFePo 
 - 2004 LCD with serial I2C interface adapter.
 - 2 pin female header for automatic LCD brightness control.
 - LDR for automatic LCD brightness control.
-- BC 549C or any type with hFE > 250 for automatic LCD brightness control.
+- BC 549 or any NPN type for automatic LCD brightness control. The effect varies, depending on the LDR and the hFE of the transistor.
 
 <br/>
 

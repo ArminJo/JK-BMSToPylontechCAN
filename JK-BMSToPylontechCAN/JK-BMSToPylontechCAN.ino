@@ -83,6 +83,11 @@
  *   --------------GND
  */
 
+/*
+ * Ideas:
+ * Balancing time per day etc.
+ * Maximum, minimum percent per cell
+ */
 #include <Arduino.h>
 
 #if !defined(LOCAL_DEBUG)
@@ -171,7 +176,10 @@ bool sSerialLCDAvailable;
  */
 #define USE_SERIAL_2004_LCD             // required by LCDBigNumbers.hpp
 #include "LCDBigNumbers.hpp"            // Include sources for LCD big number generation
-LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_1); // Use 2x3 numbers, 2. variant
+//LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_1); // Use 2x3 numbers, 1. variant
+//#define UNITS_ROW_FOR_BIG_INFO  2
+LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_2); // Use 2x3 numbers, 2. variant
+#define UNITS_ROW_FOR_BIG_INFO  1
 const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // char 1: top block for maximum cell voltage marker
 const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F }; // char 2: bottom block for minimum cell voltage marker
 /*
@@ -200,8 +208,8 @@ void processReceivedData();
 #define LCD_PAGES_TEST
 const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x01,
 /*Cell voltages*/0x79, 0x3C, 0x01, 0x0E, 0xED, 0x02, 0x0E, 0xFA, 0x03, 0x0E, 0xF7, 0x04, 0x0E, 0xEC, 0x05, 0x0E, 0xF8, 0x06, 0x0E,
-        0xFA, 0x07, 0x0E, 0xF1, 0x08, 0x0E, 0xF8, 0x09, 0x0E, 0xE3, 0x0A, 0x0E, 0xFA, 0x0B, 0x0E, 0xF1, 0x0C, 0x0E, 0xFB, 0x0D,
-        0x0E, 0xFB, 0x0E, 0x0E, 0xF2, 0x0F, 0x0E, 0xF2, 0x10, 0x0E, 0xF2, 0x11, 0x0E, 0xF2, 0x12, 0x0E, 0xD8, 0x13, 0x0F, 0xA0,
+        0xFA, 0x07, 0x0E, 0xF1, 0x08, 0x0E, 0xF8, 0x09, 0x0E, 0xD8, 0x0A, 0x0E, 0xFA, 0x0B, 0x0E, 0xF1, 0x0C, 0x0E, 0x0F, 0xA0,
+        0x0E, 0xFB, 0x0E, 0x0E, 0xF2, 0x0F, 0x0E, 0xF2, 0x10, 0x0E, 0xF2, 0x11, 0x0E, 0xF2, 0x12, 0x0E, 0xF0, 0x13, 0x0E, 0xF3,
         0x14, 0x0E, 0xF2,
         /*JKFrameAllDataStruct*/0x80, 0x00, 0x16, 0x81, 0x00, 0x15, 0x82, 0x00, 0x15, 0x83, 0x0F, 0xF8, 0x84, 0x80, 0xD0, 0x85,
         0x0F, 0x86, 0x02, 0x87, 0x00, 0x04, 0x89, 0x00, 0x00, 0x01, 0xE0, 0x8A, 0x00, 0x0E, 0x8B, 0x00, 0x00, 0x8C, 0x00, 0x07,
@@ -237,6 +245,8 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 #endif
     // Just to know which program is running on my Arduino
     Serial.println(F("START " __FILE__ "\r\nVersion " VERSION_EXAMPLE " from " __DATE__));
+
+    tone(BUZZER_PIN, 2200, 50);
 
     /*
      * Initialize I2C and check for bus lockup
@@ -294,8 +304,10 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
             myLCD.setCursor(0, 3);
             myLCD.print(F("Starting CAN failed!"));
         }
+#if !defined(STANDALONE_TEST)
         while (1)
             ;
+#endif
     }
 
     /*
@@ -345,8 +357,14 @@ void loop() {
 
                 Serial.print(F("Set LCD display page to: "));
                 Serial.println(sDisplayPageNumber);
-//                myLCD.clear();
             }
+        }
+        if (sErrorStatusJustChanged == true && sErrorStringForLCD != NULL) {
+            /*
+             * Switch to overview page once, to show the error
+             */
+            sErrorStatusJustChanged = false;
+            sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
         }
     }
     /*
@@ -448,6 +466,9 @@ void loop() {
                     printBMSDataOnLCD();
 
                     sDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
+                    // Create symbols character for maximum and minimum
+                    bigNumberLCD._createChar(1, bigNumbersTopBlock);
+                    bigNumberLCD._createChar(2, bigNumbersBottomBlock);
                     delay(2000);
                     printBMSDataOnLCD();
 
@@ -469,6 +490,7 @@ void loop() {
                     printBMSDataOnLCD();
 
                     sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+                    bigNumberLCD.begin();
                     delay(2000);
                     printBMSDataOnLCD();
 
@@ -571,12 +593,76 @@ void processReceivedData() {
         printJKStaticInfo();
     }
     printJKDynamicInfo();
+    printAlarmInfo();
     Serial.println();
     fillAllCANData(sJKFAllReplyPointer);
     sCanDataIsInitialized = true;
     if (sSerialLCDAvailable) {
         printBMSDataOnLCD();
     }
+}
+
+void printShortEnableFlagsOnLCD() {
+    if (sJKFAllReplyPointer->ChargeIsEnabled) {
+        myLCD.print('C');
+    } else {
+        myLCD.print(' ');
+    }
+    if (sJKFAllReplyPointer->ChargeIsEnabled) {
+        myLCD.print('D');
+    } else {
+        myLCD.print(' ');
+    }
+    if (sJKFAllReplyPointer->BalancingIsEnabled) {
+        myLCD.print('B');
+    }
+}
+
+void printShortStateOnLCD() {
+    if (sJKFAllReplyPointer->StatusUnion.StatusBits.ChargeMosFetActive) {
+        myLCD.print('C');
+    } else {
+        myLCD.print(' ');
+    }
+    if (sJKFAllReplyPointer->StatusUnion.StatusBits.DischargeMosFetActive) {
+        myLCD.print('D');
+    } else {
+        myLCD.print(' ');
+    }
+    if (sJKFAllReplyPointer->StatusUnion.StatusBits.BalancerActive) {
+        myLCD.print('B');
+    }
+}
+
+void printLongStateOnLCD() {
+    if (sJKFAllReplyPointer->StatusUnion.StatusBits.ChargeMosFetActive) {
+        myLCD.print(F("CH "));
+    } else {
+        myLCD.print(F("   "));
+    }
+
+    if (sJKFAllReplyPointer->StatusUnion.StatusBits.DischargeMosFetActive) {
+        myLCD.print(F("DC "));
+    } else {
+        myLCD.print(F("   "));
+    }
+
+    if (sJKFAllReplyPointer->StatusUnion.StatusBits.BalancerActive) {
+        myLCD.print(F("BAL"));
+    }
+}
+
+void printCurrentOnLCD() {
+    uint16_t tBatteryLoadCurrentInt = JKComputedData.BatteryLoadCurrentFloat;
+    tBatteryLoadCurrentInt = abs(tBatteryLoadCurrentInt);
+    if (tBatteryLoadCurrentInt < 10) {
+        myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 2);
+    } else if (tBatteryLoadCurrentInt < 100) {
+        myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 1);
+    } else {
+        myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 0);
+    }
+    myLCD.print(F("A "));
 }
 
 /*
@@ -588,23 +674,18 @@ void printBMSDataOnLCD() {
     myLCD.clear();
 
     myLCD.setCursor(0, 0);
-    if (sErrorStringForLCD != NULL) {
-        // print not more than 20 characters
-        char t20CharacterString[LCD_COLUMNS + 1];
-        memcpy_P(t20CharacterString, sErrorStringForLCD, LCD_COLUMNS);
-        t20CharacterString[LCD_COLUMNS] = '\0';
-        // Allow error flags to be seen on page CAN info
-        if (sDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
-            sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-            myLCD.print(t20CharacterString);
-        }
-    }
 
     if (sDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
         /*
          * Top row 1 - Error message or up time
          */
-        if (sErrorStringForLCD == NULL) {
+        if (sErrorStringForLCD != NULL) {
+            // print not more than 20 characters
+            char t20CharacterString[LCD_COLUMNS + 1];
+            memcpy_P(t20CharacterString, sErrorStringForLCD, LCD_COLUMNS);
+            t20CharacterString[LCD_COLUMNS] = '\0';
+            myLCD.print(t20CharacterString);
+        } else {
             myLCD.print(F("Uptime:  "));
             myLCD.print(&sUpTimeString[4]);
         }
@@ -625,23 +706,7 @@ void printBMSDataOnLCD() {
         }
 
         myLCD.setCursor(11, 1);
-        if (sJKFAllReplyPointer->StatusUnion.StatusBits.ChargeMosFetActive) {
-            myLCD.print(F("CH "));
-        } else {
-            myLCD.print(F("   "));
-        }
-
-        if (sJKFAllReplyPointer->StatusUnion.StatusBits.DischargeMosFetActive) {
-            myLCD.print(F("DC "));
-        } else {
-            myLCD.print(F("   "));
-        }
-
-        if (sJKFAllReplyPointer->StatusUnion.StatusBits.BalancerActive) {
-            myLCD.print(F("BAL"));
-        } else {
-            myLCD.print(F("   "));
-        }
+        printLongStateOnLCD();
 
         /*
          * Row 3 - Voltage, Current and Power
@@ -652,17 +717,7 @@ void printBMSDataOnLCD() {
         myLCD.print(F("V "));
 
 // Current
-        uint16_t tBatteryLoadCurrentInt = JKComputedData.BatteryLoadCurrentFloat;
-        tBatteryLoadCurrentInt = abs(tBatteryLoadCurrentInt);
-        if (tBatteryLoadCurrentInt < 10) {
-            myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 2);
-        } else if (tBatteryLoadCurrentInt < 100) {
-            myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 1);
-        } else {
-            myLCD.print(JKComputedData.BatteryLoadCurrentFloat, 0);
-        }
-
-        myLCD.print(F("A "));
+        printCurrentOnLCD();
 
 // Power
         if (JKComputedData.BatteryLoadPower < -10000) {
@@ -690,22 +745,11 @@ void printBMSDataOnLCD() {
 
         // Last 3 characters are the enable states
         myLCD.setCursor(17, 3);
-        if (sJKFAllReplyPointer->ChargeIsEnabled) {
-            myLCD.print('C');
-        } else {
-            myLCD.print(' ');
-        }
-        if (sJKFAllReplyPointer->ChargeIsEnabled) {
-            myLCD.print('D');
-        } else {
-            myLCD.print(' ');
-        }
-        if (sJKFAllReplyPointer->BalancingIsEnabled) {
-            myLCD.print('B');
-        } else {
-            myLCD.print(' ');
-        }
+        printShortEnableFlagsOnLCD();
 
+        /**************************
+         *  CELL INFO
+         **************************/
     } else if (sDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
         /*
          * We can display only up to 16 cell values on the LCD :-(
@@ -738,6 +782,9 @@ void printBMSDataOnLCD() {
             myLCD.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt);
         }
 
+        /**************************
+         *  BIG INFO
+         **************************/
     } else if (sDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
         bigNumberLCD.setBigNumberCursor(0, 0);
         bigNumberLCD.print(sJKFAllReplyPointer->SOCPercent);
@@ -749,7 +796,7 @@ void printBMSDataOnLCD() {
         } else {
             tColumn = 8; // 100%
         }
-        myLCD.setCursor(tColumn, 2); // 3, 6 or 8
+        myLCD.setCursor(tColumn, UNITS_ROW_FOR_BIG_INFO); // 3, 6 or 8
         myLCD.print('%');
 
         /*
@@ -815,11 +862,25 @@ void printBMSDataOnLCD() {
         bigNumberLCD.print(sStringBuffer);
 
         // Print units
-        myLCD.setCursor(19, 1);
+        myLCD.setCursor(19, UNITS_ROW_FOR_BIG_INFO - 1);
         myLCD.print(tKiloWattChar);
-        myLCD.setCursor(19, 2);
+        myLCD.setCursor(19, UNITS_ROW_FOR_BIG_INFO);
         myLCD.print('W');
 
+        // Row 3: Max temperature, the actual states
+        myLCD.setCursor(0, 3);
+        myLCD.print(JKComputedData.TemperatureMaximum);
+        myLCD.print(F("\xDF" "C "));
+
+        myLCD.setCursor(7, 3);
+        printCurrentOnLCD();
+
+        myLCD.setCursor(17, 3);
+        printShortStateOnLCD();
+
+        /**************************
+         *  CAN INFO
+         **************************/
     } else {
         /*
          * sDisplayPageNumber == JK_BMS_PAGE_CAN_INFO

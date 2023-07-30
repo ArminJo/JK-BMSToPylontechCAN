@@ -64,6 +64,7 @@ extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 extern const char *sErrorStringForLCD;
+extern bool sErrorStatusJustChanged;
 extern char sUpTimeString[16]; // " -> 1000D23H12M" is 15 bytes long
 
 int16_t getTemperature(uint16_t aJKRAWTemperature);

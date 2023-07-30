@@ -77,6 +77,7 @@ const char *const JK_BMSErrorStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
         CellVoltageDifference, Sensor1Overtemperature, Sensor2LowLemperature, CellOvervoltage, CellUndervoltage, _309AProtection,
         _309BProtection };
 const char *sErrorStringForLCD; // store of the error string of the highest error bit, NULL otherwise
+bool sErrorStatusJustChanged = false; // is set to true by printAlarmInfo(), and can be reset by main program
 
 void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive) {
     for (uint8_t i = 0; i < sizeof(JKRequestStatusFrame); ++i) {
@@ -521,10 +522,10 @@ void printAlarmInfo() {
         if (tAlarms == 0) {
             sErrorStringForLCD = NULL;
         }
+        sErrorStatusJustChanged = true;
     }
 
     if (tAlarms != 0) {
-//        sLastAlarms = tAlarms;
         Serial.println(F("*** ALARM FLAGS ***"));
 
         Serial.print(F("Alarm bits=0b"));
@@ -674,8 +675,5 @@ void printJKDynamicInfo() {
     printActiveState(tJKFAllReply->StatusUnion.StatusBits.BalancerActive);
 
     Serial.println();
-
-    printAlarmInfo();
-
 }
 #endif // _JK_BMS_H
