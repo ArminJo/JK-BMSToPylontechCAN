@@ -6,13 +6,13 @@ Converts the JK-BMS RS485 data to Pylontech CAN data for inverters which are not
 Display of many BMS information and alarms on a locally attached 2004 LCD.<br/>
 
 [![Badge License: GPLv3](https://img.shields.io/badge/License-GPLv3-brightgreen.svg)](https://www.gnu.org/licenses/gpl-3.0)
- &nbsp; &nbsp; 
+ &nbsp; &nbsp;
 [![Badge Version](https://img.shields.io/github/v/release/ArminJo/OpenledRace?include_prereleases&color=yellow&logo=DocuSign&logoColor=white)](https://github.com/ArminJo/JK-BMSToPylontechCAN/releases/latest)
- &nbsp; &nbsp; 
+ &nbsp; &nbsp;
 [![Badge Commits since latest](https://img.shields.io/github/commits-since/ArminJo/JK-BMSToPylontechCAN/latest?color=yellow)](https://github.com/ArminJo/JK-BMSToPylontechCAN/commits/main)
- &nbsp; &nbsp; 
+ &nbsp; &nbsp;
 [![Badge Build Status](https://github.com/ArminJo/JK-BMSToPylontechCAN/workflows/TestCompile/badge.svg)](https://github.com/ArminJo/JK-BMSToPylontechCAN/actions)
- &nbsp; &nbsp; 
+ &nbsp; &nbsp;
 ![Badge Hit Counter](https://visitor-badge.laobi.icu/badge?page_id=ArminJo_JK-BMSToPylontechCAN)
 <br/>
 
@@ -27,8 +27,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 - Display of BMS information and alarms on a locally attached serial 2004 LCD.
 - Beep on Alarm.
 
-**On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/)**
- 
+**!!! On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/) !!!**
+
  <br/>
 
 ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardAndOverviewPage.jpg)
@@ -39,17 +39,28 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 - [Wokwi JK-BMSToPylontechCAN example](https://wokwi.com/projects/371657348012321793).
 
  <br/>
+
+ # Pictures and screenshots
+
  The screenshots are taken from the Wokwi example with `STANDALONE_TEST` enabled and therefore contain random data.
- 
+
 | Breadboard detail | Automatic brightness |
 | :-: | :-: |
 | ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
-| Big Info Page | Cell Info Page |
+| Big Info Page | Cell Info Page with maximum and minimum indicators |
 | ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) |
 | Overview Page | CAN Info Page |
 | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) | ![CAN Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |
-| Error Page |  |
+| Error Page with start of error message in first line |  |
 | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |  |
+
+## No breadboard version
+
+| Overview | Overview |
+| :-: | :-: |
+| ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
+| Nano top view | Nano bottom view |
+| ![Nano top view](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NanoTop.jpg) | ![Nano bottom view](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NanoBottom.jpg) |
 
 <br/>
 
@@ -62,7 +73,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 ```
   __________ Schottky diode  _________            _________             _________
  |        TX|----|<|-- RX ->|RX       |<-- SPI ->|         |           |         |
- |        RX|<-------- TX --|4  UNO/  |          | MCP2515 |           |         |
+ |        RX|<-------- TX --|4  Uno/  |          | MCP2515 |           |         |
  |  JK-BMS  |               |   Nano  |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
  |          |<------- GND ->|         |<-- GND-->|         |           |         |
  |__________|               |_________|          |_________|           |_________|
@@ -74,12 +85,14 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  |GND  RX  TX VBAT|
  |________________|
    |   |   |
-   |   |   ----- RX of UNO / Nano
+   |   |   ----- RX of Uno / Nano
    |   --------- D4 (or other pin, if specified)
    --------------GND
 
 ```
-
+### Board connections:
+- [Nano](https://store.arduino.cc/products/arduino-nano#docs)
+- [Uno](https://store.arduino.cc/products/arduino-uno-rev3#docs)
  <br/>
 
 # Principle of operation
@@ -189,8 +202,8 @@ Start Current Calibration State=0
 Battery Actual Capacity[Ah]=30
 
 *** CELL INFO ***
- 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3968 mV, 
- 9=3969 mV, 10=3969 mV, 
+ 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3968 mV,
+ 9=3969 mV, 10=3969 mV,
 Minimum=3965 mV at cell #2, Maximum=3969 mV at cell #9
 Delta=4 mV, Average=3966 mV
 
@@ -205,8 +218,8 @@ Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing
 
 
 *** CELL INFO ***
- 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3967 mV, 
- 9=3969 mV, 10=3968 mV, 
+ 1=3967 mV,  2=3965 mV,  3=3965 mV,  4=3965 mV,  5=3965 mV,  6=3967 mV,  7=3968 mV,  8=3967 mV,
+ 9=3969 mV, 10=3968 mV,
 Minimum=3965 mV at cell #2, Maximum=3969 mV at cell #9
 Delta=4 mV, Average=3966 mV
 

@@ -66,7 +66,7 @@
  *
  *  __________ Schottky diode  _________            _________             _________
  * |        TX|----|<|-- RX ->|RX       |<-- SPI ->|         |           |         |
- * |        RX|<-------- TX --|4  UNO/  |          | MCP2515 |           |         |
+ * |        RX|<-------- TX --|4  Uno/  |          | MCP2515 |           |         |
  * |  JK-BMS  |               |   Nano  |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
  * |          |<------- GND ->|         |<-- GND-->|         |           |         |
  * |__________|               |_________|          |_________|           |_________|
@@ -78,15 +78,15 @@
  * |GND  RX  TX VBAT|
  * |________________|
  *   |   |   |
- *   |   |   ----- RX of UNO / Nano
+ *   |   |   ----- RX of Uno / Nano
  *   |   --------- D4 (or other)
  *   --------------GND
  */
 
 /*
  * Ideas:
- * Balancing time per day etc.
- * Maximum, minimum percent per cell
+ * Balancing time per day / week / month etc.
+ * Maximum, minimum cell while balancing
  */
 #include <Arduino.h>
 
@@ -103,7 +103,7 @@
 #define JK_BMS_TX_PIN               4
 /*
  * The SPI pins for connection to CAN converter and the I2C / TWI pins for the LCD are determined by hardware.
- * For UNO / Nano:
+ * For Uno / Nano:
  *   SPI: MOSI - 11, MISO - 12, SCK - 13.
  *   I2C: SDA - A4, SCL - A5.
  */
@@ -155,8 +155,8 @@ uint16_t sFrameTimeoutCounter = 0;
 #define CAN_BAUDRATE    500000  // 500 kB
 #if !defined(MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE)
 // Must be specified before #include "MCP2515_TX.hpp"
-//#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE  16 // 16 MHz is default for the Arduino CAN bus shield
-#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE   8 // 8 MHz is default for the Chinese breakout board
+#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE  16 // 16 MHz is default for the Arduino CAN bus shield
+//#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE   8 // 8 MHz is default for the Chinese breakout board. !!! This does not work with 500 kB !!!
 #endif
 #include "MCP2515_TX.hpp" // my reduced tx only driver
 bool sCanDataIsInitialized = false;
