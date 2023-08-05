@@ -7,7 +7,7 @@ Display of many BMS information and alarms on a locally attached 2004 LCD.<br/>
 
 [![Badge License: GPLv3](https://img.shields.io/badge/License-GPLv3-brightgreen.svg)](https://www.gnu.org/licenses/gpl-3.0)
  &nbsp; &nbsp;
-[![Badge Version](https://img.shields.io/github/v/release/ArminJo/OpenledRace?include_prereleases&color=yellow&logo=DocuSign&logoColor=white)](https://github.com/ArminJo/JK-BMSToPylontechCAN/releases/latest)
+[![Badge Version](https://img.shields.io/github/v/release/ArminJo/JK-BMSToPylontechCAN?include_prereleases&color=yellow&logo=DocuSign&logoColor=white)](https://github.com/ArminJo/JK-BMSToPylontechCAN/releases/latest)
  &nbsp; &nbsp;
 [![Badge Commits since latest](https://img.shields.io/github/commits-since/ArminJo/JK-BMSToPylontechCAN/latest?color=yellow)](https://github.com/ArminJo/JK-BMSToPylontechCAN/commits/main)
  &nbsp; &nbsp;
@@ -25,7 +25,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 # Features
 - Protocol converter.
 - Display of BMS information and alarms on a locally attached serial 2004 LCD.
-- Beep on Alarm.
+- Switch off LCD backlight after timeout.
+- Beep on alarm and timeouts.
 
 **!!! On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/) !!!**
 
@@ -96,16 +97,17 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  <br/>
 
 # Principle of operation
-1. A request to deliver all informations is sent to the BMS.
-2. The BMS reply frame is stored in a buffer and parity and other plausi checks are made.
-3. The cell data are converted and enhanced to fill the JKConvertedCellInfoStruct.
+1. A request to deliver all informations is sent to the BMS (1.85 ms).
+2. Wait and receive the The BMS reply frame (0.18 to 1 ms + 25.5 ms).
+3. The BMS reply frame is stored in a buffer and parity and other plausi checks are made.
+4. The cell data are converted and enhanced to fill the JKConvertedCellInfoStruct.
    Other frame data are mapped to a C structure.
    But all words and longs in this structure are filled with big endian and thus cannot be read directly but must be swapped on reading.
-4. Other frame data are converted and enhanced to fill the JKComputedDataStruct.
-5. The content of the result frame is printed. After reset, all info is printed once, then only dynamic info is printed.
-6. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
-7. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
-8. CAN data is sent.
+5. Other frame data are converted and enhanced to fill the JKComputedDataStruct.
+6. The content of the result frame is printed. After reset, all info is printed once, then only dynamic info is printed.
+7. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
+8. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
+9. CAN data is sent.
 <br/>
 
 # Compile with the Arduino IDE

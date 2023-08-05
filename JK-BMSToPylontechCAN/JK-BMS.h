@@ -66,6 +66,7 @@ extern struct JKComputedDataStruct JKComputedData;        // All derived convert
 extern const char *sErrorStringForLCD;
 extern bool sErrorStatusJustChanged;
 extern char sUpTimeString[16]; // " -> 1000D23H12M" is 15 bytes long
+extern bool sUpTimeStringHasChanged;
 
 int16_t getTemperature(uint16_t aJKRAWTemperature);
 int16_t getCurrent(uint16_t aJKRAWCurrent);
@@ -85,9 +86,10 @@ void myPrintlnSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue);
 
+void computeUpTimeString();
 void printJKStaticInfo();
 void printJKDynamicInfo();
-void printAlarmInfo();
+void handleAndPrintAlarmInfo();
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
 #define JK_BMS_FRAME_TRAILER_LENGTH             9
@@ -144,6 +146,18 @@ struct JKComputedDataStruct {
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
+};
+
+union BMSStatusUnion {
+    uint16_t StatusAsWord;
+    struct {
+        uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
+        bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
+        bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
+        bool BalancerActive :1;                 // 0x04
+        bool BatteryDown :1;                    // 0x08
+        uint8_t ReservedStatus :4;
+    } StatusBits;
 };
 
 /*
@@ -215,17 +229,16 @@ struct JKReplyStruct {
     } AlarmUnion;
 
     uint8_t TokenBatteryStatus;                     // 0x8C
-    union {
-        uint16_t StatusAsWord;
-        struct {
-            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
-            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
-            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
-            bool BalancerActive :1;                 // 0x04
-            bool BatteryDown :1;                    // 0x08
-            uint8_t ReservedStatus :4;
-        } StatusBits;
-    } StatusUnion;
+    union BMSStatusUnion BMSStatus;
+//        uint16_t StatusAsWord;
+//        struct {
+//            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
+//            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
+//            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
+//            bool BalancerActive :1;                 // 0x04
+//            bool BatteryDown :1;                    // 0x08
+//            uint8_t ReservedStatus :4;
+//        } StatusBits;
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
     uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000

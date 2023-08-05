@@ -142,8 +142,8 @@ struct PylontechCANBatteryRequesFrameStruct {
         uint8_t Filler = 0;
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
-        FrameData.DischargeEnable = aJKFAllReply->StatusUnion.StatusBits.ChargeMosFetActive;
-        FrameData.ChargeEnable = aJKFAllReply->StatusUnion.StatusBits.DischargeMosFetActive;
+        FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
+        FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
 
         // I do not know the semantics of ForceChargeRequest flags so it is only a guess here
         if (aJKFAllReply->SOCPercent < 20) {
@@ -225,7 +225,7 @@ struct PylontechCANErrorsWarningsFrameStruct {
 
         // Byte 1
         FrameData.ChargeOvercurrentError = aJKFAllReply->AlarmUnion.AlarmBits.ChargeOvercurrentAlarm;
-        FrameData.SystemError = aJKFAllReply->StatusUnion.StatusBits.BatteryDown;
+        FrameData.SystemError = aJKFAllReply->BMSStatus.StatusBits.BatteryDown;
 //        if (aJKFAllReply->SOCPercent < 5) {
 //            FrameData.SystemError = 1;
 //        }
@@ -243,7 +243,7 @@ struct PylontechCANErrorsWarningsFrameStruct {
         // Byte 3
         // Use the same values as for error here
         FrameData.ChargeHighCurrentWarning = aJKFAllReply->AlarmUnion.AlarmBits.ChargeOvercurrentAlarm;
-        FrameData.SystemError = aJKFAllReply->StatusUnion.StatusBits.BatteryDown;
+        FrameData.SystemError = aJKFAllReply->BMSStatus.StatusBits.BatteryDown;
 //        if (aJKFAllReply->SOCPercent < 10) {
 //            FrameData.SystemWarning = 1;
 //        }
