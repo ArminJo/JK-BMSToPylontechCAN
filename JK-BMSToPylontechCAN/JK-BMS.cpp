@@ -31,7 +31,7 @@
 
 #include "JK-BMS.h"
 
-BMSStatusUnion lastBMSStatus;
+JKReplyStruct lastJKReply;
 
 #if !defined(LOCAL_DEBUG)
 //#define LOCAL_DEBUG
@@ -52,9 +52,10 @@ uint8_t JKReplyFrameBuffer[350];                // The raw big endian data as re
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
 JKComputedDataStruct lastJKComputedData;            // All derived converted and computed data useful for display
-char sUpTimeString[16]; // " -> 1000D23H12M" is 15 bytes long
-bool sUpTimeStringHasChanged;
-char sLastUpTimeCharacter;  // for detecting changes in string and setting sUpTimeStringHasChanged
+char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
+bool sUpTimeStringMinuteHasChanged;
+bool sUpTimeStringTenthOfMinuteHasChanged;
+char sLastUpTimeTenthOfMinuteCharacter;  // for detecting changes in string and setting sUpTimeStringTenthOfMinuteHasChanged
 
 /*
  * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
@@ -500,7 +501,7 @@ void printBMSInfo() {
     Serial.println();
 }
 
-void printMiscelaneousInfo() {
+void printMiscellaneousInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
     myPrintlnSwap(F("Balance Starting Cell Voltage=[mV]"), tJKFAllReply->BalancingStartMillivolt);
@@ -520,40 +521,33 @@ void printMiscelaneousInfo() {
  * Stores error string for LCD in sErrorStringForLCD
  */
 void handleAndPrintAlarmInfo() {
-    static uint16_t sLastAlarms = 0;
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
+    if (tJKFAllReply->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
+        sErrorStatusJustChanged = true; // used for checkButtonStateChange()
 
-    uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
-
-    if (sLastAlarms != tAlarms) {
-        sLastAlarms = tAlarms;
+        uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
         if (tAlarms == 0) {
             sErrorStringForLCD = NULL;
-        }
-        sErrorStatusJustChanged = true; // used for checkButtonStateChange()
-    }
+        } else {
+            Serial.println(F("*** ALARM FLAGS ***"));
+            Serial.print(F("Alarm bits=0b"));
+            Serial.println(tAlarms, BIN);
 
-    if (tAlarms != 0) {
-        Serial.println(F("*** ALARM FLAGS ***"));
-
-        Serial.print(F("Alarm bits=0b"));
-        Serial.println(tAlarms, BIN);
-
-        uint16_t tAlarmMask = 1;
-        for (uint_fast8_t i = 0; i < NUMBER_OF_DEFINED_ALARM_BITS; ++i) {
-            if (tAlarms & tAlarmMask) {
-                Serial.print(F("Alarm bit=0b"));
-                Serial.print(tAlarmMask, BIN);
-                Serial.print(F(" -> "));
-                const char *tErrorStringPtr = (char*) (pgm_read_word(&JK_BMSErrorStringsArray[i]));
-                sErrorStringForLCD = tErrorStringPtr;
-                Serial.println(reinterpret_cast<const __FlashStringHelper*>(tErrorStringPtr));
+            uint16_t tAlarmMask = 1;
+            for (uint_fast8_t i = 0; i < NUMBER_OF_DEFINED_ALARM_BITS; ++i) {
+                if (tAlarms & tAlarmMask) {
+                    Serial.print(F("Alarm bit=0b"));
+                    Serial.print(tAlarmMask, BIN);
+                    Serial.print(F(" -> "));
+                    const char *tErrorStringPtr = (char*) (pgm_read_word(&JK_BMSErrorStringsArray[i]));
+                    sErrorStringForLCD = tErrorStringPtr;
+                    Serial.println(reinterpret_cast<const __FlashStringHelper*>(tErrorStringPtr));
+                }
+                tAlarmMask <<= 1;
             }
-            tAlarmMask <<= 1;
+            Serial.println();
         }
-        Serial.println();
     }
-
 }
 
 void printEnabledState(bool aIsEnabled) {
@@ -569,33 +563,6 @@ void printActiveState(bool aIsActive) {
         Serial.print(F(" not"));
     }
     Serial.print(F(" active"));
-}
-/*
- * Token 0x8C. Print if changed
- * NOT YET USED
- */
-void printStatusFlags() {
-    static uint16_t sLastStatus = 0;
-
-    JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
-//    Serial.print(F("StatusAsWord="));
-//    Serial.println(tJKFAllReply->BMSStatus.StatusAsWord);
-
-    uint16_t tStatus = swap(tJKFAllReply->BMSStatus.StatusAsWord);
-    if (sLastStatus != tStatus) {
-        sLastStatus = tStatus;
-        Serial.println(F("*** STATUS FLAGS ***"));
-        Serial.print(F("Charging MosFet"));
-        printActiveState(tJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive);
-        Serial.print(F(", Discharging MosFet"));
-        printActiveState(tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive);
-        Serial.print(F(", Balancer"));
-        printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
-        Serial.print(F(", Shutdown"));
-        printActiveState(tJKFAllReply->BMSStatus.StatusBits.BatteryDown);
-        Serial.println();
-        Serial.println();
-    }
 }
 
 void printJKStaticInfo() {
@@ -613,17 +580,21 @@ void printJKStaticInfo() {
     printTemperatureProtectionInfo();
 
     Serial.println(F("*** MISC INFO ***"));
-    printMiscelaneousInfo();
+    printMiscellaneousInfo();
 }
 
 void computeUpTimeString() {
-    uint32_t tSystemWorkingMinutes = swap(sJKFAllReplyPointer->SystemWorkingMinutes);
-    // 1 kByte for sprintf
-    sprintf_P(sUpTimeString, PSTR(" -> %4uD%2uH%2uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
-            (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
-    if (sLastUpTimeCharacter != sUpTimeString[13]) {
-        sLastUpTimeCharacter = sUpTimeString[13];
-        sUpTimeStringHasChanged = true;
+    if (sJKFAllReplyPointer->SystemWorkingMinutes != lastJKReply.SystemWorkingMinutes) {
+        sUpTimeStringMinuteHasChanged = true;
+
+        uint32_t tSystemWorkingMinutes = swap(sJKFAllReplyPointer->SystemWorkingMinutes);
+        // 1 kByte for sprintf
+        sprintf_P(sUpTimeString, PSTR("%4uD%2uH%2uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
+                (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
+        if (sUpTimeStringTenthOfMinuteHasChanged != sUpTimeString[7]) {
+            sUpTimeStringTenthOfMinuteHasChanged = sUpTimeString[7];
+            sUpTimeStringTenthOfMinuteHasChanged = true;
+        }
     }
 }
 
@@ -634,8 +605,13 @@ void computeUpTimeString() {
  */
 void printJKDynamicInfo() {
 
-    if (sUpTimeStringHasChanged) {
-        sUpTimeStringHasChanged = false;
+    /*
+     * Print it every ten minutes
+     */
+//    if (sUpTimeStringMinuteHasChanged) {
+//        sUpTimeStringMinuteHasChanged = false;
+    if (sUpTimeStringTenthOfMinuteHasChanged) {
+        sUpTimeStringTenthOfMinuteHasChanged = false;
 
         Serial.print(F("Total Runtime Minutes="));
         Serial.print(swap(sJKFAllReplyPointer->SystemWorkingMinutes));
@@ -665,14 +641,21 @@ void printJKDynamicInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
     /*
+     * SOC
+     */
+    if (tJKFAllReply->SOCPercent != lastJKReply.SOCPercent
+            || JKComputedData.RemainingCapacityAmpereHour != lastJKComputedData.RemainingCapacityAmpereHour) {
+        myPrint(F("SOC[%]="), tJKFAllReply->SOCPercent);
+        myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
+        Serial.println();
+    }
+
+    /*
      * Capacity
      */
     if (JKComputedData.RemainingCapacityAmpereHour != lastJKComputedData.RemainingCapacityAmpereHour
-            || JKComputedData.BatteryVoltageFloat != lastJKComputedData.BatteryVoltageFloat // @suppress("Direct float comparison")
+            || abs(JKComputedData.BatteryVoltageFloat - lastJKComputedData.BatteryVoltageFloat) > 0.01
             || JKComputedData.BatteryLoadCurrentFloat != lastJKComputedData.BatteryLoadCurrentFloat) { // @suppress("Direct float comparison")
-        myPrint(F("SOC[%]="), tJKFAllReply->SOCPercent);
-        myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
-
         Serial.print(F("Battery Voltage[V]="));
         Serial.print(JKComputedData.BatteryVoltageFloat, 2);
         Serial.print(F(", Current[A]="));
@@ -685,9 +668,9 @@ void printJKDynamicInfo() {
     /*
      * Charge, Discharge and Balancer flags
      */
-    if (tJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive != lastBMSStatus.StatusBits.ChargeMosFetActive
-            || tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive != lastBMSStatus.StatusBits.DischargeMosFetActive
-            || tJKFAllReply->BMSStatus.StatusBits.BalancerActive != lastBMSStatus.StatusBits.BalancerActive) {
+    if (tJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive != lastJKReply.BMSStatus.StatusBits.ChargeMosFetActive
+            || tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive != lastJKReply.BMSStatus.StatusBits.DischargeMosFetActive
+            || tJKFAllReply->BMSStatus.StatusBits.BalancerActive != lastJKReply.BMSStatus.StatusBits.BalancerActive) {
         Serial.print(F("Charging MosFet"));
         printEnabledState(tJKFAllReply->ChargeIsEnabled);
         Serial.print(',');
@@ -702,8 +685,12 @@ void printJKDynamicInfo() {
         printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
         Serial.println();
 
-        lastBMSStatus = tJKFAllReply->BMSStatus;
     }
+
+    /*
+     * Copy complete reply for comparison
+     */
+    lastJKReply = *tJKFAllReply; // 221 bytes
 
 }
 #endif // _JK_BMS_H

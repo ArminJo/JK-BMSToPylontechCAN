@@ -65,8 +65,8 @@ extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted l
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 extern const char *sErrorStringForLCD;
 extern bool sErrorStatusJustChanged;
-extern char sUpTimeString[16]; // " -> 1000D23H12M" is 15 bytes long
-extern bool sUpTimeStringHasChanged;
+extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
+extern bool sUpTimeStringMinuteHasChanged;
 
 int16_t getTemperature(uint16_t aJKRAWTemperature);
 int16_t getCurrent(uint16_t aJKRAWCurrent);
@@ -148,6 +148,9 @@ struct JKComputedDataStruct {
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
 };
 
+/*
+ * Only for documentation
+ */
 union BMSStatusUnion {
     uint16_t StatusAsWord;
     struct {
@@ -229,16 +232,17 @@ struct JKReplyStruct {
     } AlarmUnion;
 
     uint8_t TokenBatteryStatus;                     // 0x8C
-    union BMSStatusUnion BMSStatus;
-//        uint16_t StatusAsWord;
-//        struct {
-//            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
-//            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
-//            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
-//            bool BalancerActive :1;                 // 0x04
-//            bool BatteryDown :1;                    // 0x08
-//            uint8_t ReservedStatus :4;
-//        } StatusBits;
+    union {
+        uint16_t StatusAsWord;
+        struct {
+            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
+            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
+            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
+            bool BalancerActive :1;                 // 0x04
+            bool BatteryDown :1;                    // 0x08
+            uint8_t ReservedStatus :4;
+        } StatusBits;
+    } BMSStatus;
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
     uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000

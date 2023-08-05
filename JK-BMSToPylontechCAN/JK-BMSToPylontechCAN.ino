@@ -688,7 +688,7 @@ void printBMSDataOnLCD() {
             myLCD.print(t20CharacterString);
         } else {
             myLCD.print(F("Uptime:  "));
-            myLCD.print(&sUpTimeString[4]);
+            myLCD.print(sUpTimeString);
         }
 
         /*
