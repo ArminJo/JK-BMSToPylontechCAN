@@ -604,11 +604,15 @@ void computeUpTimeString() {
         sUpTimeStringMinuteHasChanged = true;
 
         uint32_t tSystemWorkingMinutes = swap(sJKFAllReplyPointer->SystemWorkingMinutes);
-        // 1 kByte for sprintf
-        sprintf_P(sUpTimeString, PSTR("%4uD%2uH%2uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
+        // 1 kByte for sprintf  creates string "1234D23H12M"
+        sprintf_P(sUpTimeString, PSTR("%4uD%02uH%02uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
                 (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
         if (sLastUpTimeTenthOfMinuteCharacter != sUpTimeString[8]) {
+//            Serial.print(F("Old="));
+//            Serial.print(sLastUpTimeTenthOfMinuteCharacter);
             sLastUpTimeTenthOfMinuteCharacter = sUpTimeString[8];
+//            Serial.print(F(" new="));
+//            Serial.println(sLastUpTimeTenthOfMinuteCharacter);
             sUpTimeStringTenthOfMinuteHasChanged = true;
         }
     }
@@ -651,7 +655,6 @@ void printJKDynamicInfo() {
         myPrint(F("Temperature: Power MosFet="), JKComputedData.TemperaturePowerMosFet);
         myPrint(F(", Sensor 1="), JKComputedData.TemperatureSensor1);
         myPrintln(F(", Sensor 2="), JKComputedData.TemperatureSensor2);
-        Serial.println();
     }
 
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
@@ -663,23 +666,20 @@ void printJKDynamicInfo() {
             || JKComputedData.RemainingCapacityAmpereHour != lastJKComputedData.RemainingCapacityAmpereHour) {
         myPrint(F("SOC[%]="), tJKFAllReply->SOCPercent);
         myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
-        Serial.println();
     }
 
     /*
      * Capacity
      */
     if (JKComputedData.RemainingCapacityAmpereHour != lastJKComputedData.RemainingCapacityAmpereHour
-            || abs(JKComputedData.BatteryVoltageFloat - lastJKComputedData.BatteryVoltageFloat) > 0.01
+            || abs(JKComputedData.BatteryVoltageFloat - lastJKComputedData.BatteryVoltageFloat) > 0.015 // Meant is 0.01 but use 15 to avoid strange floating point effects
             || JKComputedData.BatteryLoadCurrentFloat != lastJKComputedData.BatteryLoadCurrentFloat) { // @suppress("Direct float comparison")
         Serial.print(F("Battery Voltage[V]="));
         Serial.print(JKComputedData.BatteryVoltageFloat, 2);
         Serial.print(F(", Current[A]="));
         Serial.print(JKComputedData.BatteryLoadCurrentFloat, 2);
         myPrintln(F(", Power[W]="), JKComputedData.BatteryLoadPower);
-        Serial.println();
     }
-    lastJKComputedData = JKComputedData;
 
     /*
      * Charge, Discharge and Balancer flags
@@ -699,13 +699,12 @@ void printJKDynamicInfo() {
         printEnabledState(tJKFAllReply->BalancingIsEnabled);
         Serial.print(',');
         printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
-        Serial.println();
-
     }
 
     /*
-     * Copy complete reply for comparison
+     * Copy complete reply and computed values for change determination
      */
+    lastJKComputedData = JKComputedData;
     lastJKReply = *tJKFAllReply; // 221 bytes
 
 }

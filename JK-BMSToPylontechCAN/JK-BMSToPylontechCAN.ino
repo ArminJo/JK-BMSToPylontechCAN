@@ -589,8 +589,12 @@ void loop() {
         Serial.flush();
         // Interrupts, like button press will wake us up early, but millis will be incremented anyway :-(
         sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
-        sleepWithWatchdog(WDTO_500MS, true);
-        sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
+        if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
+            sleepWithWatchdog(WDTO_500MS, true);
+        }
+        if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
+            sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
+        }
     }
 #endif
 }
@@ -1050,6 +1054,10 @@ void checkButtonStateChange() {
                 tone(BUZZER_PIN, 2200, 30);
                 Serial.print(F("Set LCD display page to: "));
                 Serial.println(sDisplayPageNumber);
+                /*
+                 * Show new page
+                 */
+                printBMSDataOnLCD();
             }
         } // if (Button0AtPin2.ButtonStateIsActive)
     } // Button0AtPin2.ButtonStateHasJustChanged
