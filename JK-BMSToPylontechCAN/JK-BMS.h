@@ -36,12 +36,8 @@
 #ifndef _JK_BMS_H
 #define _JK_BMS_H
 
-#include <Arduino.h>
 #include "SoftwareSerialTX.h"
 
-#if !defined(MAXIMUM_NUMBER_OF_CELLS)
-#define MAXIMUM_NUMBER_OF_CELLS     24 // must be before #include "JK-BMS.h"
-#endif
 #define JK_FRAME_START_BYTE_0   0x4E
 #define JK_FRAME_START_BYTE_1   0x57
 #define JK_FRAME_END_BYTE       0x68
@@ -122,7 +118,7 @@ struct JKCellInfoStruct {
 };
 
 struct JKConvertedCellInfoStruct {
-    uint8_t NumberOfCellInfoEnties;
+    uint8_t actualNumberOfCellInfoEntries;
     JKCellInfoStruct CellInfoStructArray[MAXIMUM_NUMBER_OF_CELLS];
     uint8_t MinimumVoltagCellIndex;
     uint8_t MaximumVoltagCellIndex;

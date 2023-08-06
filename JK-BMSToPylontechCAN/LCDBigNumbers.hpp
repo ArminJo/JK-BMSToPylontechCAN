@@ -82,7 +82,11 @@
 #define BIG_NUMBERS_FONT_3_COLUMN_4_ROWS_VARIANT_1  0x0B
 #define BIG_NUMBERS_FONT_3_COLUMN_4_ROWS_VARIANT_2  0x1B
 
-//#define LOCAL_DEBUG // To debug/understand the writeBigNumber() function
+#if defined(DEBUG)
+#define LOCAL_DEBUG
+#else
+//#define LOCAL_DEBUG // To debug/understand the writeBigNumber() function - only for development
+#endif
 
 // !!! Must be without comment and closed by @formatter:on
 // @formatter:off

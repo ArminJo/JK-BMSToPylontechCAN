@@ -1,5 +1,5 @@
 /*
- * Pylontech_CAN.cpp
+ * Pylontech_CAN.hpp
  *
  * Functions to fill and send CAN data defined in Pylontech_CAN.h
  *
@@ -27,13 +27,15 @@
  *
  */
 
-#ifndef _PYLONTECH_CAN_CPP
-#define _PYLONTECH_CAN_CPP
+#ifndef _PYLONTECH_CAN_HPP
+#define _PYLONTECH_CAN_HPP
 
 #include <Arduino.h>
 
-#if !defined(LOCAL_DEBUG)
-//#define LOCAL_DEBUG
+#if defined(DEBUG)
+#define LOCAL_DEBUG
+#else
+//#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 #endif
 
 #include "MCP2515_TX.h" // my reduced driver
@@ -99,4 +101,7 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
 }
 
-#endif // _PYLONTECH_CAN_H
+#if defined(LOCAL_DEBUG)
+#undef LOCAL_DEBUG
+#endif
+#endif // _PYLONTECH_CAN_HPP

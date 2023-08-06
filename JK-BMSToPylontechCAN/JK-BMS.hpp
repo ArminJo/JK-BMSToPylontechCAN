@@ -24,8 +24,8 @@
  *
  */
 
-#ifndef _JK_BMS_RS458_C
-#define _JK_BMS_RS458_C
+#ifndef _JK_BMS_HPP
+#define _JK_BMS_HPP
 
 #include <Arduino.h>
 
@@ -33,8 +33,10 @@
 
 JKReplyStruct lastJKReply;
 
-#if !defined(LOCAL_DEBUG)
-//#define LOCAL_DEBUG
+#if defined(DEBUG)
+#define LOCAL_DEBUG
+#else
+//#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 #endif
 
 // see JK Communication protocol.pdf http://www.jk-bms.com/Upload/2022-05-19/1621104621.pdf
@@ -51,7 +53,7 @@ uint16_t sReplyFrameLength;                     // Received length of frame
 uint8_t JKReplyFrameBuffer[350];                // The raw big endian data as received from JK BMS
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
-JKComputedDataStruct lastJKComputedData;            // All derived converted and computed data useful for display
+JKComputedDataStruct lastJKComputedData;        // All derived converted and computed data useful for display
 char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 bool sUpTimeStringMinuteHasChanged;
 bool sUpTimeStringTenthOfMinuteHasChanged;
@@ -85,6 +87,12 @@ const char *sErrorStringForLCD; // store of the error string of the highest erro
 bool sErrorStatusJustChanged = false; // is set to true by handleAndPrintAlarmInfo(), and reset by checkButtonStateChange()
 
 /*
+ * Helper macro for getting a macro definition as string
+ */
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+/*
  * 1.85 ms
  */
 void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive) {
@@ -105,37 +113,36 @@ void initJKReplyFrameBuffer() {
     sReplyFrameBufferIndex = 0;
 }
 
+/*
+ * Prints formatted reply buffer raw content
+ */
 void printJKReplyFrameBuffer() {
-    if (sReplyFrameBufferIndex == 0) {
-        Serial.println(F("sReplyFrameBufferIndex is 0"));
-    } else {
-        for (uint16_t i = 0; i < (sReplyFrameBufferIndex + 1); ++i) {
-            if (i == JK_BMS_FRAME_HEADER_LENGTH || i == ((sReplyFrameBufferIndex + 1) - JK_BMS_FRAME_TRAILER_LENGTH) || i % 16 == 0
-                    || i
-                            == (uint16_t) (JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH + 1
-                                    + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH])) {
-                // Insert newline and address after header, after cell data and after each 16 bit
-                if (i != 0) {
-                    Serial.println();
-                }
-                Serial.print(F("0x"));
-                if (i < 0x10) {
-                    Serial.print('0'); // padding with zero
-                }
-                Serial.print(i, HEX);
-                Serial.print(F("  "));
+    for (uint16_t i = 0; i < (sReplyFrameBufferIndex + 1); ++i) {
+        if (i == JK_BMS_FRAME_HEADER_LENGTH || i == ((sReplyFrameBufferIndex + 1) - JK_BMS_FRAME_TRAILER_LENGTH) || i % 16 == 0
+                || i
+                        == (uint16_t) (JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH + 1
+                                + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH])) {
+            // Insert newline and address after header, after cell data and after each 16 bit
+            if (i != 0) {
+                Serial.println();
             }
-
             Serial.print(F("0x"));
-            if (JKReplyFrameBuffer[i] < 0x10) {
+            if (i < 0x10) {
                 Serial.print('0'); // padding with zero
             }
-            Serial.print(JKReplyFrameBuffer[i], HEX);
-            Serial.print(' ');
-
+            Serial.print(i, HEX);
+            Serial.print(F("  "));
         }
-        Serial.println();
+
+        Serial.print(F("0x"));
+        if (JKReplyFrameBuffer[i] < 0x10) {
+            Serial.print('0'); // padding with zero
+        }
+        Serial.print(JKReplyFrameBuffer[i], HEX);
+        Serial.print(' ');
+
     }
+    Serial.println();
 }
 
 #define JK_BMS_RECEIVE_OK           0
@@ -303,7 +310,13 @@ void fillJKConvertedCellInfo() {
     uint8_t *tJKCellInfoReplyPointer = &JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH];
 
     uint8_t tNumberOfCellInfo = (*tJKCellInfoReplyPointer++) / 3;
-    JKConvertedCellInfo.NumberOfCellInfoEnties = tNumberOfCellInfo;
+    JKConvertedCellInfo.actualNumberOfCellInfoEntries = tNumberOfCellInfo;
+    if (tNumberOfCellInfo > MAXIMUM_NUMBER_OF_CELLS) {
+        Serial.print(F("Error: " STR(MAXIMUM_NUMBER_OF_CELLS) " cells configured with MAXIMUM_NUMBER_OF_CELLS in program, but "));
+        Serial.print(tNumberOfCellInfo);
+        Serial.println(F(" cell info were sent"));
+        return;
+    }
 
     uint16_t tVoltage;
     uint32_t tMillivoltSum = 0;
@@ -340,9 +353,9 @@ void fillJKConvertedCellInfo() {
     if (tNumberOfNonNullCellInfo < tNumberOfCellInfo) {
         Serial.print(F("Problem: "));
         Serial.print(tNumberOfCellInfo);
-        Serial.print(F(" cells configured, but only "));
+        Serial.print(F(" cells configured in BMS, but only "));
         Serial.print(tNumberOfNonNullCellInfo);
-        Serial.println(F(" cells are connected"));
+        Serial.println(F(" cells seems to be connected"));
     }
 }
 
@@ -386,8 +399,11 @@ void fillJKComputedData() {
     JKComputedData.BatteryLoadPower = JKComputedData.BatteryVoltageFloat * JKComputedData.BatteryLoadCurrentFloat;
 }
 
+/*
+ * Print formatted cell info on Serial
+ */
 void printJKCellInfo() {
-    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.NumberOfCellInfoEnties;
+    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.actualNumberOfCellInfoEntries;
 
 //    Serial.print(tNumberOfCellInfo);
 //    Serial.println(F(" cell voltages:"));
@@ -591,8 +607,8 @@ void computeUpTimeString() {
         // 1 kByte for sprintf
         sprintf_P(sUpTimeString, PSTR("%4uD%2uH%2uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
                 (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
-        if (sUpTimeStringTenthOfMinuteHasChanged != sUpTimeString[7]) {
-            sUpTimeStringTenthOfMinuteHasChanged = sUpTimeString[7];
+        if (sLastUpTimeTenthOfMinuteCharacter != sUpTimeString[8]) {
+            sLastUpTimeTenthOfMinuteCharacter = sUpTimeString[8];
             sUpTimeStringTenthOfMinuteHasChanged = true;
         }
     }
@@ -693,4 +709,7 @@ void printJKDynamicInfo() {
     lastJKReply = *tJKFAllReply; // 221 bytes
 
 }
-#endif // _JK_BMS_H
+#if defined(LOCAL_DEBUG)
+#undef LOCAL_DEBUG
+#endif
+#endif // _JK_BMS_HPP

@@ -93,10 +93,6 @@
 
 #define VERSION_EXAMPLE "1.2"
 
-#if !defined(LOCAL_DEBUG)
-//#define LOCAL_DEBUG
-#endif
-
 /*
  * Pin layout, may be adapted to your requirements
  */
@@ -119,7 +115,10 @@
 /*
  * Program timing, may be adapted to your requirements
  */
-#if defined(LOCAL_DEBUG)
+#if !defined(DEBUG)
+//#define DEBUG
+#endif
+#if defined(DEBUG)
 #define MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS     5000
 #define MILLISECONDS_BETWEEN_CAN_FRAME_SEND             5000
 #define SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS          "5" // Only for display on LCD
@@ -135,25 +134,49 @@
  * Display timeouts, may be adapted to your requirements
  */
 //#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on
+#if defined(DEBUG)
+#define DISPLAY_ON_TIME_STRING               "30s  "
+#define DISPLAY_ON_TIME_SECONDS              30L // L to avoid overflow at macro processing
+#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT   20L
+//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps
+#define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      10L // 10 s
+#else
 #define DISPLAY_ON_TIME_STRING              "5 min" // 5 minutes. L to avoid overflow at macro processing
 #define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
-#define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
 #define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT  180L // 3 minutes
-//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want beeps for 1 minute
+//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps for 1 minute
 #define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      60L // 1 minute
+#endif
 
 /*
- * Sleep stuff
+ * Button at INT0 / D2 for switching LCD pages
  */
-#include "AVRUtils.h"
-bool sEnableSleep = false;             // If true, we can do a sleep at the end of the loop
+#define USE_BUTTON_0              // Enable code for 1. button at INT0 / D2
+//#define BUTTON_DEBOUNCING_MILLIS 80 // With this you can adapt to the characteristic of your button. Default is 50.
+#include "EasyButtonAtInt01.hpp"
+EasyButton Button0AtPin2;         // Only 1. button (USE_BUTTON_0) enabled -> button is connected to INT0
+#define JK_BMS_PAGE_OVERVIEW    0 // is displayed in case of error
+#define JK_BMS_PAGE_CELL_INFO   1
+#define JK_BMS_PAGE_BIG_INFO    2
+#define JK_BMS_PAGE_CAN_INFO    3 // Only if debug is enabled
+#define JK_BMS_PAGE_MAX         JK_BMS_PAGE_BIG_INFO
+#define JK_BMS_PAGE_MAX_DEBUG   JK_BMS_PAGE_CAN_INFO
+#define JK_BMS_START_PAGE       JK_BMS_PAGE_BIG_INFO
+//uint8_t sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
+uint8_t sDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
+void checkButtonStateChange();
 
 /*
- * JK-BMS stuff
+ * Software serial for JK-BMS stuff
  */
-#define MAXIMUM_NUMBER_OF_CELLS     24 // must be before #include "JK-BMS.h"
-#include "JK-BMS.h"
+#if !defined(MAXIMUM_NUMBER_OF_CELLS)
+#define MAXIMUM_NUMBER_OF_CELLS     24 // Maximum number of cell info which are converted. Must be before #include "JK-BMS.hpp".
+#endif
+#include "JK-BMS.hpp"
 
+/*
+ * Software serial for JK-BMS stuff
+ */
 #include "SoftwareSerialTX.h"
 /*
  * Use a 115200 baud software serial for the short request frame.
@@ -168,7 +191,7 @@ bool sFrameHasTimeout = false;              // If true BMS is likely switched of
 /*
  * CAN stuff
  */
-#include "Pylontech_CAN.h" // Must be before #include "MCP2515_TX.hpp"
+#include "Pylontech_CAN.hpp" // Must be before #include "MCP2515_TX.hpp"
 #define CAN_BAUDRATE    500000  // 500 kB
 #if !defined(MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE)
 // Must be specified before #include "MCP2515_TX.hpp"
@@ -178,6 +201,12 @@ bool sFrameHasTimeout = false;              // If true BMS is likely switched of
 #include "MCP2515_TX.hpp" // my reduced tx only driver
 bool sCanDataIsInitialized = false;
 uint32_t sMillisOfLastCANFrameSent = 0; // For CAN timing
+
+/*
+ * Sleep stuff
+ */
+#include "AVRUtils.h"
+bool sEnableSleep = false;             // If true, we can do a sleep at the end of the loop
 
 /*
  * LCD stuff
@@ -206,23 +235,6 @@ LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_2); 
 #define UNITS_ROW_FOR_BIG_INFO  1
 const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // char 1: top block for maximum cell voltage marker
 const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F }; // char 2: bottom block for minimum cell voltage marker
-
-/*
- * Button at INT0 / D2 for switching LCD pages
- */
-#define USE_BUTTON_0              // Enable code for 1. button at INT0 / D2
-#include "EasyButtonAtInt01.hpp"
-EasyButton Button0AtPin2;         // Only 1. button (USE_BUTTON_0) enabled -> button is connected to INT0
-#define JK_BMS_PAGE_OVERVIEW    0 // is displayed in case of error
-#define JK_BMS_PAGE_CELL_INFO   1
-#define JK_BMS_PAGE_BIG_INFO    2
-#define JK_BMS_PAGE_CAN_INFO    3 // Only if debug is enabled
-#define JK_BMS_PAGE_MAX         JK_BMS_PAGE_BIG_INFO
-#define JK_BMS_PAGE_MAX_DEBUG   JK_BMS_PAGE_CAN_INFO
-#define JK_BMS_START_PAGE       JK_BMS_PAGE_BIG_INFO
-//uint8_t sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
-uint8_t sDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
-void checkButtonStateChange();
 
 /*
  * Miscellaneous
@@ -376,11 +388,16 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 }
 
 void loop() {
+    bool tOldDebugModeActive = sDebugModeActive;
+    bool tDebugModeJustActivated = false;
     sDebugModeActive = !digitalRead(DEBUG_PIN);
+    if (sDebugModeActive && !tOldDebugModeActive) {
+        tDebugModeJustActivated = true;
+    }
 
     if (sSerialLCDAvailable) {
         checkButtonStateChange();
-    } // if (sSerialLCDAvailable)
+    }
 
     /*
      * Request status frame every n seconds
@@ -393,7 +410,7 @@ void loop() {
         while (Serial.available()) {
             Serial.read();
         }
-        requestJK_BMSStatusFrame(&TxToJKBMS, sDebugModeActive); // 1.85 ms
+        requestJK_BMSStatusFrame(&TxToJKBMS, tDebugModeJustActivated); // 1.85 ms
         sFrameIsRequested = true; // enable check for serial input
         initJKReplyFrameBuffer();
         sMillisOfLastReceivedByte = millis(); // initialize reply timeout
@@ -413,11 +430,15 @@ void loop() {
                  */
                 sFrameIsRequested = false;
                 sEnableSleep = true;
-                if (sDebugModeActive) {
+                if (tDebugModeJustActivated) {
                     Serial.println();
                     Serial.print(sReplyFrameBufferIndex + 1);
                     Serial.println(F(" bytes received"));
-                    printJKReplyFrameBuffer();
+                    if (sReplyFrameBufferIndex == 0) {
+                        Serial.println(F("sReplyFrameBufferIndex is 0"));
+                    } else {
+                        printJKReplyFrameBuffer();
+                    }
                     Serial.println();
                 }
 
@@ -543,7 +564,7 @@ void loop() {
      */
     if (sCanDataIsInitialized && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
-        if (sDebugModeActive) {
+        if (tDebugModeJustActivated) {
             Serial.println(F("Send CAN"));
         }
         sendPylontechAllCANFrames(sDebugModeActive);
@@ -671,6 +692,40 @@ void printCurrentOnLCD() {
  * Print selected data on a 2004 LCD display
  */
 char sStringBuffer[7]; // For rendering numbers with sprintf()
+
+/*
+ * We can display only up to 16 cell values on the LCD :-(
+ */
+void printCellInfoOnLCD() {
+    uint_fast8_t tRowNumber;
+    auto tNumberOfCellInfoEntries = JKConvertedCellInfo.actualNumberOfCellInfoEntries;
+    if (tNumberOfCellInfoEntries > 12) {
+        tRowNumber = 0;
+        if (tNumberOfCellInfoEntries > 16) {
+            tNumberOfCellInfoEntries = 16;
+        }
+    } else {
+        myLCD.print(F("    -CELL INFO-"));
+        tRowNumber = 1;
+    }
+    for (uint8_t i = 0; i < tNumberOfCellInfoEntries; ++i) {
+        if (i % 4 == 0) {
+            myLCD.setCursor(0, tRowNumber);
+            tRowNumber++;
+        }
+        // print maximum or minimum indicator
+        if (i == JKConvertedCellInfo.MaximumVoltagCellIndex) {
+            myLCD.print((char) (0x1));
+        } else if (i == JKConvertedCellInfo.MinimumVoltagCellIndex) {
+            myLCD.print((char) (0x2));
+        } else {
+            myLCD.print(' ');
+        }
+
+        myLCD.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt);
+    }
+}
+
 void printBMSDataOnLCD() {
     myLCD.clear();
 
@@ -752,36 +807,7 @@ void printBMSDataOnLCD() {
          *  CELL INFO
          **************************/
     } else if (sDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
-        /*
-         * We can display only up to 16 cell values on the LCD :-(
-         */
-        uint_fast8_t tRowNumber;
-        auto tNumberOfCellInfoEnties = JKConvertedCellInfo.NumberOfCellInfoEnties;
-        if (tNumberOfCellInfoEnties > 12) {
-            tRowNumber = 0;
-            if (tNumberOfCellInfoEnties > 16) {
-                tNumberOfCellInfoEnties = 16;
-            }
-        } else {
-            myLCD.print(F("    -CELL INFO-"));
-            tRowNumber = 1;
-        }
-        for (uint8_t i = 0; i < tNumberOfCellInfoEnties; ++i) {
-            if (i % 4 == 0) {
-                myLCD.setCursor(0, tRowNumber);
-                tRowNumber++;
-            }
-
-            // print maximum or minimum indicator
-            if (i == JKConvertedCellInfo.MaximumVoltagCellIndex) {
-                myLCD.print((char) 0x1);
-            } else if (i == JKConvertedCellInfo.MinimumVoltagCellIndex) {
-                myLCD.print((char) 0x2);
-            } else {
-                myLCD.print(' ');
-            }
-            myLCD.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt);
-        }
+        printCellInfoOnLCD();
 
         /**************************
          *  BIG INFO
@@ -1021,11 +1047,10 @@ void checkButtonStateChange() {
                     sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
                 }
 
+                tone(BUZZER_PIN, 2200, 30);
                 Serial.print(F("Set LCD display page to: "));
                 Serial.println(sDisplayPageNumber);
-
             }
-
         } // if (Button0AtPin2.ButtonStateIsActive)
     } // Button0AtPin2.ButtonStateHasJustChanged
     if (sErrorStatusJustChanged == true && sErrorStringForLCD != NULL) {
