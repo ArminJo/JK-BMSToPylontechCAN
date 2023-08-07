@@ -100,6 +100,7 @@ void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive) 
         aSerial->write(JKRequestStatusFrame[i]);
     }
     if (aDebugModeActive) {
+        Serial.println();
         Serial.println(F("Send requestFrame with TxToJKBMS"));
         for (uint8_t i = 0; i < sizeof(JKRequestStatusFrame); ++i) {
             Serial.print(F(" 0x"));
@@ -312,7 +313,7 @@ void fillJKConvertedCellInfo() {
     uint8_t tNumberOfCellInfo = (*tJKCellInfoReplyPointer++) / 3;
     JKConvertedCellInfo.actualNumberOfCellInfoEntries = tNumberOfCellInfo;
     if (tNumberOfCellInfo > MAXIMUM_NUMBER_OF_CELLS) {
-        Serial.print(F("Error: " STR(MAXIMUM_NUMBER_OF_CELLS) " cells configured with MAXIMUM_NUMBER_OF_CELLS in program, but "));
+        Serial.print(F("Error: Program compiled with \"MAXIMUM_NUMBER_OF_CELLS=" STR(MAXIMUM_NUMBER_OF_CELLS) "\", but "));
         Serial.print(tNumberOfCellInfo);
         Serial.println(F(" cell info were sent"));
         return;
@@ -608,11 +609,7 @@ void computeUpTimeString() {
         sprintf_P(sUpTimeString, PSTR("%4uD%02uH%02uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
                 (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
         if (sLastUpTimeTenthOfMinuteCharacter != sUpTimeString[8]) {
-//            Serial.print(F("Old="));
-//            Serial.print(sLastUpTimeTenthOfMinuteCharacter);
             sLastUpTimeTenthOfMinuteCharacter = sUpTimeString[8];
-//            Serial.print(F(" new="));
-//            Serial.println(sLastUpTimeTenthOfMinuteCharacter);
             sUpTimeStringTenthOfMinuteHasChanged = true;
         }
     }
@@ -699,6 +696,7 @@ void printJKDynamicInfo() {
         printEnabledState(tJKFAllReply->BalancingIsEnabled);
         Serial.print(',');
         printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
+        Serial.println(); // printActiveState does no println()
     }
 
     /*

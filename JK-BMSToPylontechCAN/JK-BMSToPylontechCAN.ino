@@ -246,6 +246,8 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 bool sStaticInfoWasSent = false; // Flag to send static Info only once after reset.
 
 bool sDebugModeActive = false;
+bool sDebugModeJustActivated = false;;
+
 void processReceivedData();
 void printReceivedData();
 
@@ -389,10 +391,10 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 
 void loop() {
     bool tOldDebugModeActive = sDebugModeActive;
-    bool tDebugModeJustActivated = false;
     sDebugModeActive = !digitalRead(DEBUG_PIN);
     if (sDebugModeActive && !tOldDebugModeActive) {
-        tDebugModeJustActivated = true;
+        sDebugModeJustActivated = true; // Must be set to false, where it is evaluated, otherwise it is reset in the next loop.
+        Serial.println(F("Debug mode just activated"));
     }
 
     if (sSerialLCDAvailable) {
@@ -410,7 +412,7 @@ void loop() {
         while (Serial.available()) {
             Serial.read();
         }
-        requestJK_BMSStatusFrame(&TxToJKBMS, tDebugModeJustActivated); // 1.85 ms
+        requestJK_BMSStatusFrame(&TxToJKBMS, sDebugModeJustActivated); // 1.85 ms
         sFrameIsRequested = true; // enable check for serial input
         initJKReplyFrameBuffer();
         sMillisOfLastReceivedByte = millis(); // initialize reply timeout
@@ -430,8 +432,8 @@ void loop() {
                  */
                 sFrameIsRequested = false;
                 sEnableSleep = true;
-                if (tDebugModeJustActivated) {
-                    Serial.println();
+                if (sDebugModeJustActivated) {
+                    sDebugModeJustActivated = false;
                     Serial.print(sReplyFrameBufferIndex + 1);
                     Serial.println(F(" bytes received"));
                     if (sReplyFrameBufferIndex == 0) {
@@ -564,7 +566,8 @@ void loop() {
      */
     if (sCanDataIsInitialized && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
-        if (tDebugModeJustActivated) {
+
+        if (sDebugModeActive) {
             Serial.println(F("Send CAN"));
         }
         sendPylontechAllCANFrames(sDebugModeActive);
@@ -587,8 +590,10 @@ void loop() {
     if (sEnableSleep) {
         sEnableSleep = false;
         Serial.flush();
-        // Interrupts, like button press will wake us up early, but millis will be incremented anyway :-(
-        sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
+        // Interrupts, like button press will wake us up early, but millis will be incremented anyway
+        if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
+            sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
+        }
         if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
             sleepWithWatchdog(WDTO_500MS, true);
         }
