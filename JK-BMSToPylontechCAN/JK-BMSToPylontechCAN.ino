@@ -133,7 +133,7 @@
 /*
  * Display timeouts, may be adapted to your requirements
  */
-//#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on
+//#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
 #if defined(DEBUG)
 #define DISPLAY_ON_TIME_STRING               "30s  "
 #define DISPLAY_ON_TIME_SECONDS              30L // L to avoid overflow at macro processing
@@ -141,11 +141,11 @@
 //#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps
 #define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      10L // 10 s
 #else
-#define DISPLAY_ON_TIME_STRING              "5 min" // 5 minutes. L to avoid overflow at macro processing
+#define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
 #define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
 #define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT  180L // 3 minutes
-//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps for 1 minute
 #define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      60L // 1 minute
+//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // If activated, only beep once if timeout was detected.
 #endif
 
 /*
@@ -170,7 +170,7 @@ void checkButtonStateChange();
  * Software serial for JK-BMS stuff
  */
 #if !defined(MAXIMUM_NUMBER_OF_CELLS)
-#define MAXIMUM_NUMBER_OF_CELLS     24 // Maximum number of cell info which are converted. Must be before #include "JK-BMS.hpp".
+#define MAXIMUM_NUMBER_OF_CELLS     24 // Maximum number of cell info which can be converted. Must be before #include "JK-BMS.hpp".
 #endif
 #include "JK-BMS.hpp"
 
@@ -365,7 +365,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     /*
      * Print debug pin info
      */
-    Serial.println(F("If you connect debug pin " STR(DEBUG_BUTTON_PIN) " to ground, additional debug data is printed"));
+    Serial.println(F("If you connect debug pin " STR(DEBUG_PIN) " to ground, additional debug data is printed"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) " ms between 2 BMS requests"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_CAN_FRAME_SEND) " ms between 2 CAN transmissions"));
     Serial.println();

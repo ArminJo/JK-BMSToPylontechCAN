@@ -142,17 +142,24 @@ struct PylontechCANBatteryRequesFrameStruct {
         uint8_t Filler = 0;
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
-        FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
-        FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
+        FrameData.FullChargeRequest = 0;
 
         // I do not know the semantics of ForceChargeRequest flags so it is only a guess here
         if (aJKFAllReply->SOCPercent < 20) {
             FrameData.ForceChargeRequestI = 1;
+        } else {
+            FrameData.ForceChargeRequestI = 0;
         }
         // If battery drops below lower voltage. See https://powerforum.co.za/topic/13587-battery-anomaly-on-synsynk-hybrid-inverter/
         if (swap(aJKFAllReply->Battery10Millivolt) < swap(aJKFAllReply->BatteryUndervoltageProtection10Millivolt)) {
             FrameData.ForceChargeRequestII = 1;
+        } else {
+            FrameData.ForceChargeRequestII = 0;
         }
+
+        FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
+        FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
+
     }
 };
 

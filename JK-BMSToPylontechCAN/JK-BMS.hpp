@@ -483,15 +483,17 @@ void printTemperatureProtectionInfo() {
 void printBatteryInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
-    Serial.print(F("Manufacturer Id="));
-    tJKFAllReply->TokenProtocolVersionNumber = '\0'; // set end of string token
-    Serial.println(tJKFAllReply->ManufacturerId);
     Serial.print(F("Manufacturer Date="));
-    tJKFAllReply->TokenSystemWorkingMinutes = '\0'; // set end of string token
+    tJKFAllReply->TokenSystemWorkingMinutes = '\0'; // Set end of string token
     Serial.println(tJKFAllReply->ManufacturerDate);
-    Serial.print(F("Device ID String="));
-    tJKFAllReply->TokenManufacturerDate = '\0'; // set end of string token
+
+    Serial.print(F("Manufacturer Id="));            // First 8 characters of the manufacturer id entered in the app field "User Private Data"
+    tJKFAllReply->TokenProtocolVersionNumber = '\0'; // Set end of string token
+    Serial.println(tJKFAllReply->ManufacturerId);
+    Serial.print(F("Device ID String="));           // First 8 characters of ManufacturerId
+    tJKFAllReply->TokenManufacturerDate = '\0';     // Set end of string token
     Serial.println(tJKFAllReply->DeviceIdString);
+
     myPrintln(F("Device Address="), tJKFAllReply->BoardAddress);
     myPrint(F("Total Battery Capacity[Ah]="), JKComputedData.TotalCapacityAmpereHour); // 0xAA
     myPrintln(F(", Low Capacity Alarm Percent="), tJKFAllReply->LowCapacityAlarmPercent); // 0xB1
@@ -522,7 +524,7 @@ void printMiscellaneousInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
     myPrintlnSwap(F("Balance Starting Cell Voltage=[mV]"), tJKFAllReply->BalancingStartMillivolt);
-    myPrintlnSwap(F("Balance Opening Voltage Difference[mV]="), tJKFAllReply->BalancingStartDifferentialMillivolt); // ??? semantics
+    myPrintlnSwap(F("Balance Triggering Voltage Difference[mV]="), tJKFAllReply->BalancingStartDifferentialMillivolt);
     Serial.println();
     myPrintlnSwap(F("Current Calibration[mA]="), tJKFAllReply->CurrentCalibrationMilliampere);
     myPrintlnSwap(F("Sleep Wait Time[s]="), tJKFAllReply->SleepWaitingTimeSeconds);
@@ -622,6 +624,8 @@ void computeUpTimeString() {
  */
 void printJKDynamicInfo() {
 
+    JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
+
     /*
      * Print it every ten minutes
      */
@@ -637,6 +641,19 @@ void printJKDynamicInfo() {
 
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
+#if !defined(SUPPRESS_LIFEPO4_PLAUSI)
+        if(swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450){
+            // https://www.evworks.com.au/page/technical-information/lifepo4-care-guide-looking-after-your-lithium-batt/
+            Serial.println(F("Warning: CellOvervoltageProtectionMillivolt value > 3450 mV is not recommended for LiFePO4 chemistry."));
+            Serial.println(F("There is less than 1% extra capacity above 3.5V."));
+        }
+        if(swap(tJKFAllReply->CellUndervoltageProtectionMillivolt) < 3000){
+            // https://batteryfinds.com/lifepo4-voltage-chart-3-2v-12v-24v-48v/
+            Serial.println(F("Warning: CellUndervoltageProtectionMillivolt value < 3000 mV is not recommended for LiFePO4 chemistry."));
+            Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
+        }
+
+#endif
     }
 
     /*
@@ -654,7 +671,6 @@ void printJKDynamicInfo() {
         myPrintln(F(", Sensor 2="), JKComputedData.TemperatureSensor2);
     }
 
-    JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
     /*
      * SOC

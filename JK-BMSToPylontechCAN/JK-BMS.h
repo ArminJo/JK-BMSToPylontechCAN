@@ -335,7 +335,7 @@ struct JKReplyStruct {
     uint8_t DedicatedChargerSwitchIsActive;     // 0=off 1=on
 
     uint8_t TokenDeviceIdString;                // 0xB4
-    char DeviceIdString[8];                // First 8 characters of the manufacturer id entered in the app field "User Private Data"
+    char DeviceIdString[8];                     // First 8 characters of the manufacturer id entered in the app field "User Private Data"
 
     uint8_t TokenManufacturerDate;              // 0xB5
     char ManufacturerDate[4];                   // "YYMM" - Date of first connection with app

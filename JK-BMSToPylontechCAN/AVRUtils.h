@@ -28,13 +28,13 @@
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 
-#ifndef _MILLIS_UTILS_H
-// copied from MillisUtils.h
 /*
  * storage for millis value to enable compensation for interrupt disable at signal acquisition etc.
  */
 #if defined(__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)  || defined(__AVR_ATtiny87__) || defined(__AVR_ATtiny167__)
-#define timer0_millis millis_timer_millis // The ATTinyCore libraries use other variable name in wiring.c
+#  if !defined(_MILLIS_UTILS_H)
+#define timer0_millis millis_timer_millis // The ATTinyCore libraries use other variable name in wiring.c - copied from MillisUtils.h
+#  endif
 #  if !defined(DEFAULT_MILLIS_FOR_WAKEUP_AFTER_POWER_DOWN)
 #define DEFAULT_MILLIS_FOR_WAKEUP_AFTER_POWER_DOWN  65
 #  endif
@@ -45,7 +45,6 @@
 #endif
 
 extern volatile unsigned long timer0_millis;
-#endif // MILLIS_UTILS_H_
 
 void initSleep(uint8_t tSleepMode);
 void initPeriodicSleepWithWatchdog(uint8_t tSleepMode, uint8_t aWatchdogPrescaler);
