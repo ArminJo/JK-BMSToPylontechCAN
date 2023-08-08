@@ -119,11 +119,16 @@ void initJKReplyFrameBuffer() {
  */
 void printJKReplyFrameBuffer() {
     for (uint16_t i = 0; i < (sReplyFrameBufferIndex + 1); ++i) {
-        if (i == JK_BMS_FRAME_HEADER_LENGTH || i == ((sReplyFrameBufferIndex + 1) - JK_BMS_FRAME_TRAILER_LENGTH) || i % 16 == 0
+        /*
+         * Insert newline and address after header (11 byte), before and after cell data before trailer (9 byte) and after each 16 byte
+         */
+        if (i == JK_BMS_FRAME_HEADER_LENGTH || i == JK_BMS_FRAME_HEADER_LENGTH + 2
                 || i
                         == (uint16_t) (JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH + 1
-                                + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH])) {
-            // Insert newline and address after header, after cell data and after each 16 bit
+                                + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH])
+                || i == ((sReplyFrameBufferIndex + 1) - JK_BMS_FRAME_TRAILER_LENGTH)
+                || (i < ((sReplyFrameBufferIndex + 1) - JK_BMS_FRAME_TRAILER_LENGTH) && i % 16 == 0) /* no 16 byte newline in trailer*/
+                ) {
             if (i != 0) {
                 Serial.println();
             }
@@ -488,7 +493,7 @@ void printBatteryInfo() {
     tJKFAllReply->TokenSystemWorkingMinutes = '\0'; // Set end of string token
     Serial.println(tJKFAllReply->ManufacturerDate);
 
-    Serial.print(F("Manufacturer Id="));            // First 8 characters of the manufacturer id entered in the app field "User Private Data"
+    Serial.print(F("Manufacturer Id="));   // First 8 characters of the manufacturer id entered in the app field "User Private Data"
     tJKFAllReply->TokenProtocolVersionNumber = '\0'; // Set end of string token
     Serial.println(tJKFAllReply->ManufacturerId);
     Serial.print(F("Device ID String="));           // First 8 characters of ManufacturerId
@@ -643,14 +648,16 @@ void printJKDynamicInfo() {
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
 #if !defined(SUPPRESS_LIFEPO4_PLAUSI_WARNING)
-        if(swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450){
+        if (swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450) {
             // https://www.evworks.com.au/page/technical-information/lifepo4-care-guide-looking-after-your-lithium-batt/
-            Serial.println(F("Warning: CellOvervoltageProtectionMillivolt value > 3450 mV is not recommended for LiFePO4 chemistry."));
+            Serial.println(
+                    F("Warning: CellOvervoltageProtectionMillivolt value > 3450 mV is not recommended for LiFePO4 chemistry."));
             Serial.println(F("There is less than 1% extra capacity above 3.5V."));
         }
-        if(swap(tJKFAllReply->CellUndervoltageProtectionMillivolt) < 3000){
+        if (swap(tJKFAllReply->CellUndervoltageProtectionMillivolt) < 3000) {
             // https://batteryfinds.com/lifepo4-voltage-chart-3-2v-12v-24v-48v/
-            Serial.println(F("Warning: CellUndervoltageProtectionMillivolt value < 3000 mV is not recommended for LiFePO4 chemistry."));
+            Serial.println(
+                    F("Warning: CellUndervoltageProtectionMillivolt value < 3000 mV is not recommended for LiFePO4 chemistry."));
             Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
         }
 
@@ -671,7 +678,6 @@ void printJKDynamicInfo() {
         myPrint(F(", Sensor 1="), JKComputedData.TemperatureSensor1);
         myPrintln(F(", Sensor 2="), JKComputedData.TemperatureSensor2);
     }
-
 
     /*
      * SOC

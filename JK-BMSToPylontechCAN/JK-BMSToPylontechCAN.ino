@@ -65,15 +65,15 @@
  * # Connection schematic
  * A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
  *
- *                                           ___ 78L05
- *  Extern 6.6 V from Battery 2 >--o--------|___|-------o
- *                                 |          |         | 5V
- *  __________ Schottky diode  ____|____     ---    ____|____             _________
- * |        TX|----|<|-- RX ->|RX Vin   |<-- SPI ->|   5V    |           |         |
- * |        RX|<-------- TX --|4  Uno/  |          | MCP2515 |           |         |
- * |  JK-BMS  |               |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
- * |          |<------- GND ->|         |<-- GND-->|         |           |         |
- * |__________|               |_________|          |_________|           |_________|
+ *                                             ___ 78L05    Schottky diode
+ * External 6.6 V from Battery #2 >--o--------|___|-------o----|<|---O From Uno / Nano 5 V to avoid
+ *                                   |          |         | 5V         parasitic supply of CAN module
+ *  __________ Schottky diode    ____|____     ---    ____|____             _________
+ * |        TX|----|<|-- RX --->|RX Vin   |<-- SPI ->|   5V    |           |         |
+ * |        RX|<-------- TX ----|4  Uno/  |          | MCP2515 |           |         |
+ * |  JK-BMS  |                 |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
+ * |          |<------- GND --->|         |<-- GND-->|         |           |         |
+ * |__________|                 |_________|          |_________|           |_________|
  *
  * # UART-TTL socket (4 Pin, JST 1.25mm pitch)
  *  ___ ________ ___
@@ -94,13 +94,14 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "1.2"
+#define VERSION_EXAMPLE "1.3"
 
 /*
  * Pin layout, may be adapted to your requirements
  */
 #define BUZZER_PIN                 A2 // To signal errors
 #define BUTTON_PIN                  2
+#define DEBUG_PIN                   3 // If low, print additional info and enable LCD CAN page.
 // The standard RX of the Arduino is used for the JK_BMS connection.
 #define JK_BMS_RX_PIN               0 // We use the Serial RX pin. Not used in program, only for documentation
 #define JK_BMS_TX_PIN               4
@@ -113,14 +114,15 @@
 #define SPI_CS_PIN                  9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
 //#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
 
-#define DEBUG_PIN                   8 // If low, print additional info
+//#define TIMING_TEST
+#define TIMING_TEST_PIN             7
+#if !defined(DEBUG)
+//#define DEBUG
+#endif
 
 /*
  * Program timing, may be adapted to your requirements
  */
-#if !defined(DEBUG)
-//#define DEBUG
-#endif
 #if defined(DEBUG)
 #define MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS     5000
 #define MILLISECONDS_BETWEEN_CAN_FRAME_SEND             5000
@@ -147,9 +149,20 @@
 #define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
 #define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
 #define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT  180L // 3 minutes
-#define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      60L // 1 minute
-//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // If activated, only beep once if timeout was detected.
-#endif
+#endif // DEBUG
+
+/*
+ * Error beep behavior
+ * Overvoltage error cannot be suppressed by a macro!
+ * If no NO_BEEP_ON_ERROR, ONE_BEEP_ON_ERROR or MULTIPLE_BEEPS_WITH_TIMEOUT are activated, we beep forever until error vanishes.
+ */
+//#define NO_BEEP_ON_ERROR              // If activated, Do not beep on error or timeout.
+//#define ONE_BEEP_ON_ERROR             // If activated, only beep once if error was detected.
+#define BEEP_TIMEOUT_SECONDS        60L // 1 minute, Maximum is 254 seconds = 4 min 14 s
+#define MULTIPLE_BEEPS_WITH_TIMEOUT     // If activated, beep for 1 minute if error was detected. Timeout is disabled if debug is active.
+bool sLastDoErrorBeep = false;          // required for ONE_BEEP_ON_ERROR
+bool sDoErrorBeep = false;              // If true, we do an error beep at the end of the loop
+uint8_t sBeepTimeoutCounter;
 
 //#define SUPPRESS_LIFEPO4_PLAUSI_WARNING   // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
 /*
@@ -210,7 +223,7 @@ uint32_t sMillisOfLastCANFrameSent = 0; // For CAN timing
  * Sleep stuff
  */
 #include "AVRUtils.h"
-bool sEnableSleep = false;             // If true, we can do a sleep at the end of the loop
+bool sEnableSleep = false; // True if one frame was received and processed or timeout happened. Then we can do a sleep at the end of the loop.
 
 /*
  * LCD stuff
@@ -222,7 +235,7 @@ bool sEnableSleep = false;             // If true, we can do a sleep at the end 
 LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 bool sSerialLCDAvailable;
 bool sSerialLCDIsSwitchedOff;
-uint16_t sFrameTimeoutCounterForLCDTAutoOff = 0; // counts frame timeouts, (every 2 seconds)
+uint16_t sTimeoutFrameCounterForLCDTAutoOff = 0; // counts frame timeouts, (every 2 seconds)
 uint16_t sFrameCounterForLCDTAutoOff = 0;
 void printBMSDataOnLCD();
 void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint);
@@ -249,21 +262,31 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #endif
 bool sStaticInfoWasSent = false; // Flag to send static Info only once after reset.
 
+#if defined(TIMING_TEST)
+#include "digitalWriteFast.h"
+#endif
+
 bool sDebugModeActive = false;
-bool sDebugModeJustActivated = false;;
+bool sDebugModeJustActivated = false;
 
 void processReceivedData();
 void printReceivedData();
+bool isVCCTooHighSimple();
+void handleOvervoltage();
 
 //#define STANDALONE_TEST
 #if defined(STANDALONE_TEST)
 //#define LCD_PAGES_TEST
 const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x01,
-/*Cell voltages*/0x79, 0x3C, 0x01, 0x0E, 0xED, 0x02, 0x0E, 0xFA, 0x03, 0x0E, 0xF7, 0x04, 0x0E, 0xEC, 0x05, 0x0E, 0xF8, 0x06, 0x0E,
+/*Length of Cell voltages*/
+        0x79, 0x3C,
+/*Cell voltages*/
+        0x01, 0x0E, 0xED, 0x02, 0x0E, 0xFA, 0x03, 0x0E, 0xF7, 0x04, 0x0E, 0xEC, 0x05, 0x0E, 0xF8, 0x06, 0x0E,
         0xFA, 0x07, 0x0E, 0xF1, 0x08, 0x0E, 0xF8, 0x09, 0x0E, 0xD8, 0x0A, 0x0E, 0xFA, 0x0B, 0x0E, 0xF1, 0x0C, 0x0E, 0x0F, 0xA0,
         0x0E, 0xFB, 0x0E, 0x0E, 0xF2, 0x0F, 0x0E, 0xF2, 0x10, 0x0E, 0xF2, 0x11, 0x0E, 0xF2, 0x12, 0x0E, 0xF0, 0x13, 0x0E, 0xF3,
         0x14, 0x0E, 0xF2,
-        /*JKFrameAllDataStruct*/0x80, 0x00, 0x16, 0x81, 0x00, 0x15, 0x82, 0x00, 0x15, 0x83, 0x0F, 0xF8, 0x84, 0x80, 0xD0, 0x85,
+/*JKFrameAllDataStruct*/
+        0x80, 0x00, 0x16, 0x81, 0x00, 0x15, 0x82, 0x00, 0x15, 0x83, 0x0F, 0xF8, 0x84, 0x80, 0xD0, 0x85,
         0x0F, 0x86, 0x02, 0x87, 0x00, 0x04, 0x89, 0x00, 0x00, 0x01, 0xE0, 0x8A, 0x00, 0x0E, 0x8B, 0x00, 0x00, 0x8C, 0x00, 0x07,
         0x8E, 0x16, 0x26, 0x8F, 0x10, 0xAE, 0x90, 0x0F, 0xD2, 0x91, 0x0F, 0xA0, 0x92, 0x00, 0x05, 0x93, 0x0B, 0xEA, 0x94, 0x0C,
         0x1C, 0x95, 0x00, 0x05, 0x96, 0x01, 0x2C, 0x97, 0x00, 0x07, 0x98, 0x00, 0x03, 0x99, 0x00, 0x05, 0x9A, 0x00, 0x05, 0x9B,
@@ -275,7 +298,8 @@ const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 
         0x57, 0x5F, 0x53, 0x31, 0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F, 0xB8, 0x00, 0xB9, 0x00, 0x00, 0x04, 0x00, 0xBA, 0x49,
         0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0x65, 0x72, 0x64, 0x61, 0x4A, 0x4B, 0x5F, 0x42, 0x32, 0x41, 0x32, 0x30, 0x53,
         0x32, 0x30, 0x50, 0xC0, 0x01,
-        /*End*/0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x51, 0xC2 };
+        /*Trailer*/
+        0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x51, 0xC2 };
 
 void testLCDPages();
 void testBigNumbers();
@@ -293,6 +317,9 @@ void setup() {
 //    digitalWrite(LED_BUILTIN, LOW);
 
     pinMode(DEBUG_PIN, INPUT_PULLUP);
+#if defined(TIMING_TEST)
+    pinMode(TIMING_TEST_PIN, OUTPUT);
+#endif
 
     Serial.begin(115200);
 #if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) /*stm32duino*/|| defined(USBCON) /*STM32_stm32*/|| defined(SERIALUSB_PID) || defined(ARDUINO_attiny3217)
@@ -347,7 +374,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     /*
      * CAN initialization
      */
-//    if (CAN.begin(500000)) { // Resets the device and start the CAN bus at 500 kbps
+    //    if (CAN.begin(500000)) { // Resets the device and start the CAN bus at 500 kbps
     if (initializeCAN(CAN_BAUDRATE, MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE, &Serial) == MCP2515_RETURN_OK) { // Resets the device and start the CAN bus at 500 kbps
         Serial.println(F("CAN started with 500 kbit/s!"));
         if (sSerialLCDAvailable) {
@@ -359,10 +386,11 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("Starting CAN failed!"));
+            delay(8000);
         }
 #if !defined(STANDALONE_TEST)
-        while (1)
-            ;
+//        while (1)
+//            ;
 #endif
     }
 
@@ -406,17 +434,23 @@ void loop() {
     }
 
     /*
-     * Request status frame every n seconds
+     * Request status frame every 2 seconds
      */
     if (millis() - sMillisOfLastRequestedJKDataFrame >= MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-        sMillisOfLastRequestedJKDataFrame = millis();
+        sMillisOfLastRequestedJKDataFrame = millis(); // set for next check
         /*
          * Flush input buffer and send request to JK-BMS
          */
         while (Serial.available()) {
             Serial.read();
         }
+#if defined(TIMING_TEST)
+        digitalWriteFast(TIMING_TEST_PIN, HIGH);
+#endif
         requestJK_BMSStatusFrame(&TxToJKBMS, sDebugModeJustActivated); // 1.85 ms
+#if defined(TIMING_TEST)
+        digitalWriteFast(TIMING_TEST_PIN, LOW);
+#endif
         sFrameIsRequested = true; // enable check for serial input
         initJKReplyFrameBuffer();
         sMillisOfLastReceivedByte = millis(); // initialize reply timeout
@@ -427,6 +461,9 @@ void loop() {
      */
     if (sFrameIsRequested) {
         if (Serial.available()) {
+#if defined(TIMING_TEST)
+            digitalWriteFast(TIMING_TEST_PIN, HIGH);
+#endif
             sMillisOfLastReceivedByte = millis();
 
             uint8_t tReceiveResultCode = readJK_BMSStatusFrameByte();
@@ -448,24 +485,8 @@ void loop() {
                     Serial.println();
                 }
 
-#if !defined(DISPLAY_ALWAYS_ON)
-                sFrameCounterForLCDTAutoOff++;
-                if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
-                        && !sDebugModeActive) {
-                    myLCD.noBacklight(); // switch off backlight after 5 minutes
-                    sSerialLCDIsSwitchedOff = true;
-                    Serial.println(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
-                    sFrameCounterForLCDTAutoOff = 0; // start again to enable switch off after 5 minutes
-                }
-#endif
-                if (sSerialLCDIsSwitchedOff && sFrameTimeoutCounterForLCDTAutoOff != 0) {
-                    myLCD.backlight(); // Switch backlight LED on after timeout
-                    sSerialLCDIsSwitchedOff = false;
-                    Serial.println(F("Switch on LCD display, triggered by successfully receiving a BMS info frame after timeout"));
-                }
-
                 sFrameHasTimeout = false;
-                sFrameTimeoutCounterForLCDTAutoOff = 0;
+                sTimeoutFrameCounterForLCDTAutoOff = 0;
                 processReceivedData();
                 printReceivedData();
 
@@ -481,6 +502,9 @@ void loop() {
                 sFrameIsRequested = false;
                 printJKReplyFrameBuffer();
             }
+#if defined(TIMING_TEST)
+            digitalWriteFast(TIMING_TEST_PIN, LOW);
+#endif
 
         } else if (millis() - sMillisOfLastReceivedByte >= TIMEOUT_MILLIS_FOR_FRAME_REPLY) {
             /*
@@ -490,40 +514,27 @@ void loop() {
             sFrameHasTimeout = true;
             sFrameIsRequested = false; // do not try to receive more
             sEnableSleep = true;
+            sDoErrorBeep = true;
 
-#if !defined(NO_MULTIPLE_BEEPS_ON_TIMEOUT)
-            if (sFrameTimeoutCounterForLCDTAutoOff
-                    < (BEEP_ON_TIME_SECONDS_IF_TIMEOUT * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS || sDebugModeActive) {
-                tone(BUZZER_PIN, 2200); // beep at least first minute
-                delay(10);
-                noTone(BUZZER_PIN); // to avoid Tone interrupts waking us up from sleep
-            }
-#endif
-
-            if (sReplyFrameBufferIndex != 0 || sFrameTimeoutCounterForLCDTAutoOff == 0 || sDebugModeActive) {
+            if (sReplyFrameBufferIndex != 0 || sTimeoutFrameCounterForLCDTAutoOff == 0 || sDebugModeActive) {
                 /*
                  * No byte received, BMS may be off or disconnected
                  */
                 Serial.print(F("Receive timeout at sReplyFrameBufferIndex="));
                 Serial.println(sReplyFrameBufferIndex);
-#if defined(NO_MULTIPLE_BEEPS_ON_TIMEOUT)
-                tone(BUZZER_PIN, 2200); // beep once
-                delay(10);
-                noTone(BUZZER_PIN); // to avoid Tone interrupts waking us up from sleep
-#endif
+                printJKReplyFrameBuffer();
+
 #if !defined(STANDALONE_TEST)
-                if (sSerialLCDAvailable) {
-                    if (!sSerialLCDIsSwitchedOff) {
-                        myLCD.clear();
-                        myLCD.setCursor(0, 0);
-                        myLCD.print(F("Receive timeout"));
-                    }
+                if (sSerialLCDAvailable && !sSerialLCDIsSwitchedOff) {
+                    myLCD.clear();
+                    myLCD.setCursor(0, 0);
+                    myLCD.print(F("Receive timeout"));
                 }
 #endif
             }
 
             if (sSerialLCDAvailable) {
-                if (sFrameTimeoutCounterForLCDTAutoOff
+                if (sTimeoutFrameCounterForLCDTAutoOff
                         == ((DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT * 1000) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)
                         && !sDebugModeActive) {
                     myLCD.noBacklight(); // switch off backlight after 3 minutes
@@ -533,12 +544,12 @@ void loop() {
 #if !defined(STANDALONE_TEST)
                 if (!sSerialLCDIsSwitchedOff) {
                     myLCD.setCursor(16, 0);
-                    myLCD.print(sFrameTimeoutCounterForLCDTAutoOff);
+                    myLCD.print(sTimeoutFrameCounterForLCDTAutoOff);
                 }
 #endif
             }
 
-            sFrameTimeoutCounterForLCDTAutoOff++;
+            sTimeoutFrameCounterForLCDTAutoOff++;
 
 #if defined(STANDALONE_TEST)
             /*
@@ -551,13 +562,13 @@ void loop() {
                 printJKReplyFrameBuffer();
                 Serial.println();
                 processReceivedData();
-#if defined(LCD_PAGES_TEST)
+#  if defined(LCD_PAGES_TEST)
                 if (sSerialLCDAvailable) {
                     testLCDPages();
                     delay(2000);
                     testBigNumbers();
                 }
-#endif
+#  endif
             }
 #endif
         } // millis() - sMillisOfLastReceivedByte >= TIMEOUT_MILLIS_FOR_FRAME_REPLY
@@ -569,45 +580,120 @@ void loop() {
      * Inverter reply every second: 0x305: 00-00-00-00-00-00-00-00
      * Do not send, if BMS is starting up, the 0% SOC during this time will trigger a deye error beep.
      */
-    if (sCanDataIsInitialized && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND && !JKComputedData.BMSIsStarting) {
+    if (sCanDataIsInitialized && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND
+            && !JKComputedData.BMSIsStarting) {
         sMillisOfLastCANFrameSent = millis();
 
         if (sDebugModeActive) {
             Serial.println(F("Send CAN"));
         }
         sendPylontechAllCANFrames(sDebugModeActive);
-
-        /*
-         * Signaling errors
-         */
-        if (sErrorStringForLCD != NULL) {
-            tone(BUZZER_PIN, 2200, 50);
-            delay(200);
-            tone(BUZZER_PIN, 2200, 50);
-            delay(200);
-        }
     }
 
     /*
-     * Sleep instead of checking millis(). This saves only 5 mA during sleep.
+     * Do this once after each complete frame or timeout
      */
-#if MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS == 2000 && MILLISECONDS_BETWEEN_CAN_FRAME_SEND == 2000
-    // currently not in the mood to compute it more general ;-)
     if (sEnableSleep) {
+        /*
+         * Check for overvoltage
+         */
+        while (isVCCTooHighSimple()) {
+            handleOvervoltage();
+        }
+
+        /*
+         * Checking for errors
+         */
+        if (sErrorStringForLCD != NULL) {
+            sDoErrorBeep = true;
+        }
+
+        /*
+         * Display backlight handling
+         */
+#if !defined(DISPLAY_ALWAYS_ON)
+        sFrameCounterForLCDTAutoOff++;
+        if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
+                && !sDebugModeActive) {
+            myLCD.noBacklight(); // switch off backlight after 5 minutes
+            sSerialLCDIsSwitchedOff = true;
+            Serial.println(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
+            sFrameCounterForLCDTAutoOff = 0; // start again to enable switch off after 5 minutes
+        }
+#endif
+        if (!sDoErrorBeep && sSerialLCDIsSwitchedOff && sTimeoutFrameCounterForLCDTAutoOff != 0) {
+            myLCD.backlight(); // Switch backlight LED on after timeout
+            sSerialLCDIsSwitchedOff = false;
+            Serial.println(F("Switch on LCD display, triggered by successfully receiving a BMS info frame after timeout"));
+        }
+
+        /*
+         * Beep handling
+         */
+#if !defined(NO_BEEP_ON_ERROR)      // Beep enabled
+#  if defined(ONE_BEEP_ON_ERROR)    // Beep once
+        if (sDoErrorBeep) {
+            if (!sLastDoErrorBeep) {
+                // First error here
+                sLastDoErrorBeep = sDoErrorBeep; // Set sLastDoErrorBeep
+            } else {
+                sDoErrorBeep = false; // Suppress consecutive error beeps
+            }
+        } else {
+            sLastDoErrorBeep = sDoErrorBeep; // Reset sLastDoErrorBeep
+        }
+#  endif
+        if (sDoErrorBeep) {
+            sDoErrorBeep = false;
+#  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
+            sBeepTimeoutCounter++;
+            if (sBeepTimeoutCounter > (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
+                    && !sDebugModeActive) {
+                sBeepTimeoutCounter--; // To avoid overflow
+            } else
+#  endif
+            {
+                tone(BUZZER_PIN, 2200);
+                tone(BUZZER_PIN, 2200, 50);
+                delay(200);
+                tone(BUZZER_PIN, 2200, 50);
+                delay(200);
+                noTone(BUZZER_PIN); // to avoid tone interrupts waking us up from sleep
+            }
+        }
+#endif // NO_BEEP_ON_ERROR
+
+        /*
+         * Sleep instead of checking millis(). This saves only 5 mA during sleep.
+         */
+#if MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS == 2000 && MILLISECONDS_BETWEEN_CAN_FRAME_SEND == 2000
+        // currently not in the mood to compute it more general ;-)
         sEnableSleep = false;
         Serial.flush();
         // Interrupts, like button press will wake us up early, but millis will be incremented anyway
         if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
+#if defined(TIMING_TEST)
+            digitalWriteFast(TIMING_TEST_PIN, HIGH);
+#endif
             sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
         }
         if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
+#if defined(TIMING_TEST)
+            digitalWriteFast(TIMING_TEST_PIN, LOW);
+#endif
             sleepWithWatchdog(WDTO_500MS, true);
         }
         if (!Button0AtPin2.ButtonStateHasJustChanged) { // skip if button was pressed
-            sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
-        }
-    }
+#if defined(TIMING_TEST)
+            digitalWriteFast(TIMING_TEST_PIN, HIGH);
 #endif
+            sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
+#if defined(TIMING_TEST)
+            digitalWriteFast(TIMING_TEST_PIN, LOW);
+#endif
+        }
+#endif
+    } // if (sEnableSleep)
 }
 
 void processReceivedData() {
@@ -765,11 +851,11 @@ void printBMSDataOnLCD() {
          * Row 2 - SOC and remaining capacity and state of MosFets or Error
          */
         myLCD.setCursor(0, 1);
-// Percent of charge
+        // Percent of charge
         myLCD.print(sJKFAllReplyPointer->SOCPercent);
         myLCD.print(F("% "));
 
-// Remaining capacity
+        // Remaining capacity
         myLCD.print(JKComputedData.RemainingCapacityAmpereHour);
         myLCD.print(F("Ah "));
         if (JKComputedData.RemainingCapacityAmpereHour < 100) {
@@ -783,14 +869,14 @@ void printBMSDataOnLCD() {
          * Row 3 - Voltage, Current and Power
          */
         myLCD.setCursor(0, 2);
-// Voltage
+        // Voltage
         myLCD.print(JKComputedData.BatteryVoltageFloat, 2);
         myLCD.print(F("V "));
 
-// Current
+        // Current
         printCurrentOnLCD();
 
-// Power
+        // Power
         if (JKComputedData.BatteryLoadPower < -10000) {
             // over 10 kW
             myLCD.setCursor(13, 2);
@@ -1037,11 +1123,11 @@ void checkButtonStateChange() {
                  * If off, switch backlight LED on, but do not select next page
                  */
                 myLCD.backlight();
-                sFrameTimeoutCounterForLCDTAutoOff = 0; // start again to enable switch off after 3 minutes
+                sTimeoutFrameCounterForLCDTAutoOff = 0; // start again to enable switch off after 3 minutes
                 sFrameCounterForLCDTAutoOff = 0; // start again to enable switch off after 5 minutes
                 sSerialLCDIsSwitchedOff = false;
                 Serial.println(F("Switch on LCD display, triggered by button press"));
-            } else if (sFrameTimeoutCounterForLCDTAutoOff == 0) {
+            } else if (sTimeoutFrameCounterForLCDTAutoOff == 0) {
                 /*
                  * Switch display pages only if no timeout happened
                  */
@@ -1086,7 +1172,7 @@ void testLCDPages() {
     printBMSDataOnLCD();
 
     sDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
-// Create symbols character for maximum and minimum
+    // Create symbols character for maximum and minimum
     bigNumberLCD._createChar(1, bigNumbersTopBlock);
     bigNumberLCD._createChar(2, bigNumbersBottomBlock);
     delay(2000);
@@ -1180,3 +1266,47 @@ void LCDClearLine(uint8_t aLineNumber) {
     LCDPrintSpaces(20);
     myLCD.setCursor(0, aLineNumber);
 }
+
+void handleOvervoltage() {
+    if (sSerialLCDAvailable) {
+        if (sSerialLCDIsSwitchedOff) {
+            myLCD.backlight();
+            sSerialLCDIsSwitchedOff = false;
+        }
+        myLCD.clear();
+        myLCD.setCursor(0, 0);
+        myLCD.print(F("VCC overvoltage"));
+        myLCD.setCursor(0, 1);
+        myLCD.print(F("VCC > 5.25 V"));
+    }
+    // Do it as long as overvoltage happens
+    tone(BUZZER_PIN, 1100, 300);
+    delay(300);
+    tone(BUZZER_PIN, 2200, 1000);
+    delay(1000);
+}
+
+#ifndef _ADC_UTILS_HPP
+/*
+ * Recommended VCC is 1.8 V to 5.5 V, absolute maximum VCC is 6.0 V.
+ * Check for 5.25 V, because such overvoltage is quite unlikely to happen during regular operation.
+ * Raw reading of 1.1 V is 225 at 5 V.
+ * Raw reading of 1.1 V is 221 at 5.1 V.
+ * Raw reading of 1.1 V is 214 at 5.25 V (+5 %).
+ * Raw reading of 1.1 V is 204 at 5.5 V (+10 %).
+ * @return true if overvoltage reached
+ */
+bool isVCCTooHighSimple() {
+    ADMUX = 14 | (DEFAULT << 6);
+    // ADCSRB = 0; // Only active if ADATE is set to 1.
+    // ADSC-StartConversion ADIF-Reset Interrupt Flag - NOT free running mode
+    ADCSRA = (_BV(ADEN) | _BV(ADSC) | _BV(ADIF) | 7); //  7 -> 104 microseconds per ADC conversion at 16 MHz --- Arduino default
+    // wait for single conversion to finish
+    loop_until_bit_is_clear(ADCSRA, ADSC);
+
+    // Get value
+    uint16_t tRawValue = ADCL | (ADCH << 8);
+
+    return tRawValue < 214;
+}
+#endif

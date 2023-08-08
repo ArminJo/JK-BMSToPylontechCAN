@@ -31,9 +31,9 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 - Switch off LCD backlight after timeout.
 - Beep on alarm and timeouts.
 
-**!!! On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/) !!!**
+**On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
-**!!! The MCP2515 / TJA1050 kit for Arduino must be supplied by an extra 5 V regulator, because the Arduino-Nano internal regulator cannot provide more than 100 mA and get defect on my site after a few days !!!**
+**The MCP2515 / TJA1050 kit for Arduino must be supplied by an extra 5 V regulator, because the Arduino-Nano internal regulator cannot provide more than 100 mA and got defect on my site after a few days.**
 
 <br/>
 
@@ -77,15 +77,15 @@ If you use the cable from the separate RS485 adapter of the JK-BMS and follow th
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for CAN is `00`.
 
 ```
-                                           ___ 78L05
-  Extern 6.6 V from Battery 2 >--o--------|___|-------o
-                                 |          |         | 5V
-  __________ Schottky diode  ____|____     ---    ____|____             _________
- |        TX|----|<|-- RX ->|RX Vin   |<-- SPI ->|   5V    |           |         |
- |        RX|<-------- TX --|4  Uno/  |          | MCP2515 |           |         |
- |  JK-BMS  |               |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
- |          |<------- GND ->|         |<-- GND-->|         |           |         |
- |__________|               |_________|          |_________|           |_________|
+                                             ___ 78L05    Schottky diode
+ External 6.6 V from Battery #2 >--o--------|___|-------o----|<|---O From Uno / Nano 5 V to avoid
+                                   |          |         | 5V         parasitic supply of CAN module
+  __________ Schottky diode    ____|____     ---    ____|____             _________
+ |        TX|----|<|-- RX --->|RX Vin   |<-- SPI ->|   5V    |           |         |
+ |        RX|<-------- TX ----|4  Uno/  |          | MCP2515 |           |         |
+ |  JK-BMS  |                 |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
+ |          |<------- GND --->|         |<-- GND-->|         |           |         |
+ |__________|                 |_________|          |_________|           |_________|
 
  # JK-BMS UART-TTL socket (4 Pin, JST 1.25mm pitch)
   ___ ________ ___
@@ -134,8 +134,10 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `MILLISECONDS_BETWEEN_CAN_FRAME_SEND` | 2000 | % |
 | `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
 | `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
-| `BEEP_ON_TIME_SECONDS_IF_TIMEOUT` | 60 | If timeout was detected, beep for 60 s. |
-| `NO_MULTIPLE_BEEPS_ON_TIMEOUT` | disabled | If activated, only beep once if timeout was detected. |
+| `NO_BEEP_ON_ERROR` | disabled | . |
+| `ONE_BEEP_ON_ERROR` | disabled | If activated, only beep once if error was detected. |
+| `BEEP_TIMEOUT_SECONDS` | 60 | 1 minute, every 2 seconds. |
+| `MULTIPLE_BEEPS_WITH_TIMEOUT` | enabled | If error was detected, beep for 60 s. |
 | `SUPPRESS_LIFEPO4_PLAUSI_WARNING` | disabled | Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V. |
 | `MAXIMUM_NUMBER_OF_CELLS` | 24 | Maximum number of cell info which can be converted. Saves RAM. |
 
