@@ -65,10 +65,13 @@
  * # Connection schematic
  * A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
  *
- *  __________ Schottky diode  _________            _________             _________
- * |        TX|----|<|-- RX ->|RX       |<-- SPI ->|         |           |         |
+ *                                           ___ 78L05
+ *  Extern 6.6 V from Battery 2 >--o--------|___|-------o
+ *                                 |          |         | 5V
+ *  __________ Schottky diode  ____|____     ---    ____|____             _________
+ * |        TX|----|<|-- RX ->|RX Vin   |<-- SPI ->|   5V    |           |         |
  * |        RX|<-------- TX --|4  Uno/  |          | MCP2515 |           |         |
- * |  JK-BMS  |               |   Nano  |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
+ * |  JK-BMS  |               |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
  * |          |<------- GND ->|         |<-- GND-->|         |           |         |
  * |__________|               |_________|          |_________|           |_________|
  *
@@ -79,9 +82,9 @@
  * |GND  RX  TX VBAT|
  * |________________|
  *   |   |   |
- *   |   |   ----- RX of Uno / Nano
- *   |   --------- D4 (or other)
- *   --------------GND
+ *   |   |   --|>|-- RX of Uno / Nano
+ *   |   ----------- D4 (or other)
+ *   --------------- GND
  */
 
 /*
@@ -148,6 +151,7 @@
 //#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // If activated, only beep once if timeout was detected.
 #endif
 
+//#define SUPPRESS_LIFEPO4_PLAUSI_WARNING   // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
 /*
  * Button at INT0 / D2 for switching LCD pages
  */
@@ -563,8 +567,9 @@ void loop() {
      * Send CAN frame independently of the period of JK-BMS data requests
      * 0.5 MB/s
      * Inverter reply every second: 0x305: 00-00-00-00-00-00-00-00
+     * Do not send, if BMS is starting up, the 0% SOC during this time will trigger a deye error beep.
      */
-    if (sCanDataIsInitialized && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
+    if (sCanDataIsInitialized && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND && !JKComputedData.BMSIsStarting) {
         sMillisOfLastCANFrameSent = millis();
 
         if (sDebugModeActive) {
@@ -579,6 +584,7 @@ void loop() {
             tone(BUZZER_PIN, 2200, 50);
             delay(200);
             tone(BUZZER_PIN, 2200, 50);
+            delay(200);
         }
     }
 

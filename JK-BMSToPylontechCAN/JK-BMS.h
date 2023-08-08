@@ -130,7 +130,7 @@ struct JKConvertedCellInfoStruct {
  * This structure contains all converted and computed data useful for display
  */
 struct JKComputedDataStruct {
-    int16_t TemperaturePowerMosFet;     //degree Celsius
+    int16_t TemperaturePowerMosFet;     // Degree Celsius
     int16_t TemperatureSensor1;
     int16_t TemperatureSensor2;
     int16_t TemperatureMaximum;         // Computed value
@@ -142,6 +142,8 @@ struct JKComputedDataStruct {
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
+
+    bool BMSIsStarting;                 // True if SOC and Capacity are both 0
 };
 
 /*

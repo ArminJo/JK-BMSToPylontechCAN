@@ -379,6 +379,7 @@ void fillJKComputedData() {
     // 16 bit multiplication gives overflow at 640 Ah
     JKComputedData.RemainingCapacityAmpereHour = ((uint32_t) JKComputedData.TotalCapacityAmpereHour
             * sJKFAllReplyPointer->SOCPercent) / 100;
+    JKComputedData.BMSIsStarting = (sJKFAllReplyPointer->SOCPercent == 0);
 
     JKComputedData.BatteryVoltage10Millivolt = swap(sJKFAllReplyPointer->Battery10Millivolt);
     JKComputedData.BatteryVoltageFloat = JKComputedData.BatteryVoltage10Millivolt;
@@ -641,7 +642,7 @@ void printJKDynamicInfo() {
 
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
-#if !defined(SUPPRESS_LIFEPO4_PLAUSI)
+#if !defined(SUPPRESS_LIFEPO4_PLAUSI_WARNING)
         if(swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450){
             // https://www.evworks.com.au/page/technical-information/lifepo4-care-guide-looking-after-your-lithium-batt/
             Serial.println(F("Warning: CellOvervoltageProtectionMillivolt value > 3450 mV is not recommended for LiFePO4 chemistry."));

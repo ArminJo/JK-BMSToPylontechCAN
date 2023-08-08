@@ -20,6 +20,9 @@ Based on https://github.com/syssi/esphome-jk-bms and https://github.com/maxx-uko
 The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105200 Bit/s.
 
 </div>
+
+#### If you find this program useful, please give it a star.
+
 <br/>
 
 # Features
@@ -30,7 +33,9 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 **!!! On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/) !!!**
 
- <br/>
+**!!! The MCP2515 / TJA1050 kit for Arduino must be supplied by an extra 5 V regulator, because the Arduino-Nano internal regulator cannot provide more than 100 mA and get defect on my site after a few days !!!**
+
+<br/>
 
 ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardAndOverviewPage.jpg)
 
@@ -72,10 +77,13 @@ If you use the cable from the separate RS485 adapter of the JK-BMS and follow th
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for CAN is `00`.
 
 ```
-  __________ Schottky diode  _________            _________             _________
- |        TX|----|<|-- RX ->|RX       |<-- SPI ->|         |           |         |
+                                           ___ 78L05
+  Extern 6.6 V from Battery 2 >--o--------|___|-------o
+                                 |          |         | 5V
+  __________ Schottky diode  ____|____     ---    ____|____             _________
+ |        TX|----|<|-- RX ->|RX Vin   |<-- SPI ->|   5V    |           |         |
  |        RX|<-------- TX --|4  Uno/  |          | MCP2515 |           |         |
- |  JK-BMS  |               |   Nano  |<-- 5V -->|   CAN   |<-- CAN -->|  DEYE   |
+ |  JK-BMS  |               |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
  |          |<------- GND ->|         |<-- GND-->|         |           |         |
  |__________|               |_________|          |_________|           |_________|
 
@@ -86,9 +94,9 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  |GND  RX  TX VBAT|
  |________________|
    |   |   |
-   |   |   ----- RX of Uno / Nano
-   |   --------- D4 (or other pin, if specified)
-   --------------GND
+   |   |   --|>|-- RX of Uno / Nano
+   |   ----------- D4 (or other pin, if specified)
+   --------------- GND
 
 ```
 ### Board connections:
@@ -108,6 +116,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 7. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
 8. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
 9. CAN data is sent.
+
 <br/>
 
 # Compile with the Arduino IDE
@@ -120,17 +129,19 @@ Modify them by enabling / disabling them, or change the values if applicable.
 
 | Name | Default value | Description |
 |-|-|-|
-| `MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS` | 2000 |  |
-| `MILLISECONDS_BETWEEN_CAN_FRAME_SEND` | 2000 |  |
+| `MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS` | 2000 | % |
 | `DISPLAY_ALWAYS_ON` | disabled | If activated, the display backlight is always on. This disables the value of `DISPLAY_ON_TIME_SECONDS`. |
+| `MILLISECONDS_BETWEEN_CAN_FRAME_SEND` | 2000 | % |
 | `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
 | `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
 | `BEEP_ON_TIME_SECONDS_IF_TIMEOUT` | 60 | If timeout was detected, beep for 60 s. |
 | `NO_MULTIPLE_BEEPS_ON_TIMEOUT` | disabled | If activated, only beep once if timeout was detected. |
+| `SUPPRESS_LIFEPO4_PLAUSI_WARNING` | disabled | Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V. |
 | `MAXIMUM_NUMBER_OF_CELLS` | 24 | Maximum number of cell info which can be converted. Saves RAM. |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
+<br/>
 
 # Libraries used
 This program uses the following libraries, which are already included in this repository:
@@ -166,7 +177,6 @@ This program uses the following libraries, which are already included in this re
 - https://www.kvaser.com/support/calculators/bit-timing-calculator/
 - https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
 
-#### If you find this program useful, please give it a star.
 
 # Sample Serial output
 See also [here](https://github.com/ArminJo/tree/main/extras).

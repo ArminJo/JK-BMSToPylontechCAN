@@ -159,7 +159,6 @@ struct PylontechCANBatteryRequesFrameStruct {
 
         FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
         FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
-
     }
 };
 
