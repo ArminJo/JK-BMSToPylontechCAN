@@ -57,6 +57,7 @@ void fillJKComputedData();
 extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to write to array, thus starting with 0.
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
+extern bool sJKBMSFrameHasTimeout; // For sending CAN data
 extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 extern const char *sErrorStringForLCD;

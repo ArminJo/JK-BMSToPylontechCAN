@@ -54,11 +54,13 @@
 #define PYLON_CAN_BATTERY_LIMITS_FRAME_ID           0x351 // Battery voltage + current limits
 #define PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID   0x359 // Protection & Alarm flags
 
+#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I      15
+
 extern struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
 extern struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
 extern struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
 extern struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
-extern struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequesFrame;
+extern struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
 extern struct PylontechCANAliveFrameStruct PylontechCANAliveFrameStruct;
 extern struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
 
@@ -71,6 +73,7 @@ void fillPylontechCANCurrentValuesFrame(struct JKReplyStruct *aJKFAllReply);
 
 void fillAllCANData(struct JKReplyStruct *aJKFAllReply);
 void sendPylontechAllCANFrames(bool aDebugModeActive);
+void modifyAllCanDataToInactive();
 
 struct PylontechCANFrameInfoStruct {
     // Both values will be statically initialized in each instance
@@ -80,7 +83,7 @@ struct PylontechCANFrameInfoStruct {
 
 struct PylontechCANFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo;
-    LongLongUnion FrameData;
+    LongLongUnion FrameData; // 8 byte
 };
 
 struct PylontechCANBatteryLimitsFrameStruct {
@@ -132,7 +135,7 @@ struct PylontechCANBatteryRequesFrameStruct {
          * It will be handled automatically by the communication between BESS and external device.
          * This is to stop SOC calculations drifting too far from reality when the battery has not had a full charge for n days.
          */
-        bool FullChargeRequest :1;
+        bool FullChargeRequest :1; // sent as always 0
         // Force to charge battery even from the grid.
         // From Battery-Communications-Integration-Guide-V2.5-1.pdf: Command sent by the BMS telling the inverter to charge the battery from any available power source regardless of inverter settings.
         bool ForceChargeRequestII :1;
@@ -145,7 +148,7 @@ struct PylontechCANBatteryRequesFrameStruct {
         FrameData.FullChargeRequest = 0;
 
         // I do not know the semantics of ForceChargeRequest flags so it is only a guess here
-        if (aJKFAllReply->SOCPercent < 20) {
+        if (aJKFAllReply->SOCPercent < SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I) {
             FrameData.ForceChargeRequestI = 1;
         } else {
             FrameData.ForceChargeRequestI = 0;
@@ -156,7 +159,6 @@ struct PylontechCANBatteryRequesFrameStruct {
         } else {
             FrameData.ForceChargeRequestII = 0;
         }
-
         FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
         FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
     }
@@ -171,7 +173,7 @@ struct PylontechCANAliveFrameStruct {
 
 struct PylontechCANErrorsWarningsFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID, 7 };
-    struct {
+    struct FrameDataStruct {
         // 0=off 1=on
         // Byte 0
         bool :1; // unused
@@ -212,7 +214,7 @@ struct PylontechCANErrorsWarningsFrameStruct {
 
         // Byte 4 to 6
 //    bool :0;
-        uint8_t ModuleNumber = 1;           // 0 to 255
+        uint8_t ModuleNumber = 1;           // 0 to 255. 1 is displayed on Deye as "LiBms01"
         uint8_t Token1 = 0x50;              // 'P'
         uint8_t Token2 = 0x4E;              // 'N'
     } FrameData;
@@ -250,6 +252,7 @@ struct PylontechCANErrorsWarningsFrameStruct {
         // Use the same values as for error here
         FrameData.ChargeHighCurrentWarning = aJKFAllReply->AlarmUnion.AlarmBits.ChargeOvercurrentAlarm;
         FrameData.SystemError = aJKFAllReply->BMSStatus.StatusBits.BatteryDown;
+
 //        if (aJKFAllReply->SOCPercent < 10) {
 //            FrameData.SystemWarning = 1;
 //        }

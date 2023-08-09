@@ -49,8 +49,10 @@ uint8_t JKRequestStatusFrame[21] = { 0x4E, 0x57 /*4E 57 = StartOfFrame*/, 0x00, 
 uint8_t JKrequestStatusFrameOld[] = { 0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77 };
 
 uint16_t sReplyFrameBufferIndex = 0;        // Index of next byte to write to array, except for last byte received. Starting with 0.
-uint16_t sReplyFrameLength;                     // Received length of frame
-uint8_t JKReplyFrameBuffer[350];                // The raw big endian data as received from JK BMS
+uint16_t sReplyFrameLength;                 // Received length of frame
+uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
+bool sJKBMSFrameHasTimeout;                 // For displaying switched page
+
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
 JKComputedDataStruct lastJKComputedData;        // All derived converted and computed data useful for display
@@ -548,11 +550,11 @@ void printMiscellaneousInfo() {
 void handleAndPrintAlarmInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
     if (tJKFAllReply->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
-        sErrorStatusJustChanged = true; // used for checkButtonStateChange()
+        sErrorStatusJustChanged = true; // This forces a switch to Overview page
 
         uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
         if (tAlarms == 0) {
-            sErrorStringForLCD = NULL;
+            sErrorStringForLCD = NULL; // reset error string
         } else {
             Serial.println(F("*** ALARM FLAGS ***"));
             Serial.print(F("Alarm bits=0b"));
@@ -647,20 +649,22 @@ void printJKDynamicInfo() {
 
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
+
 #if !defined(SUPPRESS_LIFEPO4_PLAUSI_WARNING)
         if (swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450) {
             // https://www.evworks.com.au/page/technical-information/lifepo4-care-guide-looking-after-your-lithium-batt/
-            Serial.println(
-                    F("Warning: CellOvervoltageProtectionMillivolt value > 3450 mV is not recommended for LiFePO4 chemistry."));
+            Serial.print(F("Warning: CellOvervoltageProtectionMillivolt value "));
+            Serial.print(swap(tJKFAllReply->CellOvervoltageProtectionMillivolt));
+            Serial.println(F(" mV > 3450 mV is not recommended for LiFePO4 chemistry."));
             Serial.println(F("There is less than 1% extra capacity above 3.5V."));
         }
         if (swap(tJKFAllReply->CellUndervoltageProtectionMillivolt) < 3000) {
             // https://batteryfinds.com/lifepo4-voltage-chart-3-2v-12v-24v-48v/
-            Serial.println(
-                    F("Warning: CellUndervoltageProtectionMillivolt value < 3000 mV is not recommended for LiFePO4 chemistry."));
+            Serial.print(F("Warning: CellUndervoltageProtectionMillivolt value "));
+            Serial.print(swap(tJKFAllReply->CellUndervoltageProtectionMillivolt));
+            Serial.println(F(" mV < 3000 mV is not recommended for LiFePO4 chemistry."));
             Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
         }
-
 #endif
     }
 

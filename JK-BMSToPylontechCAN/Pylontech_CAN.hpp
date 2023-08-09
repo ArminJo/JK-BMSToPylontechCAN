@@ -45,14 +45,14 @@ struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
 struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
 struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
 struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
-struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequesFrame;
-struct PylontechCANAliveFrameStruct PylontechCANAliveFrameStruct;
+struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
+struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
 struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
 
 void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
     PylontechCANBatteryLimitsFrame.fillFrame(aJKFAllReply);
     PylontechCANSohSocFrame.fillFrame(aJKFAllReply);
-    PylontechCANBatteryRequesFrame.fillFrame(aJKFAllReply);
+    PylontechCANBatteryRequestFrame.fillFrame(aJKFAllReply);
     PylontechCANErrorsWarningsFrame.fillFrame(aJKFAllReply);
     PylontechCANCurrentValuesFrame.fillFrame(aJKFAllReply);
 }
@@ -60,6 +60,13 @@ void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
 void sendPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
     sendCANMessage(aPylontechCANFrame->PylontechCANFrameInfo.CANId, aPylontechCANFrame->PylontechCANFrameInfo.FrameLength,
             aPylontechCANFrame->FrameData.UBytes);
+}
+
+void modifyAllCanDataToInactive() {
+    PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere = 0;
+    // Clear all requests in case of timeout / BMS switched off, before sending
+    reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame)->FrameData.UWords[0] = 0;
+    reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame)->FrameData.ULong.LowLong = 0;
 }
 
 void printPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
@@ -88,16 +95,16 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSohSocFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANCurrentValuesFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANManufacturerFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequesFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrameStruct));
+        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
+        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
     }
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSohSocFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANCurrentValuesFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANManufacturerFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequesFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrameStruct));
+    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
+    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
 }
 

@@ -26,14 +26,17 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 <br/>
 
 # Features
-- Protocol converter.
+- Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Display of BMS information and alarms on a locally attached serial 2004 LCD.
 - Switch off LCD backlight after timeout.
-- Beep on alarm and timeouts.
+- Beep on alarm and connection timeouts with selectable timeout.
+- Debug button for realtime monitoring some CAN data sent.
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
 **The MCP2515 / TJA1050 kit for Arduino must be supplied by an extra 5 V regulator, because the Arduino-Nano internal regulator cannot provide more than 100 mA and got defect on my site after a few days.**
+
+At around 100% SOC, the JK-BMS seems to send strange current information of more than +/- 1 ampere.
 
 <br/>
 
@@ -41,14 +44,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 <br/>
 
-# Example on Wokwi
-- [Wokwi JK-BMSToPylontechCAN example](https://wokwi.com/projects/371657348012321793).
-
- <br/>
-
  # Pictures and screenshots
-
- The screenshots are taken from the Wokwi example with `STANDALONE_TEST` enabled and therefore contain random data.
+ The screenshots are taken from the Wokwi example with `STANDALONE_TEST` enabled and therefore may contain random data.
 
 | Breadboard detail | Automatic brightness |
 | :-: | :-: |
@@ -61,7 +58,6 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |  |
 
 ## No breadboard version
-
 | Overview | Overview |
 | :-: | :-: |
 | ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
@@ -70,11 +66,20 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 <br/>
 
+
+# Example on Wokwi
+Also usable as connection schematic.
+
+- [Wokwi JK-BMSToPylontechCAN example](https://wokwi.com/projects/371657348012321793).
+
+ <br/>
+ 
 # Connection schematic
 The standard RX of the Arduino is used for the JK_BMS connection.<br/>
-A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.<br/>
+A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected and switched on.
+Keep in mind that programming will fail if JK-BMS is connected and switched off.<br/>
 If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to swap the lines for RX and TX on the nano.<br/>
-On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for CAN is `00`.
+On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `18`.
 
 ```
                                              ___ 78L05    Schottky diode
@@ -106,13 +111,13 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 
 # Principle of operation
 1. A request to deliver all informations is sent to the BMS (1.85 ms).
-2. Wait and receive the The BMS reply frame (0.18 to 1 ms + 25.5 ms).
-3. The BMS reply frame is stored in a buffer and parity and other plausi checks are made.
+2. Wait and receive the The BMS status frame (0.18 to 1 ms + 25.5 ms).
+3. The BMS status frame is stored in a buffer and parity and other plausi checks are made.
 4. The cell data are converted and enhanced to fill the JKConvertedCellInfoStruct.
    Other frame data are mapped to a C structure.
    But all words and longs in this structure are filled with big endian and thus cannot be read directly but must be swapped on reading.
 5. Other frame data are converted and enhanced to fill the JKComputedDataStruct.
-6. The content of the result frame is printed. After reset, all info is printed once, then only dynamic info is printed.
+6. The content of the status frame is printed. After reset, all info is printed once, then only dynamic info is printed.
 7. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
 8. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
 9. CAN data is sent.
