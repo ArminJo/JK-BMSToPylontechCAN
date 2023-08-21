@@ -104,15 +104,19 @@
 #define DEBUG_PIN                   3 // If low, print additional info and enable LCD CAN page.
 // The standard RX of the Arduino is used for the JK_BMS connection.
 #define JK_BMS_RX_PIN               0 // We use the Serial RX pin. Not used in program, only for documentation
+#if !defined(JK_BMS_TX_PIN)           // Allow override by global symbol
 #define JK_BMS_TX_PIN               4
+#endif
 /*
  * The SPI pins for connection to CAN converter and the I2C / TWI pins for the LCD are determined by hardware.
  * For Uno / Nano:
- *   SPI: MOSI - 11, MISO - 12, SCK - 13.
+ *   SPI: MOSI - 11, MISO - 12, SCK - 13. CS cannot be replaced by constant ground.
  *   I2C: SDA - A4, SCL - A5.
  */
+#if !defined(SPI_CS_PIN)              // Allow override by global symbol
 #define SPI_CS_PIN                  9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
 //#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
+#endif
 
 //#define TIMING_TEST
 #define TIMING_TEST_PIN             7
