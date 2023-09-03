@@ -27,10 +27,12 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 # Features
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
-- Display of BMS information and alarms on a locally attached serial 2004 LCD.
+- Display of BMS information, Cell voltages and alarms on a locally attached serial 2004 LCD.
+- Page button for switching 3 LCD display pages.
 - Switch off LCD backlight after timeout.
 - Beep on alarm and connection timeouts with selectable timeout.
 - Debug button for realtime monitoring some CAN data sent.
+- Serial.print() function is still available for monitoring and debugging.
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
@@ -44,23 +46,28 @@ At around 100% SOC, the JK-BMS seems to send strange current information of more
 
 <br/>
 
- # Pictures and screenshots
+ # Screenshots
  The screenshots are taken from the Wokwi example with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Breadboard detail | Automatic brightness |
-| :-: | :-: |
-| ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
 | Big Info Page | Cell Info Page with maximum and minimum indicators |
+| :-: | :-: |
 | ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) |
 | Overview Page | CAN Info Page |
 | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) | ![CAN Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |
-| Error Page with start of error message in first line |  |
+| Overview / Error Page with start of error message in first line |  |
 | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |  |
 
-## No breadboard version
-| Overview | Overview |
+<br/>
+
+ # Pictures
+
+| My installation | Automatic brightness |
 | :-: | :-: |
-| ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
+| ![My installation](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CompleteInstallation.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
+| Breadboard detail | Automatic brightness |
+| ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) |  |
+| No breadboard version overview | No breadboard version overview |
+| ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
 | Nano top view | Nano bottom view |
 | ![Nano top view](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NanoTop.jpg) | ![Nano bottom view](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NanoBottom.jpg) |
 
@@ -75,10 +82,12 @@ Also usable as connection schematic.
  <br/>
  
 # Connection schematic
-The standard RX of the Arduino is used for the JK_BMS connection.<br/>
-A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected and switched on.
+The standard **RX** of the Arduino is used for the JK_BMS connection.<br/>
+A **schottky diode** is inserted into the RX line to allow programming the AVR with the JK-BMS still connected and switched on.
 Keep in mind that programming will fail if JK-BMS is connected and switched off.<br/>
-If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to swap the lines for RX and TX on the nano.<br/>
+The standard **TX** of the Arduino is used for Serial.print() for monitoring and debugging. The short **request to JK-BMS is sent by `SoftwareSerialTX` using pin 4**.<br/>
+If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to **swap the lines for RX and TX (pin 4)** on the Uno / Nano.
+
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `18`.
 
 ```
@@ -92,7 +101,9 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  |          |<------- GND --->|         |<-- GND-->|         |           |         |
  |__________|                 |_________|          |_________|           |_________|
 
- # JK-BMS UART-TTL socket (4 Pin, JST 1.25mm pitch)
+
+
+ # Connection diagram for JK-BMS GPS / UART-TTL socket (4 Pin, JST 1.25mm pitch)
   ___ ________ ___
  |                |
  | O   O   O   O  |
