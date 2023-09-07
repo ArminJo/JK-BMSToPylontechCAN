@@ -95,7 +95,7 @@ struct PylontechCANBatteryLimitsFrameStruct {
         int16_t BatteryDischarge100Millivolt;               // 0 to 65535 // not in documentation
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
-        FrameData.BatteryChargeOvervoltage100Millivolt = swap(aJKFAllReply->BatteryOvervoltageProtection10Millivolt) / 10;
+        FrameData.BatteryChargeOvervoltage100Millivolt = JKComputedData.BatteryFullVoltage10Millivolt / 10;
         FrameData.BatteryChargeCurrentLimit100Milliampere = swap(aJKFAllReply->ChargeOvercurrentProtectionAmpere) * 10;
         FrameData.BatteryDischargeCurrentLimit100Milliampere = swap(aJKFAllReply->DischargeOvercurrentProtectionAmpere) * 10;
         FrameData.BatteryDischarge100Millivolt = swap(aJKFAllReply->BatteryUndervoltageProtection10Millivolt) / 10;

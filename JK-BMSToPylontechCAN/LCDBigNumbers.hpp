@@ -112,15 +112,16 @@ const uint8_t bigNumbers1x2_1[2][13] PROGMEM = {                   // 2-line num
 // https://www.alpenglowindustries.com/blog/the-big-numbers-go-marching-2x2#/
 // https://github.com/AlpenglowIndustries/Alpenglow_BigNums2x2
 // 8 custom characters for Trek font
+// Requires 1 0xFF Block for the special "0"
 const uint8_t bigNumbers2x2CustomPatterns_1[][8] PROGMEM = {
- { B11111, B11111, B00000, B00000, B00000, B00000, B00000, B00000 },
- { B11000, B11000, B11000, B11000, B11000, B11000, B11000, B11000 },
- { B00000, B00000, B00000, B00000, B00000, B00000, B11111, B11111 },
- { B11111, B11111, B00011, B00011, B00011, B00011, B11111, B11111 },
- { B11111, B11111, B11000, B11000, B11000, B11000, B11111, B11111 },
- { B11111, B11111, B11000, B11000, B11000, B11000, B11000, B11000 },
- { B00011, B00011, B00011, B00011, B00011, B00011, B11111, B11111 },
- { B11000, B11000, B11000, B11000, B11000, B11000, B11111, B11111 }
+ { B11111, B11111, B00000, B00000, B00000, B00000, B00000, B00000 }, // 0
+ { B11000, B11000, B11000, B11000, B11000, B11000, B11000, B11000 }, // 1
+ { B00000, B00000, B00000, B00000, B00000, B00000, B11111, B11111 }, // 2
+ { B11111, B11111, B00011, B00011, B00011, B00011, B11111, B11111 }, // 3
+ { B11111, B11111, B11000, B11000, B11000, B11000, B11111, B11111 }, // 4
+ { B11111, B11111, B11000, B11000, B11000, B11000, B11000, B11000 }, // 5
+ { B00011, B00011, B00011, B00011, B00011, B00011, B11111, B11111 }, // 6
+ { B11000, B11000, B11000, B11000, B11000, B11000, B11111, B11111 } // 7
 };
 const uint8_t bigNumbers2x2_1[2][23] PROGMEM = {                   // 2-line numbers
 //    "-"   "."   ":"       0          1          2          3          4          5          6          7          8          9
@@ -131,6 +132,7 @@ const uint8_t bigNumbers2x2_1[2][23] PROGMEM = {                   // 2-line num
 
 // 3x2 https://liudr.wordpress.com/2011/03/21/big-font/
 // 3x2 http://www.netzmafia.de/skripten/hardware/Arduino/LCD/index.html
+// Requires 0xFF Blocks, but character 6 could be used for it
 const uint8_t bigNumbers3x2CustomPatterns_1[6][8] PROGMEM = {
   { B11111,B11111,B00000,B00000,B00000,B00000,B00000,B00000 }, // 0 Upper bar
   { B00000,B00000,B00000,B00000,B00000,B00000,B11111,B11111 }, // 1 Lower bar
@@ -146,6 +148,7 @@ const uint8_t bigNumbers3x2_1[2][33] PROGMEM = {               // 2-line numbers
 };
 
 // 3x2 https://forum.arduino.cc/t/display-3-character-wide-big-digits-on-16x2-lcd/905360 bottom of page
+// Requires 0xFF Blocks
 const uint8_t bigNumbers3x2CustomPatterns_2[8][8] PROGMEM = {
   { B11111,B11111,B11111,B00000,B00000,B00000,B00000,B00000 }, // 0 Upper bar
   { B00000,B00000,B00000,B00000,B00000,B11111,B11111,B11111 }, // 1 Lower bar
@@ -216,6 +219,7 @@ const uint8_t bigNumbers2x3_2[][23] PROGMEM = {                   // 3-line numb
 };
 
 // 3x4 Font custom patterns http://woodsgood.ca/projects/2015/03/06/3-4-line-big-font-numerals/
+// Requires 0xFF Blocks
 const uint8_t bigNumbers3x3And3x4CustomPatterns_1[][8] PROGMEM = { { 0x01, 0x07, 0x0F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F }, // char 0: bottom right triangle
         { 0x00, 0x00, 0x00, 0x00, 0x1F, 0x1F, 0x1F, 0x1F },     // char 1: bottom block
         { 0x10, 0x1C, 0x1E, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F },     // char 2: bottom left triangle
@@ -245,6 +249,7 @@ const uint8_t bigNumbers3x4_1[4][33] PROGMEM = {                   // 4-line num
 
 // 3x4 Font variant 2
 // https://forum.arduino.cc/t/wie-bekommt-man-solch-grosse-zahlen-hin/986148/12
+// Requires 0xFF Blocks
 const uint8_t bigNumbers3x4CustomPatterns_2[][8] PROGMEM = {
 { B00000, B00000, B00000, B00000, B00001, B00111, B01111, B11111 }, // char 0: bottom right triangle
 { B00000, B00000, B00000, B00000, B11111, B11111, B11111, B11111 }, // char 1: bottom block

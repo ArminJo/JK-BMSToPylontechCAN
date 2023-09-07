@@ -51,12 +51,13 @@ uint8_t JKrequestStatusFrameOld[] = { 0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77 }
 uint16_t sReplyFrameBufferIndex = 0;        // Index of next byte to write to array, except for last byte received. Starting with 0.
 uint16_t sReplyFrameLength;                 // Received length of frame
 uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
-bool sJKBMSFrameHasTimeout;                 // For displaying switched page
+bool sJKBMSFrameHasTimeout;                 // If true, timeout message or CAN Info page is displayed.
 
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
 JKComputedDataStruct lastJKComputedData;        // All derived converted and computed data useful for display
-char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
+char sUpTimeString[12];                         // "9999D23H12M" is 11 bytes long
+char sBalancingTimeString[11];                  // "999D23H12M" is 10 bytes long
 bool sUpTimeStringMinuteHasChanged;
 bool sUpTimeStringTenthOfMinuteHasChanged;
 char sLastUpTimeTenthOfMinuteCharacter;  // for detecting changes in string and setting sUpTimeStringTenthOfMinuteHasChanged
@@ -68,7 +69,7 @@ JKReplyStruct *sJKFAllReplyPointer;
 
 const char lowCapacity[] PROGMEM = "Low capacity";                          // Byte 0.0, warning
 const char MosFetOvertemperature[] PROGMEM = "Power MosFet overtemperature"; // Byte 0.1; alarm
-const char chargingOvervoltage[] PROGMEM = "Charging overvoltage";          // Byte 0.2, alarm
+const char chargingOvervoltage[] PROGMEM = "Battery is full";               // Byte 0.2, alarm // Charging overvoltage
 const char dischargingUndervoltage[] PROGMEM = "Discharging undervoltage";  // Byte 0.3, alarm
 const char Sensor2Overtemperature[] PROGMEM = "Sensor1_2 overtemperature";  // Byte 0.4, alarm
 const char chargingOvercurrent[] PROGMEM = "Charging overcurrent";          // Byte 0.5, alarm
@@ -237,7 +238,7 @@ int16_t getCurrent(uint16_t aJKRAWCurrent) {
 
 }
 
-int16_t getTemperature(uint16_t aJKRAWTemperature) {
+int16_t getJKTemperature(uint16_t aJKRAWTemperature) {
     uint16_t tTemperature = swap(aJKRAWTemperature);
     if (tTemperature <= 100) {
         return tTemperature;
@@ -318,7 +319,7 @@ void fillJKConvertedCellInfo() {
     uint8_t *tJKCellInfoReplyPointer = &JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH];
 
     uint8_t tNumberOfCellInfo = (*tJKCellInfoReplyPointer++) / 3;
-    JKConvertedCellInfo.actualNumberOfCellInfoEntries = tNumberOfCellInfo;
+    JKConvertedCellInfo.ActualNumberOfCellInfoEntries = tNumberOfCellInfo;
     if (tNumberOfCellInfo > MAXIMUM_NUMBER_OF_CELLS) {
         Serial.print(F("Error: Program compiled with \"MAXIMUM_NUMBER_OF_CELLS=" STR(MAXIMUM_NUMBER_OF_CELLS) "\", but "));
         Serial.print(tNumberOfCellInfo);
@@ -333,9 +334,8 @@ void fillJKConvertedCellInfo() {
     uint16_t tMaximumMillivolt = 0;
 
     for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-        JKConvertedCellInfo.CellInfoStructArray[i].CellNumber = *tJKCellInfoReplyPointer++; // Copy CellNumber
-
-        uint8_t tHighByte = *tJKCellInfoReplyPointer++;              // Copy CellMillivolt
+        tJKCellInfoReplyPointer++;                                  // Skip Cell number
+        uint8_t tHighByte = *tJKCellInfoReplyPointer++;             // Copy CellMillivolt
         tVoltage = tHighByte << 8 | *tJKCellInfoReplyPointer++;
         JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt = tVoltage;
         if (tVoltage > 0) {
@@ -343,16 +343,106 @@ void fillJKConvertedCellInfo() {
             tMillivoltSum += tVoltage;
             if (tMinimumMillivolt > tVoltage) {
                 tMinimumMillivolt = tVoltage;
-                JKConvertedCellInfo.MinimumVoltagCellIndex = i;
             }
             if (tMaximumMillivolt < tVoltage) {
                 tMaximumMillivolt = tVoltage;
-                JKConvertedCellInfo.MaximumVoltagCellIndex = i;
             }
         }
     }
+    JKConvertedCellInfo.MinimumCellMillivolt = tMinimumMillivolt;
+    JKConvertedCellInfo.MaximumCellMillivolt = tMaximumMillivolt;
     JKConvertedCellInfo.DeltaCellMillivolt = tMaximumMillivolt - tMinimumMillivolt;
     JKConvertedCellInfo.AverageCellMillivolt = tMillivoltSum / tNumberOfNonNullCellInfo;
+
+    /*
+     * Mark and count minimum and maximum cell voltages
+     */
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMinimumMillivolt) {
+            JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MINIMUM;
+            if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                CellMinimumArray[i]++; // count for statistics
+            }
+        } else if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMaximumMillivolt) {
+            JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MAXIMUM;
+            if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                CellMaximumArray[i]++;
+            }
+        } else {
+            JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM;
+        }
+    }
+
+    /*
+     * Process minimum statistics
+     */
+    uint32_t tCellStatisticsSum = 0;
+    bool tDoDaylyScaling = false;
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        /*
+         * After 43200 counts (a whole day being the minimum / maximum) we do scaling
+         */
+        uint16_t tCellStatisticsCount = CellMinimumArray[i];
+        tCellStatisticsSum += tCellStatisticsCount;
+        if (tCellStatisticsCount > (60UL * 60UL * 24UL * 1000UL / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
+            /*
+             * After 43200 counts (a whole day being the minimum / maximum) we do scaling
+             */
+            tDoDaylyScaling = true;
+        }
+    }
+
+    // Here, we demand 2 minutes of balancing as minimum
+    if (tCellStatisticsSum > 60) {
+        for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+            CellMinimumPercentageArray[i] = ((uint32_t) (CellMinimumArray[i] * 100UL)) / tCellStatisticsSum;
+        }
+    }
+
+    if (tDoDaylyScaling) {
+        /*
+         * Do scaling by dividing all values by 2 resulting in an Exponential Moving Average filter for values
+         */
+        Serial.println(F("Do scaling of minimum counts"));
+        for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+            CellMinimumArray[i] = CellMinimumArray[i] / 2;
+        }
+    }
+
+    /*
+     * Process maximum statistics
+     */
+    tCellStatisticsSum = 0;
+    tDoDaylyScaling = false;
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        /*
+         * After 43200 counts (a whole day being the minimum / maximum) we do scaling
+         */
+        uint16_t tCellStatisticsCount = CellMaximumArray[i];
+        tCellStatisticsSum += tCellStatisticsCount;
+        if (tCellStatisticsCount > (60UL * 60UL * 24UL * 1000UL / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
+            /*
+             * After 43200 counts (a whole day being the minimum / maximum) we do scaling
+             */
+            tDoDaylyScaling = true;
+        }
+    }
+
+    // Here, we demand 2 minutes of balancing as minimum
+    if (tCellStatisticsSum > 60) {
+        for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+            CellMaximumPercentageArray[i] = ((uint32_t) (CellMaximumArray[i] * 100UL)) / tCellStatisticsSum;
+        }
+    }
+    if (tDoDaylyScaling) {
+        /*
+         * Do scaling by dividing all values by 2 resulting in an Exponential Moving Average filter for values
+         */
+        Serial.println(F("Do scaling of maximum counts"));
+        for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+            CellMaximumArray[i] = CellMaximumArray[i] / 2;
+        }
+    }
 
 #if defined(LOCAL_DEBUG)
     Serial.print(tNumberOfCellInfo);
@@ -368,15 +458,15 @@ void fillJKConvertedCellInfo() {
 }
 
 void fillJKComputedData() {
-    JKComputedData.TemperaturePowerMosFet = getTemperature(sJKFAllReplyPointer->TemperaturePowerMosFet);
+    JKComputedData.TemperaturePowerMosFet = getJKTemperature(sJKFAllReplyPointer->TemperaturePowerMosFet);
     int16_t tMaxTemperature = JKComputedData.TemperaturePowerMosFet;
 
-    JKComputedData.TemperatureSensor1 = getTemperature(sJKFAllReplyPointer->TemperatureSensor1);
+    JKComputedData.TemperatureSensor1 = getJKTemperature(sJKFAllReplyPointer->TemperatureSensor1);
     if (tMaxTemperature < JKComputedData.TemperatureSensor1) {
         tMaxTemperature = JKComputedData.TemperatureSensor1;
     }
 
-    JKComputedData.TemperatureSensor2 = getTemperature(sJKFAllReplyPointer->TemperatureSensor2);
+    JKComputedData.TemperatureSensor2 = getJKTemperature(sJKFAllReplyPointer->TemperatureSensor2);
     if (tMaxTemperature < JKComputedData.TemperatureSensor2) {
         tMaxTemperature = JKComputedData.TemperatureSensor2;
     }
@@ -388,6 +478,7 @@ void fillJKComputedData() {
             * sJKFAllReplyPointer->SOCPercent) / 100;
     JKComputedData.BMSIsStarting = (sJKFAllReplyPointer->SOCPercent == 0);
 
+    JKComputedData.BatteryFullVoltage10Millivolt = swap(sJKFAllReplyPointer->BatteryOvervoltageProtection10Millivolt);
     JKComputedData.BatteryVoltage10Millivolt = swap(sJKFAllReplyPointer->Battery10Millivolt);
     JKComputedData.BatteryVoltageFloat = JKComputedData.BatteryVoltage10Millivolt;
     JKComputedData.BatteryVoltageFloat /= 100;
@@ -406,24 +497,74 @@ void fillJKComputedData() {
 //    Serial.println(JKComputedData.BatteryLoadCurrentFloat);
 
     JKComputedData.BatteryLoadPower = JKComputedData.BatteryVoltageFloat * JKComputedData.BatteryLoadCurrentFloat;
+
+    if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+        sBalancingCount++;
+        sprintf_P(sBalancingTimeString, PSTR("%3uD%02uH%02uM"), (uint16_t) (sBalancingCount / (60 * 24 * 30UL)),
+                (uint16_t) ((sBalancingCount / (60 * 30)) % 24), (uint16_t) (sBalancingCount / 30) % 60);
+    }
 }
 
 /*
  * Print formatted cell info on Serial
  */
-void printJKCellInfo() {
-    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.actualNumberOfCellInfoEntries;
+void printJKCellStatisticsInfo() {
+    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
 
-//    Serial.print(tNumberOfCellInfo);
-//    Serial.println(F(" cell voltages:"));
+    /*
+     * Cell statistics
+     */
+    char tStringBuffer[18]; // "12=12 % |  4042, "
+
+    Serial.println(F("Cell Minimum percentages"));
     for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        if (JKConvertedCellInfo.CellInfoStructArray[i].CellNumber < 10) {
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMinimumPercentageArray[i], CellMinimumArray[i]);
+        Serial.print(tStringBuffer);
+    }
+    Serial.println();
+
+    Serial.println(F("Cell Maximum percentages"));
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        if (i != 0 && (i % 8) == 0) {
+            Serial.println();
+        }
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMaximumPercentageArray[i], CellMaximumArray[i]);
+        Serial.print(tStringBuffer);
+    }
+    Serial.println();
+
+    Serial.println();
+}
+/*
+ * Print formatted cell info on Serial
+ */
+void printJKCellInfo() {
+    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
+
+    /*
+     * Summary
+     */
+    Serial.print(tNumberOfCellInfo);
+    myPrint(F(" Cells, Minimum="), JKConvertedCellInfo.MinimumCellMillivolt);
+    myPrint(F(" mV, Maximum="), JKConvertedCellInfo.MaximumCellMillivolt);
+    myPrint(F("mV, Delta="), JKConvertedCellInfo.DeltaCellMillivolt);
+    myPrint(F(" mV, Average="), JKConvertedCellInfo.AverageCellMillivolt);
+    Serial.println(F(" mV"));
+
+    /*
+     * Individual cell voltages
+     */
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        if (i != 0 && (i % 8) == 0) {
+            Serial.println();
+        }
+        if (i < 10) {
             Serial.print(' ');
         }
-        Serial.print(JKConvertedCellInfo.CellInfoStructArray[i].CellNumber);
+        Serial.print(i + 1);
         Serial.print(F("="));
         Serial.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt);
 #if defined(LOCAL_TRACE)
@@ -434,17 +575,6 @@ void printJKCellInfo() {
     }
     Serial.println();
 
-    /*
-     * Cell statistics
-     */
-    myPrint(F("Minimum="), JKConvertedCellInfo.CellInfoStructArray[JKConvertedCellInfo.MinimumVoltagCellIndex].CellMillivolt);
-    myPrint(F(" mV at cell #"), JKConvertedCellInfo.MinimumVoltagCellIndex + 1);
-    myPrint(F(", Maximum="), JKConvertedCellInfo.CellInfoStructArray[JKConvertedCellInfo.MaximumVoltagCellIndex].CellMillivolt);
-    myPrint(F(" mV at cell #"), JKConvertedCellInfo.MaximumVoltagCellIndex + 1);
-    myPrintln(F(" of "), tNumberOfCellInfo);
-    myPrint(F("Delta="), JKConvertedCellInfo.DeltaCellMillivolt);
-    myPrint(F(" mV, Average="), JKConvertedCellInfo.AverageCellMillivolt);
-    Serial.println(F(" mV"));
     Serial.println();
 }
 
@@ -453,7 +583,7 @@ void printVoltageProtectionInfo() {
     /*
      * Voltage protection
      */
-    myPrint(F("Battery Overvoltage Protection[mV]="), swap(tJKFAllReply->BatteryOvervoltageProtection10Millivolt) * 10);
+    myPrint(F("Battery Overvoltage Protection[mV]="), JKComputedData.BatteryFullVoltage10Millivolt * 10);
     myPrintln(F(", Undervoltage="), swap(tJKFAllReply->BatteryUndervoltageProtection10Millivolt) * 10);
     myPrintSwap(F("Cell Overvoltage Protection[mV]="), tJKFAllReply->CellOvervoltageProtectionMillivolt);
     myPrintSwap(F(", Recovery="), tJKFAllReply->CellOvervoltageRecoveryMillivolt);
@@ -615,7 +745,7 @@ void computeUpTimeString() {
         sUpTimeStringMinuteHasChanged = true;
 
         uint32_t tSystemWorkingMinutes = swap(sJKFAllReplyPointer->SystemWorkingMinutes);
-        // 1 kByte for sprintf  creates string "1234D23H12M"
+// 1 kByte for sprintf  creates string "1234D23H12M"
         sprintf_P(sUpTimeString, PSTR("%4uD%02uH%02uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
                 (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
         if (sLastUpTimeTenthOfMinuteCharacter != sUpTimeString[8]) {
@@ -649,6 +779,20 @@ void printJKDynamicInfo() {
 
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
+
+        if (sBalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
+            Serial.println(F("*** CELL STATISTICS ***"));
+            Serial.print(F("Total balancing time="));
+
+            Serial.print(sBalancingCount);
+            Serial.print(F(" -> "));
+            Serial.print(sBalancingTimeString);
+            // Append seconds
+            char tString[4]; // "03S" is 3 bytes long
+            sprintf_P(tString, PSTR("%02uS"), (uint16_t) (sBalancingCount % 30) * 2);
+            Serial.println(tString);
+            printJKCellStatisticsInfo();
+        }
 
 #if !defined(SUPPRESS_LIFEPO4_PLAUSI_WARNING)
         if (swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450) {
@@ -703,6 +847,9 @@ void printJKDynamicInfo() {
         Serial.print(F(", Current[A]="));
         Serial.print(JKComputedData.BatteryLoadCurrentFloat, 2);
         myPrintln(F(", Power[W]="), JKComputedData.BatteryLoadPower);
+        Serial.print(F("Battery Voltage difference to full[V]="));
+        float tBatteryToFullDifference = JKComputedData.BatteryFullVoltage10Millivolt - JKComputedData.BatteryVoltage10Millivolt;
+        Serial.println(tBatteryToFullDifference / 100.0, 1);
     }
 
     /*

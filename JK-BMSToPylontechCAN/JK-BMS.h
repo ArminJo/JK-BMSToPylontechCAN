@@ -65,7 +65,7 @@ extern bool sErrorStatusJustChanged;
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
 
-int16_t getTemperature(uint16_t aJKRAWTemperature);
+int16_t getJKTemperature(uint16_t aJKRAWTemperature);
 int16_t getCurrent(uint16_t aJKRAWCurrent);
 
 uint8_t swap(uint8_t aByte);
@@ -113,19 +113,34 @@ struct JKFrameTailStruct {
     uint16_t Checksum;          // Including StartFrameToken
 };
 
+#define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
+#define VOLTAGE_IS_MINIMUM                      1
+#define VOLTAGE_IS_MAXIMUM                      2
+
 struct JKCellInfoStruct {
-    uint8_t CellNumber;
     uint16_t CellMillivolt;
+    uint8_t VoltageIsMinMaxOrBetween; // One of VOLTAGE_IS_MINIMUM, VOLTAGE_IS_MAXIMUM or VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM
 };
 
 struct JKConvertedCellInfoStruct {
-    uint8_t actualNumberOfCellInfoEntries;
+    uint8_t ActualNumberOfCellInfoEntries;
     JKCellInfoStruct CellInfoStructArray[MAXIMUM_NUMBER_OF_CELLS];
-    uint8_t MinimumVoltagCellIndex;
-    uint8_t MaximumVoltagCellIndex;
+    uint16_t MinimumCellMillivolt;
+    uint16_t MaximumCellMillivolt;
     uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
     uint16_t AverageCellMillivolt;
 };
+
+/*
+ * Arrays of counters, which count the times, a cell has minimal or maximal voltage
+ * To identify runaway cells
+ */
+uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS];
+uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
+uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+#define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
+uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
 
 /*
  * This structure contains all converted and computed data useful for display
@@ -138,12 +153,12 @@ struct JKComputedDataStruct {
 
     uint16_t TotalCapacityAmpereHour;
     uint16_t RemainingCapacityAmpereHour; // Computed value
+    uint16_t BatteryFullVoltage10Millivolt; // Computed by BMS. ActualNumberOfCellInfoEntries *  CellOvervoltageProtectionMillivolt
     uint16_t BatteryVoltage10Millivolt;
     float BatteryVoltageFloat;          // Volt
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
-
     bool BMSIsStarting;                 // True if SOC and Capacity are both 0
 };
 
@@ -185,9 +200,10 @@ struct JKReplyStruct {
     uint8_t TokenTemperatureSensor2;        // 0x82
     uint16_t TemperatureSensor2;            // originally named Battery, the inner sensor beneath the battery+
     uint8_t TokenVoltage;                   // 0x83
-    uint16_t Battery10Millivolt; // Voltage values start with 200mA at 240 mA real current -> 410 -> 620 -> 830mA@920mA real -> 1030@1080mA real -> 1.33 => Resolution is 0.21A
+    uint16_t Battery10Millivolt;
     uint8_t TokenCurrent;                   // 0x84
-    uint16_t Battery10MilliAmpere;          // Highest bit: 0=Discharge, 1=Charge -> see 0xC0
+    // Current values start with 200mA at 240 mA real current -> 410 -> 620 -> 830mA@920mA real -> 1030@1080mA real -> 1.33 => Resolution is 0.21A
+    uint16_t Battery10MilliAmpere;          // Highest bit: 0=Discharge, 1=Charge -> depends on ProtocolVersionNumber
     uint8_t TokenSOCPercent;                // 0x85
     uint8_t SOCPercent;                     // 0-100%
     uint8_t TokenNumberOfTemperatureSensors; // 0x86
@@ -244,7 +260,7 @@ struct JKReplyStruct {
     } BMSStatus;
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
-    uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000
+    uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000 = # of cells * CellOvervoltageProtectionMillivolt
     uint8_t TokenBatteryUndervoltageProtection10Millivolt; // 0x8F
     uint16_t BatteryUndervoltageProtection10Millivolt;  // 1000 to 15000
     uint8_t TokenCellOvervoltageProtectionMillivolt;    // 0x90
@@ -338,7 +354,7 @@ struct JKReplyStruct {
     uint8_t DedicatedChargerSwitchIsActive;     // 0=off 1=on
 
     uint8_t TokenDeviceIdString;                // 0xB4
-    char DeviceIdString[8];                     // First 8 characters of the manufacturer id entered in the app field "User Private Data"
+    char DeviceIdString[8];                // First 8 characters of the manufacturer id entered in the app field "User Private Data"
 
     uint8_t TokenManufacturerDate;              // 0xB5
     char ManufacturerDate[4];                   // "YYMM" - Date of first connection with app

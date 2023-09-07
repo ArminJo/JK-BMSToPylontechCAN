@@ -33,6 +33,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 - Beep on alarm and connection timeouts with selectable timeout.
 - Debug button for realtime monitoring some CAN data sent.
 - Serial.print() function is still available for monitoring and debugging.
+- Statistics of minimum and maximum cells during balancing to identify conspicious cells.
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
@@ -47,15 +48,18 @@ At around 100% SOC, the JK-BMS seems to send strange current information of more
 <br/>
 
  # Screenshots
- The screenshots are taken from the Wokwi example with `STANDALONE_TEST` enabled and therefore may contain random data.
+ The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info Page | Cell Info Page with maximum and minimum indicators |
+| Big Info Page  with difference voltage between<br/>actual and 100% voltage and display of<br/>"C"harging "D"ischarging and "B"alancing active flags | Overview Page |
 | :-: | :-: |
-| ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) |
-| Overview Page | CAN Info Page |
-| ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) | ![CAN Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |
-| Overview / Error Page with start of error message in first line |  |
-| ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |  |
+| ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
+| Cell Info Page with maximum and minimum indicators |  Overview / Error Page with start of error message in first line |
+| ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Error Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |
+| Maximum Cell Statistics Page with total Time of Balancing | Maximum Cell Statistics Page |
+| ![Max Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
+| CAN Info Page |  |
+| ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
+
 
 <br/>
 
@@ -64,9 +68,9 @@ At around 100% SOC, the JK-BMS seems to send strange current information of more
 | My installation | Automatic brightness |
 | :-: | :-: |
 | ![My installation](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CompleteInstallation.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
-| Breadboard detail | Automatic brightness |
+| Breadboard detail |  |
 | ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) |  |
-| No breadboard version overview | No breadboard version overview |
+| No-breadboard version overview | No-breadboard version overview |
 | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
 | Nano top view | Nano bottom view |
 | ![Nano top view](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NanoTop.jpg) | ![Nano bottom view](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NanoBottom.jpg) |
@@ -115,7 +119,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
    --------------- GND
 
 ```
-### Board connections:
+### Board pinout diagrams
 - [Nano](https://store.arduino.cc/products/arduino-nano#docs)
 - [Uno](https://store.arduino.cc/products/arduino-uno-rev3#docs)
  <br/>
@@ -178,10 +182,10 @@ This program uses the following libraries, which are already included in this re
 - Breadboard.
 - Jumper wire.
 - Pin header to connect cables to breadboard.
-- Schottky diode e.g. BAT 43.
+- Schottky diode e.g. BAT 42, BAT 43, BAT 85.
 - Arduino Nano.
-- 16 (or 20) MHz crystal.
-- MCP2515 / TJA1050 kit for Arduino. !!! You must replace the assembled 8 MHz crystal with a 16 MHz (20 MHz) one !!!
+- 16 MHz crystal.
+- MCP2515 / TJA1050 kit for Arduino. !!! You must replace the assembled 8 MHz crystal with a 16 MHz one !!!
 
 ### Optional
 - 2004 LCD with serial I2C interface adapter.
@@ -195,33 +199,45 @@ This program uses the following libraries, which are already included in this re
 - https://www.kvaser.com/support/calculators/bit-timing-calculator/
 - https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
 
+<br/>
+
+# Revision History
+### Version 2.0
+- New page for minimum and maximum cell statistics and balancing time.
+- Show difference between actual and 100% voltage.
+
+### Version 1.3
+- First release version.
+
+### Version 0.9
+- Initial version.
 
 # Sample Serial output
 See also [here](https://github.com/ArminJo/tree/main/extras).
 
 ```
 START ../src/JK-BMSToPylontechCAN.cpp
-Version 1.2 from Aug  7 2023
+Version 2.0 from Sep  8 2023
 Serial to JK-BMS started with 115200 bit/s!
 CAN started with 500 kbit/s!
-If you connect debug pin 8 to ground, additional debug data is printed
+If you connect debug pin 3 to ground, additional debug data is printed
 2000 ms between 2 BMS requests
 2000 ms between 2 CAN transmissions
 
 *** BMS INFO ***
 Protocol Version Number=1
 Software Version Number=11.XW_S11.26___
-Modify Parameter Password=123456
+Modify Parameter Password=1234
 # External Temperature Sensors=2
 
 *** BATTERY INFO ***
 Manufacturer Date=2307
-Manufacturer Id=Armins__BMS1_
+Manufacturer Id=Armins__BMS1JK_B2A20S20P
 Device ID String=Armins__
 Device Address=1
-Total Battery Capacity[Ah]=110, Low Capacity Alarm Percent=20
-Charging Cycles=0
-Total Charging Cycle Capacity=0
+Total Battery Capacity[Ah]=115, Low Capacity Alarm Percent=20
+Charging Cycles=1
+Total Charging Cycle Capacity=218
 # Battery Cells=16, Cell Count=16
 
 *** VOLTAGE PROTECTION INFO ***
@@ -230,18 +246,18 @@ Cell Overvoltage Protection[mV]=3450, Recovery=3400, Delay[s]=5
 Cell Undervoltage Protection[mV]=3000, Recovery=3050, Delay[s]=5
 Cell Voltage Difference Protection[mV]=300
 Discharging Overcurrent Protection[A]=80, Delay[s]=30
-Charging Overcurrent Protection[A]=50, Delay[s]=30
+Charging Overcurrent Protection[A]=43, Delay[s]=30
 
 *** TEMPERATURE PROTECTION INFO ***
 Power MosFet Temperature Protection=80, Recovery=70
 Sensor1 Temperature Protection=100, Recovery=100
 Sensor1 to Sensor2 Temperature Difference Protection=20
-Charge Overtemperature Protection=60, Discharge=70
-Charge Undertemperature Protection=5, Recovery=10
+Charge Overtemperature Protection=45, Discharge=45
+Charge Undertemperature Protection=3, Recovery=5
 Discharge Undertemperature Protection=-20, Recovery=-10
 
 *** MISC INFO ***
-Balance Starting Cell Voltage=[mV]3200
+Balance Starting Cell Voltage=[mV]3350
 Balance Triggering Voltage Difference[mV]=10
 
 Current Calibration[mA]=1048
@@ -249,19 +265,21 @@ Sleep Wait Time[s]=10
 
 Dedicated Charge Switch Active=0
 Start Current Calibration State=0
-Battery Actual Capacity[Ah]=110
+Battery Actual Capacity[Ah]=115
 
-Total Runtime Minutes=3716 ->    2D13H56M
+Total Runtime Minutes=49260 ->   34D05H00M
 *** CELL INFO ***
- 1=3271 mV,  2=3263 mV,  3=3271 mV,  4=3270 mV,  5=3271 mV,  6=3270 mV,  7=3269 mV,  8=3271 mV,
- 9=3266 mV, 10=3266 mV, 11=3266 mV, 12=3266 mV, 13=3265 mV, 14=3265 mV, 15=3265 mV, 16=3265 mV,
-Minimum=3263 mV at cell #2, Maximum=3271 mV at cell #1 of 16
-Delta=8 mV, Average=3267 mV
+16 Cells, Minimum=3397 mV, Maximum=3408mV, Delta=11 mV, Average=3403 mV
+ 1=3397 mV,  2=3399 mV,  3=3400 mV,  4=3403 mV,  5=3406 mV,  6=3407 mV,  7=3407 mV,  8=3408 mV,
+ 9=3400 mV,  10=3406 mV, 11=3407 mV, 12=3404 mV, 13=3404 mV, 14=3403 mV, 15=3401 mV, 16=3402 mV,
 
-Temperature: Power MosFet=22, Sensor 1=21, Sensor 2=22
-SOC[%]=60 -> Remaining Capacity[Ah]=66
-Battery Voltage[V]=52.28, Current[A]=0.00, Power[W]=0
+Temperature: Power MosFet=28, Sensor 1=25, Sensor 2=25
+SOC[%]=99 -> Remaining Capacity[Ah]=113
+Battery Voltage[V]=54.41, Current[A]=-1.25, Power[W]=-68
+Battery Voltage difference to full[V]=0.8
 Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, not active
+Battery Voltage[V]=54.41, Current[A]=1.25, Power[W]=68
+Battery Voltage difference to full[V]=0.8
 Set LCD display page to: 0
 Set LCD display page to: 1
 Set LCD display page to: 2
