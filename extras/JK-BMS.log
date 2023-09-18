@@ -2,7 +2,8 @@ START ../src/JK-BMSToPylontechCAN.cpp
 Version 2.0 from Sep  8 2023
 Serial to JK-BMS started with 115200 bit/s!
 CAN started with 500 kbit/s!
-If you connect debug pin 3 to ground, additional debug data is printed
+Page switching button is at pin 2
+If you push the debug button at pin 3, additional debug data is printed once
 2000 ms between 2 BMS requests
 2000 ms between 2 CAN transmissions
 

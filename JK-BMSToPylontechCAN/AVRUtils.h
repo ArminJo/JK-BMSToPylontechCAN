@@ -54,20 +54,26 @@ extern volatile uint16_t sNumberOfSleeps;
 
 #include <Print.h>
 
+uint8_t* getHeapStart();
+uint16_t getCurrentFreeHeapOrStack(void);
+uint16_t getCurrentAvailableHeap(void);
+void printHeapStart(Print *aSerial);
+void printCurrentFreeHeap(Print *aSerial);
+void printCurrentAvailableHeap(Print *aSerial);
+
 #define HEAP_STACK_UNTOUCHED_VALUE 0x5A
 void initStackFreeMeasurement();
 uint16_t getStackUnusedBytes();
-void printStackUnusedBytes(Print *aSerial);
+uint16_t getStackUsedBytes();
 uint16_t getStackUnusedAndUsedBytes(uint16_t *aStackUsedBytesPointer);
+void printStackUsedBytes(Print *aSerial);
 void printStackUnusedAndUsedBytes(Print *aSerial);
 void printStackUnusedAndUsedBytesIfChanged(Print *aSerial);
 
-uint8_t * getHeapStart();
-uint16_t getFreeHeap(void);
-void printFreeHeap(Print *aSerial);
-uint16_t getFreeRam(void);
-void printFreeRam(Print *aSerial);
+void printRAMInfo(Print *aSerial);
+
 bool isAddressInRAM(void *aAddressToCheck);
 bool isAddressBelowHeap(void *aAddressToCheck);
+
 #endif //  defined(__AVR__)
 #endif // _AVR_UTILS_H

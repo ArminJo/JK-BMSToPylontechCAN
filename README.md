@@ -50,7 +50,7 @@ At around 100% SOC, the JK-BMS seems to send strange current information of more
  # Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info Page  with difference voltage between<br/>actual and 100% voltage and display of<br/>"C"harging "D"ischarging and "B"alancing active flags | Overview Page |
+| Big Info Page  with difference voltage between<br/>actual and 100% voltage and display of<br/>"C"harging "D"ischarging and "B"alancing<br/>active flags | Overview Page |
 | :-: | :-: |
 | ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Cell Info Page with maximum and minimum indicators |  Overview / Error Page with start of error message in first line |
@@ -200,6 +200,10 @@ This program uses the following libraries, which are already included in this re
 - https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
 
 <br/>
+
+# Tested Inverter
+- SUN-5K-SG05LP1-EU
+- Growatt SPH6000
 
 # Revision History
 ### Version 2.0

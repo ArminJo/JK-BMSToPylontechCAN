@@ -40,15 +40,24 @@
 extern void *__brkval; // The largest address just not allocated so far
 
 /*
+ * Returns actual start of free heap
+ * Usage for print:
+ Serial.print(F("HeapStart=0x"));
+ Serial.println((uintptr_t) getHeapStart(), HEX);
+ */
+uint8_t* getHeapStart(void) {
+    if (__brkval == 0) {
+        __brkval = __malloc_heap_start;
+    }
+    return (uint8_t*) __brkval;
+}
+
+/*
  * Initialize RAM between current stack and actual heap start (__brkval) with pattern 0x5A
  */
 void initStackFreeMeasurement() {
     uint8_t tDummyVariableOnStack;
-
-    uint8_t *tHeapPtr = (uint8_t*) __brkval;
-    if (tHeapPtr == 0) {
-        tHeapPtr = (uint8_t*) __malloc_heap_start;
-    }
+    uint8_t *tHeapPtr = getHeapStart();
 
 // Fill / paint stack
     do {
@@ -57,19 +66,17 @@ void initStackFreeMeasurement() {
 }
 
 /*
- * Returns the amount of stack not used/touched since the last call to initStackFreeMeasurement()
- * by check for first touched pattern on the stack, starting the search at heap start.
+ * Returns the amount of stack/heap not used/touched since the last call to initStackFreeMeasurement()
+ * by check for first touched pattern on the stack/heap, starting the UPWARD search at heap start.
  * Sets the variable aStackUsedBytesPointer points to with amount of used/touched bytes.
+ *
+ * This fails, if a HEAP_STACK_UNTOUCHED_VALUE was written in a former malloced block.
  */
 uint16_t getStackUnusedAndUsedBytes(uint16_t *aStackUsedBytesPointer) {
     uint8_t tDummyVariableOnStack;
+    uint8_t *tHeapPtr = getHeapStart();
 
-    uint8_t *tHeapPtr = (uint8_t*) __brkval;
-    if (tHeapPtr == 0) {
-        tHeapPtr = (uint8_t*) __malloc_heap_start;
-    }
-
-// first search for first match after current begin of heap, because malloc() and free() may be happened in between and overwrite low memory
+// first search for first untouched value after current begin of heap, because malloc() and free() may be happened in between and overwrite low memory
     while (*tHeapPtr != HEAP_STACK_UNTOUCHED_VALUE && tHeapPtr < &tDummyVariableOnStack) {
         tHeapPtr++;
     }
@@ -81,21 +88,36 @@ uint16_t getStackUnusedAndUsedBytes(uint16_t *aStackUsedBytesPointer) {
     }
     *aStackUsedBytesPointer = (RAMEND - (uint16_t) tHeapPtr) + 1;
 
-// word -> bytes
     return tStackUnused;
 }
 
 /*
- * Returns the amount of stack not touched since the last call to initStackFreeMeasurement()
- * by check for first touched pattern on the stack, starting the search at heap start.
+ * Returns the amount of stack/heap touched since the last call to initStackFreeMeasurement()
+ * by check for first non touched pattern on the stack/heap, starting the DOWNWARD search at current stack pointer.
+ *
+ * This returns too big value, if the end of former malloced and written memory was higher than current stackpointer,
+ * which nevertheless looks like a potential programming problem.
+ */
+uint16_t getStackUsedBytes() {
+    uint8_t tDummyVariableOnStack;
+    uint8_t *tHeapStart = getHeapStart();
+    uint8_t *tSearchPtr = &tDummyVariableOnStack;
+
+    // Search for first untouched value below current stackpointer
+    while (*tSearchPtr != HEAP_STACK_UNTOUCHED_VALUE && tSearchPtr > tHeapStart) {
+        tSearchPtr--;
+    }
+
+    return (RAMEND + 1) - (uint16_t)tSearchPtr;
+}
+
+/*
+ * Returns the amount of stack/heap not touched since the last call to initStackFreeMeasurement()
+ * by check for first touched pattern on the stack/heap, starting the search at heap start.
  */
 uint16_t getStackUnusedBytes() {
     uint8_t tDummyVariableOnStack;
-
-    uint8_t *tHeapPtr = (uint8_t*) __brkval;
-    if (tHeapPtr == 0) {
-        tHeapPtr = (uint8_t*) __malloc_heap_start;
-    }
+    uint8_t *tHeapPtr = getHeapStart();
 
 // first search for first match after current begin of heap, because malloc() and free() may be happened in between and overwrite low memory
     while (*tHeapPtr != HEAP_STACK_UNTOUCHED_VALUE && tHeapPtr < &tDummyVariableOnStack) {
@@ -107,20 +129,55 @@ uint16_t getStackUnusedBytes() {
         tHeapPtr++;
         tStackUnused++;
     }
-// word -> bytes
     return tStackUnused;
 }
 
 /*
- * Prints the amount of stack not touched (available) since the last call to initStackFreeMeasurement().
+ * Get amount of free RAM = current stackpointer - heap end
  */
-void printStackUnusedBytes(Print *aSerial) {
-    aSerial->print(F("Stack unused[bytes]="));
-    aSerial->println(getStackUnusedBytes());
+uint16_t getCurrentFreeHeapOrStack(void) {
+    uint16_t tHeapStart = (uint16_t) getHeapStart();
+    if (tHeapStart >= SP) {
+        return 0;
+    }
+    return (SP - (uint16_t) getHeapStart());
+}
+
+/*
+ * Get amount of maximum available memory for malloc()
+ * FreeRam - __malloc_margin (128 for ATmega328)
+ */
+uint16_t getCurrentAvailableHeap(void) {
+    if (getCurrentFreeHeapOrStack() <= __malloc_margin) {
+        return 0;
+    }
+    return getCurrentFreeHeapOrStack() - __malloc_margin; // (128)
+}
+
+void printCurrentAvailableHeap(Print *aSerial) {
+    aSerial->print(F("Currently max available Heap[bytes]="));
+    aSerial->println(getCurrentAvailableHeap());
+}
+
+void printHeapStart(Print *aSerial) {
+    aSerial->print(F("Heap start="));
+    aSerial->println((uint16_t) getHeapStart());
+}
+
+/*
+ * Prints the amount of stack used/touched since the last call to initStackFreeMeasurement()
+ * Example: "Stack used 20 of 7" up to "Stack used 20 of 20" if stack runs into data
+ */
+void printStackUsedBytes(Print *aSerial) {
+    aSerial->print(F("Stack used "));
+    aSerial->print(getStackUsedBytes());
+    aSerial->print(F(" of "));
+    aSerial->println((RAMEND + 1) - (uint16_t) getHeapStart());
 }
 
 /*
  * Prints the amount of stack NOT used/touched and used/touched since the last call to initStackFreeMeasurement()
+ * Example: "Stack unused=0, used=16" if stack runs into data
  */
 void printStackUnusedAndUsedBytes(Print *aSerial) {
     uint16_t tStackUsedBytes;
@@ -148,49 +205,30 @@ void printStackUnusedAndUsedBytesIfChanged(Print *aSerial) {
 }
 
 /*
- * Returns actual start of free heap
- * Usage for print:
- Serial.print(F("HeapStart=0x"));
- Serial.println((uintptr_t) getHeapStart(), HEX);
+ * RAM starts of variables initialized with values != 0,
+ * followed by variables initialized with 0
+ * and variables not initialized by using attribute "__attribute__((section(".noinit")))".
+ * It ends with the heap and the stack.
+ *
+ * Sample output if stack runs into data:
+ * Size of Data + BSS, Heap start, Stack end=2041
+ * Stack used 20 of 7
+ * Currently available Heap=0
  */
-uint8_t* getHeapStart(void) {
-    if (__brkval == 0) {
-        __brkval = __malloc_heap_start;
-    }
-    return (uint8_t*) __brkval;
+void printRAMInfo(Print *aSerial) {
+    uint16_t tHeapStart = (uint16_t) getHeapStart();
+    aSerial->print(F("Size of Data + BSS, Heap start, Stack end="));
+    aSerial->println(tHeapStart - RAMSTART);
+
+    printStackUsedBytes(aSerial);
+
+    aSerial->print(F("Currently available Heap="));
+    aSerial->println(getCurrentAvailableHeap());
 }
 
-/*
- * Get amount of maximum available memory for malloc()
- * FreeRam - __malloc_margin (128 for ATmega328)
- */
-uint16_t getFreeHeap(void) {
-    return getFreeRam() - __malloc_margin; // (128)
-}
-
-void printFreeHeap(Print *aSerial) {
-    aSerial->print(F("Free Heap[bytes]="));
-    aSerial->println(getFreeHeap());
-}
-
-/*
- * Get amount of free RAM = current stackpointer - heap end
- */
-uint16_t getFreeRam(void) {
-
-    uint16_t tFreeRamBytes;
-
-    if (__brkval == 0) {
-        tFreeRamBytes = SP - (int) __malloc_heap_start;
-    } else {
-        tFreeRamBytes = SP - (int) __brkval;
-    }
-    return (tFreeRamBytes);
-}
-
-void printFreeRam(Print *aSerial) {
-    aSerial->print(F("Free Ram/Stack[bytes]="));
-    aSerial->println(getFreeRam());
+void printCurrentFreeHeap(Print *aSerial) {
+    aSerial->print(F("Current free Heap / Stack[bytes]="));
+    aSerial->println(getCurrentFreeHeapOrStack());
 }
 
 bool isAddressInRAM(void *aAddressToCheck) {
@@ -198,8 +236,7 @@ bool isAddressInRAM(void *aAddressToCheck) {
 }
 
 bool isAddressBelowHeap(void *aAddressToCheck) {
-    uint8_t *tHeapPtr = (uint8_t*) __brkval;
-    return (aAddressToCheck < tHeapPtr);
+    return (aAddressToCheck < getHeapStart());
 }
 
 /********************************************
@@ -227,7 +264,7 @@ extern volatile unsigned long timer0_millis;
  * SLEEP_MODE_PWR_SAVE
  * SLEEP_MODE_STANDBY
  * SLEEP_MODE_EXT_STANDBY
-*/
+ */
 // required only once
 void initSleep(uint8_t tSleepMode) {
     sleep_enable();

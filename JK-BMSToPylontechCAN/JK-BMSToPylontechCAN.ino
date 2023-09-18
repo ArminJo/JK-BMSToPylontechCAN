@@ -17,7 +17,7 @@
  *  !!! So you must replace the crystal of the module with a 16 (or 20) MHz one !!!
  *  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *
- *  Internal operation (every n seconds):
+ *  Internal operation (default every 2 seconds):
  *  1. A request to deliver all informations is sent to the BMS (1.85 ms).
  *  2. Wait and receive the BMS status frame (0.18 to 1 ms + 25.5 ms).
  *  3. The BMS status frame is stored in a buffer and parity and other plausi checks are made.
@@ -180,13 +180,16 @@ bool sDoErrorBeep = false;              // If true, we do an error beep at the e
 uint8_t sBeepTimeoutCounter;
 
 //#define SUPPRESS_LIFEPO4_PLAUSI_WARNING   // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
+
 /*
+ * Page and debug button stuff
+ *
  * Button at INT0 / D2 for switching LCD pages
  * Button at INT1 / D3 for entering debug print and LCD CAN page
  */
 #define USE_BUTTON_0              // Enable code for 1. button at INT0 / D2
 #define USE_BUTTON_1              // Enable code for 2. button at INT1 / D3
-//#define BUTTON_DEBOUNCING_MILLIS 80 // With this you can adapt to the characteristic of your button. Default is 50.
+#define BUTTON_DEBOUNCING_MILLIS 80 // With this you can adapt to the characteristic of your button. Default is 50.
 #define NO_BUTTON_RELEASE_CALLBACK  // Disables the code for release callback. This saves 2 bytes RAM and 64 bytes program memory.
 #include "EasyButtonAtInt01.hpp"
 
@@ -198,6 +201,9 @@ void handleDebugButtonPress(bool aButtonToggleState);    // The button press cal
 EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);   // Button is connected to INT0
 EasyButton DebugButtonAtPin2(BUTTON_AT_INT1_OR_PCINT, &handleDebugButtonPress); // Button is connected to INT1
 void checkButtonStateChange();
+bool readJK_BMSStatusFrame();
+void processJK_BMSStatusFrame();
+void handleFrameReceiveTimeout();
 
 /*
  * Software serial for JK-BMS stuff
@@ -273,10 +279,10 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #define JK_BMS_PAGE_CAN_INFO            4 // If debug was pressed
 #define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
 #define JK_BMS_START_PAGE               JK_BMS_PAGE_BIG_INFO
-//uint8_t sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
-uint8_t sDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
-uint8_t sCellStatisticsDisplayCounter;
-char sStringBuffer[7]; // For rendering numbers with sprintf_P()
+//uint8_t sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
+uint8_t sLCDDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
+uint8_t sCellStatisticsDisplayCounter;    // counter for CELL_STATISTICS_COUNTER_MASK, to determine max or min page
+char sStringBuffer[7];                    // For rendering numbers with sprintf_P()
 void setDisplayPage(uint8_t aDisplayPageNumber);
 
 void printBMSDataOnLCD();
@@ -315,18 +321,18 @@ const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 
         0x0C, 0xC7, 0x09, 0x0C, 0xC2, 0x0A, 0x0C, 0xC2, 0x0B, 0x0C, 0xC2, 0x0C, 0x0C, 0xC2, 0x0D, 0x0C, 0xC1, 0x0E, 0x0C, 0xBE,
         0x0F, 0x0C, 0xC1, 0x10, 0x0C, 0xC1,
         /*JKFrameAllDataStruct*/
-        0x80, 0x00, 0x16, 0x81, 0x00, 0x15, 0x82, 0x00, 0x15, 0x83, 0x14, 0x6C, 0x84, 0x80, 0xD0, 0x85, 0x23, 0x86, 0x02, 0x87,
-        0x00, 0x04, 0x89, 0x00, 0x00, 0x01, 0xE0, 0x8A, 0x00, 0x0E, 0x8B, 0x00, 0x00, 0x8C, 0x00, 0x07, 0x8E, 0x16, 0x26, 0x8F,
-        0x10, 0xAE, 0x90, 0x0F, 0xD2, 0x91, 0x0F, 0xA0, 0x92, 0x00, 0x05, 0x93, 0x0B, 0xEA, 0x94, 0x0C, 0x1C, 0x95, 0x00, 0x05,
-        0x96, 0x01, 0x2C, 0x97, 0x00, 0x07, 0x98, 0x00, 0x03, 0x99, 0x00, 0x05, 0x9A, 0x00, 0x05, 0x9B, 0x0C, 0xE4, 0x9C, 0x00,
-        0x08, 0x9D, 0x01, 0x9E, 0x00, 0x5A, 0x9F, 0x00, 0x46, 0xA0, 0x00, 0x64, 0xA1, 0x00, 0x64, 0xA2, 0x00, 0x14, 0xA3, 0x00,
-        0x46, 0xA4, 0x00, 0x46, 0xA5, 0xFF, 0xEC, 0xA6, 0xFF, 0xF6, 0xA7, 0xFF, 0xEC, 0xA8, 0xFF, 0xF6, 0xA9, 0x0E, 0xAA, 0x00,
-        0x00, 0x01, 0x40, 0xAB, 0x01, 0xAC, 0x01, 0xAD, 0x04, 0x11, 0xAE, 0x01, 0xAF, 0x01, 0xB0, 0x00, 0x0A, 0xB1, 0x14, 0xB2,
-        0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x00, 0x00, 0x00, 0x00, 0xB3, 0x00, 0xB4, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55,
-        0x73, 0xB5, 0x32, 0x31, 0x30, 0x31, 0xB6, 0x00, 0x00, 0xE2, 0x00, 0xB7, 0x31, 0x31, 0x2E, 0x58, 0x57, 0x5F, 0x53, 0x31,
-        0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F, 0xB8, 0x00, 0xB9, 0x00, 0x00, 0x04, 0x00, 0xBA, 0x49, 0x6E, 0x70, 0x75, 0x74,
-        0x20, 0x55, 0x73, 0x65, 0x72, 0x64, 0x61, 0x4A, 0x4B, 0x5F, 0x42, 0x32, 0x41, 0x32, 0x30, 0x53, 0x32, 0x30, 0x50, 0xC0,
-        0x01,
+        0x80, 0x00, 0x16, 0x81, 0x00, 0x15, 0x82, 0x00, 0x15, /*Voltage*/0x83, 0x14, 0x6C, /*Current*/0x84, 0x80, 0xD0, /*SOC*/0x85,
+        0x47, 0x86, 0x02, 0x87, 0x00, 0x04, 0x89, 0x00, 0x00, 0x01, 0xE0, 0x8A, 0x00, 0x0E, /*Warnings*/0x8B, 0x00, 0x00, 0x8C,
+        0x00, 0x07, 0x8E, 0x16, 0x26, 0x8F, 0x10, 0xAE, 0x90, 0x0F, 0xD2, 0x91, 0x0F, 0xA0, 0x92, 0x00, 0x05, 0x93, 0x0B, 0xEA,
+        0x94, 0x0C, 0x1C, 0x95, 0x00, 0x05, 0x96, 0x01, 0x2C, 0x97, 0x00, 0x07, 0x98, 0x00, 0x03, 0x99, 0x00, 0x05, 0x9A, 0x00,
+        0x05, 0x9B, 0x0C, 0xE4, 0x9C, 0x00, 0x08, 0x9D, 0x01, 0x9E, 0x00, 0x5A, 0x9F, 0x00, 0x46, 0xA0, 0x00, 0x64, 0xA1, 0x00,
+        0x64, 0xA2, 0x00, 0x14, 0xA3, 0x00, 0x46, 0xA4, 0x00, 0x46, 0xA5, 0xFF, 0xEC, 0xA6, 0xFF, 0xF6, 0xA7, 0xFF, 0xEC, 0xA8,
+        0xFF, 0xF6, 0xA9, 0x0E, 0xAA, 0x00, 0x00, 0x01, 0x40, 0xAB, 0x01, 0xAC, 0x01, 0xAD, 0x04, 0x11, 0xAE, 0x01, 0xAF, 0x01,
+        0xB0, 0x00, 0x0A, 0xB1, 0x14, 0xB2, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x00, 0x00, 0x00, 0x00, 0xB3, 0x00, 0xB4, 0x49,
+        0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0xB5, 0x32, 0x31, 0x30, 0x31, 0xB6, 0x00, 0x00, 0xE2, 0x00, 0xB7, 0x31, 0x31,
+        0x2E, 0x58, 0x57, 0x5F, 0x53, 0x31, 0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F, 0xB8, 0x00, 0xB9, 0x00, 0x00, 0x04, 0x00,
+        0xBA, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0x65, 0x72, 0x64, 0x61, 0x4A, 0x4B, 0x5F, 0x42, 0x32, 0x41, 0x32,
+        0x30, 0x53, 0x32, 0x30, 0x50, 0xC0, 0x01,
         /*Trailer*/
         0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x51, 0xC2 };
 
@@ -427,7 +433,8 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     /*
      * Print debug pin info
      */
-    Serial.println(F("If you connect debug pin " STR(DEBUG_PIN) " to ground, additional debug data is printed"));
+    Serial.println(F("Page switching button is at pin " STR(LCD_PAGE_BUTTON_PIN)));
+    Serial.println(F("If you push the debug button at pin " STR(DEBUG_PIN) ", additional debug data is printed once"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) " ms between 2 BMS requests"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_CAN_FRAME_SEND) " ms between 2 CAN transmissions"));
     Serial.println();
@@ -459,6 +466,12 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     printJKReplyFrameBuffer();
     Serial.println();
     processReceivedData();
+    printReceivedData();
+    /*
+     * Copy complete reply and computed values for change determination
+     */
+    lastJKComputedData = JKComputedData;
+    lastJKReply = *sJKFAllReplyPointer; // 221 bytes
     doStandaloneTest();
 #endif
 }
@@ -494,7 +507,6 @@ void loop() {
 
 #if defined(STANDALONE_TEST)
     processReceivedData(); // for statistics
-    printReceivedData();
     delay(500);
 #else
     /*
@@ -505,49 +517,8 @@ void loop() {
 #  if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, HIGH);
 #  endif
-            sMillisOfLastReceivedByte = millis();
-
-            uint8_t tReceiveResultCode = readJK_BMSStatusFrameByte();
-            if (tReceiveResultCode == JK_BMS_RECEIVE_FINISHED) {
-                /*
-                 * All JK-BMS status frame data received
-                 */
-
-                if (sDebugModeJustActivated) {
-                    /*
-                     * Do it once at every debug start
-                     */
-                    if (sReplyFrameBufferIndex == 0) {
-                        Serial.println(F("sReplyFrameBufferIndex is 0"));
-                    } else {
-                        Serial.print(sReplyFrameBufferIndex + 1);
-                        Serial.println(F(" bytes received"));
-                        printJKReplyFrameBuffer();
-                    }
-                    Serial.println();
-                }
-
-                sFrameIsRequested = false; // do not try to receive more
-                sEnableSleep = true;
-                sJKBMSFrameHasTimeout = false;
-                sTimeoutFrameCounter = 0;
-
-                processReceivedData();
-                printReceivedData();
-
-            } else if (tReceiveResultCode != JK_BMS_RECEIVE_OK) {
-                /*
-                 * Error here
-                 */
-                Serial.print(F("Receive error="));
-                Serial.print(tReceiveResultCode);
-                Serial.print(F(" at index"));
-                Serial.println(sReplyFrameBufferIndex);
-
-                sFrameIsRequested = false; // do not try to receive more
-                sEnableSleep = true;
-
-                printJKReplyFrameBuffer();
+            if (readJK_BMSStatusFrame()) {
+                processJK_BMSStatusFrame(); // Process the complete receiving of the status frame and set the appropriate flags
             }
 #  if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, LOW);
@@ -555,66 +526,12 @@ void loop() {
 
         } else if (millis() - sMillisOfLastReceivedByte >= TIMEOUT_MILLIS_FOR_FRAME_REPLY) {
             /*
-             * Here we have timeout at one byte
-             * If complete timeout, print it only once
+             * Here we have requested frame, but serial was not available fore a longer time => timeout at receiving
+             * If no bytes received before (because of BMS disconnected), print it only once
              */
-            sDoErrorBeep = true;
-
-            if (!sCANDataIsInitialized) {
-                sDebugModeJustActivated = false; // Must be reset here, since we do not send CAN frames
-            }
-            sFrameIsRequested = false; // Do not try to receive more
-            sEnableSleep = true;
-            sJKBMSFrameHasTimeout = true;
-
-            if (sReplyFrameBufferIndex != 0 || sTimeoutFrameCounter == 0) {
-                /*
-                 * No byte received here -BMS may be off or disconnected
-                 * Do it only once if we receive 0 bytes
-                 */
-                Serial.print(F("Receive timeout at ReplyFrameBufferIndex="));
-                Serial.println(sReplyFrameBufferIndex);
-                if (sReplyFrameBufferIndex != 0) {
-                    printJKReplyFrameBuffer();
-                }
-
-                modifyAllCanDataToInactive();
-                if (sSerialLCDAvailable && sDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
-                    // Update the changed values on LCD
-                    myLCD.clear();
-                    myLCD.setCursor(0, 0);
-                    printCANInfoOnLCD();
-                }
-            }
-            sTimeoutFrameCounter++;
-            if (sTimeoutFrameCounter == 0) {
-                sTimeoutFrameCounter--; // To avoid overflow, we have an unsigned integer here
-            }
-
-            if (sSerialLCDAvailable) {
-                if (sDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
-                    myLCD.clear();
-                    myLCD.setCursor(0, 0);
-                    myLCD.print(F("Receive timeout "));
-                    myLCD.print(sTimeoutFrameCounter);
-                    myLCD.setCursor(0, 1);
-                    myLCD.print(F("Is BMS switched off?"));
-                }
-
-#if !defined(DISPLAY_ALWAYS_ON)
-                /*
-                 * Check for display timeout here
-                 */
-                if (sTimeoutFrameCounter
-                        == ((DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT * 1000) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
-                    myLCD.noBacklight(); // switch off backlight after 3 minutes
-                    sSerialLCDIsSwitchedOff = true;
-                    Serial.println(F("Switch off LCD display now, triggered by receive timeouts."));
-                }
-#endif
-            }
-        } // millis() - sMillisOfLastReceivedByte >= TIMEOUT_MILLIS_FOR_FRAME_REPLY
-    } // if (sFrameIsRequested)
+            handleFrameReceiveTimeout();
+        }
+    }
 #endif // !defined(STANDALONE_TEST)
 
     /*
@@ -646,7 +563,7 @@ void loop() {
         }
 
         /*
-         * Checking for errors
+         * Checking for BMS error flags
          */
         if (sErrorStringForLCD != NULL) {
             sDoErrorBeep = true;
@@ -660,10 +577,10 @@ void loop() {
         }
 
         if (sSerialLCDAvailable) {
+#if !defined(DISPLAY_ALWAYS_ON)
             /*
              * Display backlight handling
              */
-#if !defined(DISPLAY_ALWAYS_ON)
             sFrameCounterForLCDTAutoOff++;
             if (sFrameCounterForLCDTAutoOff == 0) {
                 sFrameCounterForLCDTAutoOff--; // To avoid overflow, we have an unsigned integer here
@@ -753,6 +670,121 @@ void loop() {
     } // if (sEnableSleep)
 }
 
+/*
+ * Process the complete receiving of the status frame and set the appropriate flags
+ */
+void processJK_BMSStatusFrame() {
+    if (sDebugModeJustActivated) {
+        /*
+         * Do it once at every debug start
+         */
+        if (sReplyFrameBufferIndex == 0) {
+            Serial.println(F("sReplyFrameBufferIndex is 0"));
+        } else {
+            Serial.print(sReplyFrameBufferIndex + 1);
+            Serial.println(F(" bytes received"));
+            printJKReplyFrameBuffer();
+        }
+        Serial.println();
+    }
+    sFrameIsRequested = false; // do not try to receive more
+    sEnableSleep = true;
+    sJKBMSFrameHasTimeout = false;
+    sTimeoutFrameCounter = 0;
+    processReceivedData();
+    printReceivedData();
+    /*
+     * Copy complete reply and computed values for change determination
+     */
+    lastJKComputedData = JKComputedData;
+    lastJKReply = *sJKFAllReplyPointer; // 221 bytes
+}
+
+/*
+ * Reads all bytes of the requested frame into buffer and prints errors
+ * Sets sFrameIsRequested to false, if frame was complete and manages other flags too
+ * @return true if frame was completely received
+ */
+bool readJK_BMSStatusFrame() {
+    sMillisOfLastReceivedByte = millis();
+    uint8_t tReceiveResultCode = readJK_BMSStatusFrameByte();
+    if (tReceiveResultCode == JK_BMS_RECEIVE_FINISHED) {
+        /*
+         * All JK-BMS status frame data received
+         */
+        return true;
+
+    } else if (tReceiveResultCode != JK_BMS_RECEIVE_OK) {
+        /*
+         * Error here
+         */
+        Serial.print(F("Receive error="));
+        Serial.print(tReceiveResultCode);
+        Serial.print(F(" at index"));
+        Serial.println(sReplyFrameBufferIndex);
+        sFrameIsRequested = false; // do not try to receive more
+        sEnableSleep = true;
+        printJKReplyFrameBuffer();
+    }
+    return false;
+}
+
+/*
+ * Here we have requested frame, but serial was not available fore a longer time => timeout at receiving
+ * If no bytes received before (because of BMS disconnected), print it only once
+ */
+void handleFrameReceiveTimeout() {
+    sDoErrorBeep = true;
+    if (!sCANDataIsInitialized) {
+        sDebugModeJustActivated = false; // Must be reset here, since we do not send CAN frames
+    }
+    sFrameIsRequested = false; // Do not try to receive more
+    sEnableSleep = true;
+    sJKBMSFrameHasTimeout = true;
+    if (sReplyFrameBufferIndex != 0 || sTimeoutFrameCounter == 0) {
+        /*
+         * No byte received here -BMS may be off or disconnected
+         * Do it only once if we receive 0 bytes
+         */
+        Serial.print(F("Receive timeout at ReplyFrameBufferIndex="));
+        Serial.println(sReplyFrameBufferIndex);
+        if (sReplyFrameBufferIndex != 0) {
+            printJKReplyFrameBuffer();
+        }
+        modifyAllCanDataToInactive();
+        if (sSerialLCDAvailable && sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
+            // Update the changed values on LCD
+            myLCD.clear();
+            myLCD.setCursor(0, 0);
+            printCANInfoOnLCD();
+        }
+    }
+    sTimeoutFrameCounter++;
+    if (sTimeoutFrameCounter == 0) {
+        sTimeoutFrameCounter--; // To avoid overflow, we have an unsigned integer here
+    }
+    if (sSerialLCDAvailable) {
+        if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
+            myLCD.clear();
+            myLCD.setCursor(0, 0);
+            myLCD.print(F("Receive timeout "));
+            myLCD.print(sTimeoutFrameCounter);
+            myLCD.setCursor(0, 1);
+            myLCD.print(F("Is BMS switched off?"));
+        }
+#if !defined(DISPLAY_ALWAYS_ON)
+        /*
+         * Check for display timeout here
+         */
+        if (sTimeoutFrameCounter == ((DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT * 1000) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
+            myLCD.noBacklight(); // switch off backlight after 3 minutes
+            sSerialLCDIsSwitchedOff = true;
+            Serial.println(F("Switch off LCD display now, triggered by receive timeouts."));
+        }
+#endif
+    }
+}
+
 void processReceivedData() {
     /*
      * Set the static pointer to the start of the reply data which depends on the number of cell voltage entries
@@ -802,7 +834,15 @@ void printShortEnableFlagsOnLCD() {
     }
 }
 
+/*
+ * Prints state of Charge Overvoltage warning, and Charge, Discharge and Balancing flag
+ */
 void printShortStateOnLCD() {
+    if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
+        myLCD.print('F');
+    } else {
+        myLCD.print(' ');
+    }
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
         myLCD.print('C');
     } else {
@@ -837,21 +877,22 @@ void printLongStateOnLCD() {
 }
 
 /*
- * Print current as 4 character (+ 1 sign)
+ * Print current as 5 character including sign
  */
 void printCurrentOnLCD() {
     int16_t tBattery10MilliAmpere = JKComputedData.Battery10MilliAmpere;
     if (tBattery10MilliAmpere >= 0) {
-        myLCD.print(' ');
+        myLCD.print(' '); // handle not printed + sign
     }
-    tBattery10MilliAmpere = abs(tBattery10MilliAmpere);
+    tBattery10MilliAmpere = abs(tBattery10MilliAmpere); // remove sign for length computation
     uint8_t tNumberOfDecimalPlaces;
     if (tBattery10MilliAmpere < 1000) {
-        tNumberOfDecimalPlaces = 2;
+        // less than 10 A (1000 * 10mA)
+        tNumberOfDecimalPlaces = 2; // -9.99
     } else if (tBattery10MilliAmpere < 10000) {
-        tNumberOfDecimalPlaces = 1;
+        tNumberOfDecimalPlaces = 1; // -99.9
     } else {
-        tNumberOfDecimalPlaces = 0;
+        tNumberOfDecimalPlaces = 0; // -9999
     }
     myLCD.print(JKComputedData.BatteryLoadCurrentFloat, tNumberOfDecimalPlaces);
     myLCD.print(F("A "));
@@ -917,53 +958,45 @@ void printCellStatisticsOnLCD() {
         tRowNumber = 1;
     }
 
-    if (sBalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
-        // Here, we demand 2 minutes of balancing as minimum
-        myLCD.print(F("Too less samples"));
-        myLCD.setCursor(0, 1);
-        myLCD.print(F("Balancing < 120 sec"));
-
-    } else {
-        char *tBalancingTimeStringPtr = &sBalancingTimeString[0];
-        for (uint8_t i = 0; i < tNumberOfCellInfoEntries; ++i) {
-            uint8_t tPercent;
-            if (tDisplayCellMinimumStatistics) {
-                tPercent = CellMinimumPercentageArray[i];
-            } else {
-                tPercent = CellMaximumPercentageArray[i];
-            }
-            if (tPercent < 10) {
-                myLCD.print(' ');
-            }
-            myLCD.print(tPercent);
-            myLCD.print(F("% "));
-            if (i % 4 == 3) {
-                /*
-                 * Use the last 4 characters for information
-                 * about min or max and the total balancing time
-                 */
-                if (i == 3) {
-                    // first line
-                    if (tDisplayCellMinimumStatistics) {
-                        myLCD.print(F("MIN"));
-                    } else {
-                        myLCD.print(F("MAX"));
-                    }
+    char *tBalancingTimeStringPtr = &sBalancingTimeString[0];
+    for (uint8_t i = 0; i < tNumberOfCellInfoEntries; ++i) {
+        uint8_t tPercent;
+        if (tDisplayCellMinimumStatistics) {
+            tPercent = CellMinimumPercentageArray[i];
+        } else {
+            tPercent = CellMaximumPercentageArray[i];
+        }
+        if (tPercent < 10) {
+            myLCD.print(' ');
+        }
+        myLCD.print(tPercent);
+        myLCD.print(F("% "));
+        if (i % 4 == 3) {
+            /*
+             * Use the last 4 characters for information
+             * about min or max and the total balancing time
+             */
+            if (i == 3) {
+                // first line
+                if (tDisplayCellMinimumStatistics) {
+                    myLCD.print(F("MIN"));
                 } else {
-                    if (i == 7) {
-                        // Second line print 4 characters days
-                        myLCD.print(*tBalancingTimeStringPtr++);
-                    } else {
-                        myLCD.print(' ');
-                    }
-                    // print 3 character for hours or minutes
-                    myLCD.print(*tBalancingTimeStringPtr++);
-                    myLCD.print(*tBalancingTimeStringPtr++);
-                    myLCD.print(*tBalancingTimeStringPtr++);
+                    myLCD.print(F("MAX"));
                 }
-                tRowNumber++;
-                myLCD.setCursor(0, tRowNumber);
+            } else {
+                if (i == 7) {
+                    // Second line print 4 characters days
+                    myLCD.print(*tBalancingTimeStringPtr++);
+                } else {
+                    myLCD.print(' ');
+                }
+                // print 3 character for hours or minutes
+                myLCD.print(*tBalancingTimeStringPtr++);
+                myLCD.print(*tBalancingTimeStringPtr++);
+                myLCD.print(*tBalancingTimeStringPtr++);
             }
+            tRowNumber++;
+            myLCD.setCursor(0, tRowNumber);
         }
     }
 }
@@ -1046,15 +1079,15 @@ void printBigInfoOnLCD() {
     myLCD.setCursor(19, UNITS_ROW_FOR_BIG_INFO);
     myLCD.print('W');
 
-// Row 3: Max temperature, the actual states
+// Bottom row: Max temperature, current and the actual states
     myLCD.setCursor(0, 3);
     myLCD.print(JKComputedData.TemperatureMaximum);
     myLCD.print(F("\xDF" "C "));
 
-    myLCD.setCursor(5, 3);
+    myLCD.setCursor(4, 3);
     printCurrentOnLCD();
 
-    myLCD.setCursor(12, 3);
+    myLCD.setCursor(11, 3);
     uint16_t tBatteryToFullDifference10Millivolt = JKComputedData.BatteryFullVoltage10Millivolt
             - JKComputedData.BatteryVoltage10Millivolt;
     if (tBatteryToFullDifference10Millivolt < 100) {
@@ -1066,13 +1099,13 @@ void printBigInfoOnLCD() {
     }
     myLCD.print('V');
 
-    myLCD.setCursor(17, 3);
+    myLCD.setCursor(16, 3);
     printShortStateOnLCD();
 }
 
 void printCANInfoOnLCD() {
     /*
-     * sDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
+     * sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
      */
     if (!sCANDataIsInitialized || JKComputedData.BMSIsStarting) {
         myLCD.print(F("No CAN data are sent"));
@@ -1236,8 +1269,8 @@ void printOverwiewInfoOnLCD() {
     myLCD.print(F("\xDF" "C "));
     myLCD.print(JKComputedData.TemperatureSensor2);
     myLCD.print(F("\xDF" "C "));
-// Last 3 characters are the actual states
-    myLCD.setCursor(17, 3);
+// Last 4 characters are the actual states
+    myLCD.setCursor(16, 3);
     printShortStateOnLCD();
 
 }
@@ -1246,25 +1279,25 @@ void printBMSDataOnLCD() {
     myLCD.clear();
     myLCD.setCursor(0, 0);
 
-    if (sDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
+    if (sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
         printOverwiewInfoOnLCD();
 
-    } else if (sDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+    } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
         printCellInfoOnLCD();
 
-    } else if (sDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
+    } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
         printCellStatisticsOnLCD();
 
-    } else if (sDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+    } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
         printBigInfoOnLCD();
 
-    } else { //sDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
+    } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
         printCANInfoOnLCD();
     }
 }
 
 void setDisplayPage(uint8_t aDisplayPageNumber) {
-    sDisplayPageNumber = aDisplayPageNumber;
+    sLCDDisplayPageNumber = aDisplayPageNumber;
     tone(BUZZER_PIN, 2200, 30);
     Serial.print(F("Set LCD display page to: "));
     Serial.println(aDisplayPageNumber);
@@ -1285,6 +1318,7 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
 void handlePageButtonPress(bool aButtonToggleState __attribute__((unused))) {
     sPageButtonJustPressed = true;
 }
+
 void handleDebugButtonPress(bool aButtonToggleState __attribute__((unused))) {
     sDebugButtonJustPressed = true;
 }
@@ -1295,7 +1329,7 @@ void handleDebugButtonPress(bool aButtonToggleState __attribute__((unused))) {
 void checkButtonStateChange() {
 
 #if !defined(DISPLAY_ALWAYS_ON)
-    if ((sDebugButtonJustPressed || sPageButtonJustPressed) && sSerialLCDIsSwitchedOff) {
+    if ((sPageButtonJustPressed || sDebugButtonJustPressed) && sSerialLCDIsSwitchedOff) {
         /*
          * If backlight LED off, switch it on, but do not select next page, except if debug button was pressed.
          */
@@ -1332,7 +1366,7 @@ void checkButtonStateChange() {
         /*
          * Switch display pages to next page
          */
-        uint8_t tDisplayPageNumber = sDisplayPageNumber;
+        uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
         tDisplayPageNumber++;
 
         if (sJKBMSFrameHasTimeout || tDisplayPageNumber > JK_BMS_PAGE_MAX) {
@@ -1344,7 +1378,7 @@ void checkButtonStateChange() {
             bigNumberLCD._createChar(1, bigNumbersTopBlock);
             bigNumberLCD._createChar(2, bigNumbersBottomBlock);
 
-            // prepare for statistics page here
+            // Prepare for statistics page here display max first
             sCellStatisticsDisplayCounter = 0;
 
         } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
@@ -1371,17 +1405,17 @@ void doStandaloneTest() {
 }
 
 void testLCDPages() {
-    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     printBMSDataOnLCD();
 
-    sDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
 // Create symbols character for maximum and minimum
     bigNumberLCD._createChar(1, bigNumbersTopBlock);
     bigNumberLCD._createChar(2, bigNumbersBottomBlock);
     delay(2000);
     printBMSDataOnLCD();
 
-    sDisplayPageNumber = JK_BMS_PAGE_CAN_INFO;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_CAN_INFO;
     delay(2000);
     printBMSDataOnLCD();
 
@@ -1394,11 +1428,11 @@ void testLCDPages() {
     JKComputedData.TemperaturePowerMosFet = 111;
     JKComputedData.TemperatureSensor1 = 100;
 
-    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     delay(2000);
     printBMSDataOnLCD();
 
-    sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
     bigNumberLCD.begin();
     delay(2000);
     printBMSDataOnLCD();
@@ -1415,11 +1449,11 @@ void testLCDPages() {
     JKComputedData.BatteryLoadPower = 12345;
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
 
-    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     delay(2000);
     printBMSDataOnLCD();
 
-    sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
     delay(2000);
     printBMSDataOnLCD();
 
@@ -1431,13 +1465,13 @@ void testLCDPages() {
     sJKFAllReplyPointer->SOCPercent = 100;
     JKComputedData.BatteryLoadCurrentFloat = -100;
 
-    sDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     delay(2000);
     printBMSDataOnLCD();
 }
 
 void testBigNumbers() {
-    sDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+    sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
 
     for (int j = 0; j < 3; ++j) {
         // Test with 100 %  and 42 %

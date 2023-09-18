@@ -55,39 +55,39 @@ bool sJKBMSFrameHasTimeout;                 // If true, timeout message or CAN I
 
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
-JKComputedDataStruct lastJKComputedData;        // All derived converted and computed data useful for display
+JKComputedDataStruct lastJKComputedData;        // For detecting changes
 char sUpTimeString[12];                         // "9999D23H12M" is 11 bytes long
-char sBalancingTimeString[11];                  // "999D23H12M" is 10 bytes long
+char sBalancingTimeString[11] = { ' ', ' ', '0', 'D', '0', '0', 'H', '0', '0', 'M', '\0' };    // "999D23H12M" is 10 bytes long
 bool sUpTimeStringMinuteHasChanged;
 bool sUpTimeStringTenthOfMinuteHasChanged;
-char sLastUpTimeTenthOfMinuteCharacter;  // for detecting changes in string and setting sUpTimeStringTenthOfMinuteHasChanged
+char sLastUpTimeTenthOfMinuteCharacter;     // For detecting changes in string and setting sUpTimeStringTenthOfMinuteHasChanged
 
 /*
  * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
  */
 JKReplyStruct *sJKFAllReplyPointer;
 
-const char lowCapacity[] PROGMEM = "Low capacity";                          // Byte 0.0, warning
-const char MosFetOvertemperature[] PROGMEM = "Power MosFet overtemperature"; // Byte 0.1; alarm
-const char chargingOvervoltage[] PROGMEM = "Battery is full";               // Byte 0.2, alarm // Charging overvoltage
-const char dischargingUndervoltage[] PROGMEM = "Discharging undervoltage";  // Byte 0.3, alarm
-const char Sensor2Overtemperature[] PROGMEM = "Sensor1_2 overtemperature";  // Byte 0.4, alarm
-const char chargingOvercurrent[] PROGMEM = "Charging overcurrent";          // Byte 0.5, alarm
-const char dischargingOvercurrent[] PROGMEM = "Discharging overcurrent";    // Byte 0.6, alarm
-const char CellVoltageDifference[] PROGMEM = "Cell voltage difference";     // Byte 0.7, alarm
-const char Sensor1Overtemperature[] PROGMEM = "Sensor2 overtemperature";    // Byte 1.0, alarm
-const char Sensor2LowLemperature[] PROGMEM = "Sensor1_2 low temperature";   // Byte 1.1, alarm
-const char CellOvervoltage[] PROGMEM = "Cell overvoltage";                  // Byte 1.2, alarm
-const char CellUndervoltage[] PROGMEM = "Cell undervoltage";                // Byte 1.3, alarm
-const char _309AProtection[] PROGMEM = "309_A protection";                  // Byte 1.4, alarm
-const char _309BProtection[] PROGMEM = "309_B protection";                  // Byte 1.5, alarm
+const char lowCapacity[] PROGMEM = "Low capacity";                          // Byte 0.0,
+const char MosFetOvertemperature[] PROGMEM = "Power MosFet overtemperature"; // Byte 0.1;
+const char chargingOvervoltage[] PROGMEM = "Battery is full";               // Byte 0.2,  // Charging overvoltage
+const char dischargingUndervoltage[] PROGMEM = "Discharging undervoltage";  // Byte 0.3,
+const char Sensor2Overtemperature[] PROGMEM = "Sensor1_2 overtemperature";  // Byte 0.4,
+const char chargingOvercurrent[] PROGMEM = "Charging overcurrent";          // Byte 0.5,
+const char dischargingOvercurrent[] PROGMEM = "Discharging overcurrent";    // Byte 0.6,
+const char CellVoltageDifference[] PROGMEM = "Cell voltage difference";     // Byte 0.7,
+const char Sensor1Overtemperature[] PROGMEM = "Sensor2 overtemperature";    // Byte 1.0,
+const char Sensor2LowLemperature[] PROGMEM = "Sensor1_2 low temperature";   // Byte 1.1,
+const char CellOvervoltage[] PROGMEM = "Cell overvoltage";                  // Byte 1.2,
+const char CellUndervoltage[] PROGMEM = "Cell undervoltage";                // Byte 1.3,
+const char _309AProtection[] PROGMEM = "309_A protection";                  // Byte 1.4,
+const char _309BProtection[] PROGMEM = "309_B protection";                  // Byte 1.5,
 
 const char *const JK_BMSErrorStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM = { lowCapacity, MosFetOvertemperature,
         chargingOvervoltage, dischargingUndervoltage, Sensor2Overtemperature, chargingOvercurrent, dischargingOvercurrent,
         CellVoltageDifference, Sensor1Overtemperature, Sensor2LowLemperature, CellOvervoltage, CellUndervoltage, _309AProtection,
         _309BProtection };
 const char *sErrorStringForLCD; // store of the error string of the highest error bit, NULL otherwise
-bool sErrorStatusJustChanged = false; // is set to true by handleAndPrintAlarmInfo(), and reset by checkButtonStateChange()
+bool sErrorStatusJustChanged = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if error flags changed, and reset on switching to overview page.
 
 /*
  * Helper macro for getting a macro definition as string
@@ -679,15 +679,25 @@ void printMiscellaneousInfo() {
  */
 void handleAndPrintAlarmInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
-    if (tJKFAllReply->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
-        sErrorStatusJustChanged = true; // This forces a switch to Overview page
 
-        uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
-        if (tAlarms == 0) {
+    /*
+     * Do it only once per change
+     */
+    if (tJKFAllReply->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
+        // ChargeOvervoltageAlarm is displayed separately
+        if (!tJKFAllReply->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
+            sErrorStatusJustChanged = true; // This forces a switch to Overview page
+        }
+
+        if (tJKFAllReply->AlarmUnion.AlarmsAsWord == 0) {
             sErrorStringForLCD = NULL; // reset error string
+            Serial.println(F("All alarms are cleared"));
         } else {
+            uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
             Serial.println(F("*** ALARM FLAGS ***"));
-            Serial.print(F("Alarm bits=0b"));
+            Serial.print(F("Alarm bits=0x"));
+            Serial.print(tAlarms, HEX);
+            Serial.print(F(" | 0b"));
             Serial.println(tAlarms, BIN);
 
             uint16_t tAlarmMask = 1;
@@ -761,7 +771,6 @@ void computeUpTimeString() {
  * All other data are used unconverted and are therefore printed by swap() functions.
  */
 void printJKDynamicInfo() {
-
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
     /*
@@ -799,8 +808,8 @@ void printJKDynamicInfo() {
             // https://www.evworks.com.au/page/technical-information/lifepo4-care-guide-looking-after-your-lithium-batt/
             Serial.print(F("Warning: CellOvervoltageProtectionMillivolt value "));
             Serial.print(swap(tJKFAllReply->CellOvervoltageProtectionMillivolt));
-            Serial.println(F(" mV > 3450 mV is not recommended for LiFePO4 chemistry."));
-            Serial.println(F("There is less than 1% extra capacity above 3.5V."));
+            Serial.println(
+                    F(" mV > 3450 mV is not recommended for LiFePO4 chemistry. There is less than 1% extra capacity above 3.5V."));
         }
         if (swap(tJKFAllReply->CellUndervoltageProtectionMillivolt) < 3000) {
             // https://batteryfinds.com/lifepo4-voltage-chart-3-2v-12v-24v-48v/
@@ -872,13 +881,6 @@ void printJKDynamicInfo() {
         printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
         Serial.println(); // printActiveState does no println()
     }
-
-    /*
-     * Copy complete reply and computed values for change determination
-     */
-    lastJKComputedData = JKComputedData;
-    lastJKReply = *tJKFAllReply; // 221 bytes
-
 }
 #if defined(LOCAL_DEBUG)
 #undef LOCAL_DEBUG

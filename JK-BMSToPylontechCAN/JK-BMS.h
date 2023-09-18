@@ -221,28 +221,28 @@ struct JKReplyStruct {
         uint16_t AlarmsAsWord;
         struct {
             // High byte of alarms
-            bool Sensor2OvertemperatureAlarm :1;    // 0x01 ???
-            bool Sensor1Or2UndertemperatureAlarm :1; // 0x02 Disables charging, but Has no effect on discharging
-            bool CellOvervoltageAlarm :1;
+            bool Sensor2OvertemperatureAlarm :1;    // 0x0100
+            bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
+            bool CellOvervoltageAlarm :1;           // 0x0400
             bool CellUndervoltageAlarm :1;
-            bool _309_A_ProtectionAlarm :1;         // 0x10
+            bool _309_A_ProtectionAlarm :1;         // 0x1000
             bool _309_B_ProtectionAlarm :1;
-            bool Reserved1Alarm :1;
+            bool Reserved1Alarm :1;                 // Two highest bits are reserved
             bool Reserved2Alarm :1;
 
             // Low byte of alarms
-            bool LowCapacityAlarm :1;               // 0x01
+            bool LowCapacityAlarm :1;               // 0x0001
             bool PowerMosFetOvertemperatureAlarm :1;
-            bool ChargeOvervoltageAlarm :1;
+            bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
             bool DischargeUndervoltageAlarm :1;
-            bool Sensor1Or2OvertemperatureAlarm :1; // 0x10 - Affects the charging/discharging MosFet state, not the enable flags
+            bool Sensor1Or2OvertemperatureAlarm :1; // 0x0010 - Affects the charging/discharging MosFet state, not the enable flags
             /*
              * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
              * Retry is done after "OCPR Time(S)"
              */
-            bool ChargeOvercurrentAlarm :1;  // 0x20 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
-            bool DischargeOvercurrentAlarm :1; // 0x40 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
-            bool CellVoltageDifferenceAlarm :1;     // 0x80
+            bool ChargeOvercurrentAlarm :1;  // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
+            bool DischargeOvercurrentAlarm :1; // 0x0040 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
+            bool CellVoltageDifferenceAlarm :1;     // 0x0080
         } AlarmBits;
     } AlarmUnion;
 
