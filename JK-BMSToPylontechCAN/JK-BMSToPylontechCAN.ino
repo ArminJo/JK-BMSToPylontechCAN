@@ -565,11 +565,12 @@ void loop() {
         /*
          * Checking for BMS error flags
          */
-        if (sErrorStringForLCD != NULL) {
+        if (sErrorStringForLCD != NULL && sErrorStatusIsError) {
             sDoErrorBeep = true;
             if (sErrorStatusJustChanged) {
                 /*
                  * Switch to overview page once, to show the error
+                 * Not required for non errors
                  */
                 sErrorStatusJustChanged = false;
                 setDisplayPage(JK_BMS_PAGE_OVERVIEW);
@@ -813,7 +814,7 @@ void printReceivedData() {
 #if !defined(DISPLAY_ALWAYS_ON)
             && !sSerialLCDIsSwitchedOff
 #endif
-            ) {
+    ) {
         printBMSDataOnLCD();
     }
 }
@@ -1082,7 +1083,7 @@ void printBigInfoOnLCD() {
 // Bottom row: Max temperature, current and the actual states
     myLCD.setCursor(0, 3);
     myLCD.print(JKComputedData.TemperatureMaximum);
-    myLCD.print(F("\xDF" "C "));
+    myLCD.print(F("\xDF "));
 
     myLCD.setCursor(4, 3);
     printCurrentOnLCD();

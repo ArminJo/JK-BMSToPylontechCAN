@@ -88,6 +88,7 @@ const char *const JK_BMSErrorStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
         _309BProtection };
 const char *sErrorStringForLCD; // store of the error string of the highest error bit, NULL otherwise
 bool sErrorStatusJustChanged = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if error flags changed, and reset on switching to overview page.
+bool sErrorStatusIsError = false; // True if status is error and beep should be started. False e.g. for "Battery full".
 
 /*
  * Helper macro for getting a macro definition as string
@@ -687,10 +688,12 @@ void handleAndPrintAlarmInfo() {
         // ChargeOvervoltageAlarm is displayed separately
         if (!tJKFAllReply->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
             sErrorStatusJustChanged = true; // This forces a switch to Overview page
+            sErrorStatusIsError = true; //  This forces the beep
         }
 
         if (tJKFAllReply->AlarmUnion.AlarmsAsWord == 0) {
             sErrorStringForLCD = NULL; // reset error string
+            sErrorStatusIsError = false;
             Serial.println(F("All alarms are cleared"));
         } else {
             uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
@@ -793,8 +796,8 @@ void printJKDynamicInfo() {
             Serial.println(F("*** CELL STATISTICS ***"));
             Serial.print(F("Total balancing time="));
 
-            Serial.print(sBalancingCount);
-            Serial.print(F(" -> "));
+            Serial.print(sBalancingCount * (MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS / 1000));
+            Serial.print(F(" s -> "));
             Serial.print(sBalancingTimeString);
             // Append seconds
             char tString[4]; // "03S" is 3 bytes long
@@ -823,14 +826,15 @@ void printJKDynamicInfo() {
 
     /*
      * Temperatures
+     * Print only if temperature changed more than 1 degree
      */
 #if defined(LOCAL_DEBUG)
     Serial.print(F("TokenTemperaturePowerMosFet=0x"));
     Serial.println(sJKFAllReplyPointer->TokenTemperaturePowerMosFet, HEX);
 #endif
-    if (JKComputedData.TemperaturePowerMosFet != lastJKComputedData.TemperaturePowerMosFet
-            || JKComputedData.TemperatureSensor1 != lastJKComputedData.TemperatureSensor1
-            || JKComputedData.TemperatureSensor2 != lastJKComputedData.TemperatureSensor2) {
+    if (abs(JKComputedData.TemperaturePowerMosFet - lastJKComputedData.TemperaturePowerMosFet) > 2
+            || abs(JKComputedData.TemperatureSensor1 - lastJKComputedData.TemperatureSensor1) > 2
+            || abs(JKComputedData.TemperatureSensor2 - lastJKComputedData.TemperatureSensor2) > 2) {
         myPrint(F("Temperature: Power MosFet="), JKComputedData.TemperaturePowerMosFet);
         myPrint(F(", Sensor 1="), JKComputedData.TemperatureSensor1);
         myPrintln(F(", Sensor 2="), JKComputedData.TemperatureSensor2);
@@ -846,17 +850,16 @@ void printJKDynamicInfo() {
     }
 
     /*
-     * Capacity
+     * Charge and Discharge values
      */
-    if (JKComputedData.RemainingCapacityAmpereHour != lastJKComputedData.RemainingCapacityAmpereHour
-            || abs(JKComputedData.BatteryVoltageFloat - lastJKComputedData.BatteryVoltageFloat) > 0.015 // Meant is 0.01 but use 15 to avoid strange floating point effects
-            || JKComputedData.BatteryLoadCurrentFloat != lastJKComputedData.BatteryLoadCurrentFloat) { // @suppress("Direct float comparison")
+    if (abs(JKComputedData.BatteryVoltageFloat - lastJKComputedData.BatteryVoltageFloat) > 0.02 // Meant is 0.02 but use 15 to avoid strange floating point effects
+    || abs(JKComputedData.BatteryLoadPower - lastJKComputedData.BatteryLoadPower) >= 20) {
         Serial.print(F("Battery Voltage[V]="));
         Serial.print(JKComputedData.BatteryVoltageFloat, 2);
         Serial.print(F(", Current[A]="));
         Serial.print(JKComputedData.BatteryLoadCurrentFloat, 2);
-        myPrintln(F(", Power[W]="), JKComputedData.BatteryLoadPower);
-        Serial.print(F("Battery Voltage difference to full[V]="));
+        myPrint(F(", Power[W]="), JKComputedData.BatteryLoadPower);
+        Serial.print(F(", Difference to full[V]="));
         float tBatteryToFullDifference = JKComputedData.BatteryFullVoltage10Millivolt - JKComputedData.BatteryVoltage10Millivolt;
         Serial.println(tBatteryToFullDifference / 100.0, 1);
     }

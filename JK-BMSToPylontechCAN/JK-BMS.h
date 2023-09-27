@@ -62,6 +62,7 @@ extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted l
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 extern const char *sErrorStringForLCD;
 extern bool sErrorStatusJustChanged;
+extern bool sErrorStatusIsError;
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
 

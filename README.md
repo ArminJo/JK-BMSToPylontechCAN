@@ -92,12 +92,15 @@ Keep in mind that programming will fail if JK-BMS is connected and switched off.
 The standard **TX** of the Arduino is used for Serial.print() for monitoring and debugging. The short **request to JK-BMS is sent by `SoftwareSerialTX` using pin 4**.<br/>
 If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to **swap the lines for RX and TX (pin 4)** on the Uno / Nano.
 
-On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `18`.
+Power is taken from the second battery, because reliable buck converters for 55V are hard to find. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.
+
+On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `0` or `PYLON`.
 
 ```
-                                             ___ 78L05    Schottky diode
- External 6.6 V from Battery #2 >--o--------|___|-------o----|<|---O From Uno / Nano 5 V to avoid
-                                   |          |         | 5V         parasitic supply of CAN module
+                                            78L05        Schottky diode - From Uno / Nano 5 V
+                                             ___                          to enable powering CAN 
+ External 6.6 V from Battery #2 >--o--------|___|-------o--|<|-< Uno 5V   module by Nano USB,
+                                   |          |         |                 if battery is not attached
   __________ Schottky diode    ____|____     ---    ____|____             _________
  |        TX|----|<|-- RX --->|RX Vin   |<-- SPI ->|   5V    |           |         |
  |        RX|<-------- TX ----|4  Uno/  |          | MCP2515 |           |         |
@@ -114,9 +117,23 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  |GND  RX  TX VBAT|
  |________________|
    |   |   |
-   |   |   --|>|-- RX of Uno / Nano
+   |   |   --|<|-- RX of Uno / Nano
    |   ----------- D4 (or other pin, if specified)
    --------------- GND
+   
+   
+  # Automatic brightness control for 2004 LCD
+   5V O------o------o
+             |      |
+            .-.     |
+            | |     |
+        LDR | |     |
+            '-'     |
+             |    |/
+             o----|
+                  |>
+                    |
+                    O To anode of LCD backlight
 
 ```
 ### Board pinout diagrams
