@@ -136,6 +136,12 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
                     O To anode of LCD backlight
 
 ```
+
+
+[EasyEda shematics by Ngoc Dang Dinh](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401|8c434b5057fc4d769d664a0dc9c7d66c)
+![EasyEda shematics by Ngoc Dang Dinh](https://user-images.githubusercontent.com/8839597/271840357-741d3036-e734-4fbe-8635-64cbb7f3fe25.png)
+
+
 ### Board pinout diagrams
 - [Nano](https://store.arduino.cc/products/arduino-nano#docs)
 - [Uno](https://store.arduino.cc/products/arduino-uno-rev3#docs)
