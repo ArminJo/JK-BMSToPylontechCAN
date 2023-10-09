@@ -3,7 +3,7 @@
 # [Arduino JK-BMS To Pylontech CAN Protocol Converter](https://github.com/ArminJo/JK-BMSToPylontechCAN)
 
 Converts the JK-BMS RS485 data to Pylontech CAN data for inverters which are not compatible with JK-BMS protocol but with Pylontech protocol, like Deye inverters.<br/>
-Display of many BMS information and alarms on a locally attached 2004 LCD.<br/>
+Display of many BMS information and alarms on a locally attached serial 2004 LCD.<br/>
 
 [![Badge License: GPLv3](https://img.shields.io/badge/License-GPLv3-brightgreen.svg)](https://www.gnu.org/licenses/gpl-3.0)
  &nbsp; &nbsp;
@@ -173,16 +173,18 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | Name | Default value | Description |
 |-|-|-|
 | `MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS` | 2000 | % |
-| `DISPLAY_ALWAYS_ON` | disabled | If activated, the display backlight is always on. This disables the value of `DISPLAY_ON_TIME_SECONDS`. |
 | `MILLISECONDS_BETWEEN_CAN_FRAME_SEND` | 2000 | % |
-| `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
-| `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
 | `NO_BEEP_ON_ERROR` | disabled | . |
 | `ONE_BEEP_ON_ERROR` | disabled | If activated, only beep once if error was detected. |
 | `BEEP_TIMEOUT_SECONDS` | 60 | 1 minute, every 2 seconds. |
 | `MULTIPLE_BEEPS_WITH_TIMEOUT` | enabled | If error was detected, beep for 60 s. |
 | `SUPPRESS_LIFEPO4_PLAUSI_WARNING` | disabled | Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V. |
 | `MAXIMUM_NUMBER_OF_CELLS` | 24 | Maximum number of cell info which can be converted. Saves RAM. |
+| `USE_NO_LCD` | disabled | If activated, the code for the LCD display and page button is deactivated. Saves 25% program space on a Nano. |
+| `DISPLAY_ALWAYS_ON` | disabled | If activated, the display backlight is always on. This disables the value of `DISPLAY_ON_TIME_SECONDS`. |
+| `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
+| `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
+| `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus. |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
@@ -229,6 +231,10 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 2.1
+- New compile option / macro `USE_NO_LCD`.
+- GUI and print improvements.
+
 ### Version 2.0
 - New page for minimum and maximum cell statistics and balancing time.
 - Show difference between actual and 100% voltage.

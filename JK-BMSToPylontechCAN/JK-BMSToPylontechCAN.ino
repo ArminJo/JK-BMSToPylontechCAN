@@ -97,7 +97,7 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "2.0"
+#define VERSION_EXAMPLE "2.1"
 
 /*
  * Pin layout, may be adapted to your requirements
@@ -145,28 +145,6 @@
 #endif
 
 /*
- * Display timeouts, may be adapted to your requirements
- */
-#if defined(DEBUG)
-#define DISPLAY_ON_TIME_STRING               "30s  "
-#define DISPLAY_ON_TIME_SECONDS              30L // L to avoid overflow at macro processing
-#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT   20L
-//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps
-#define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      10L // 10 s
-#else
-#define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
-#define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
-#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT  180L // 3 minutes
-#endif // DEBUG
-uint16_t sTimeoutFrameCounter = 0; // Counts BMS frame timeouts, (every 2 seconds)
-
-//#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
-#if !defined(DISPLAY_ALWAYS_ON)
-bool sSerialLCDIsSwitchedOff = false;
-uint16_t sFrameCounterForLCDTAutoOff = 0;
-#endif
-
-/*
  * Error beep behavior
  * Overvoltage error cannot be suppressed by a macro!
  * If no NO_BEEP_ON_ERROR, ONE_BEEP_ON_ERROR or MULTIPLE_BEEPS_WITH_TIMEOUT are activated, we beep forever until error vanishes.
@@ -178,8 +156,41 @@ uint16_t sFrameCounterForLCDTAutoOff = 0;
 bool sLastDoErrorBeep = false;          // required for ONE_BEEP_ON_ERROR
 bool sDoErrorBeep = false;              // If true, we do an error beep at the end of the loop
 uint8_t sBeepTimeoutCounter;
+uint16_t sTimeoutFrameCounter = 0;      // Counts BMS frame timeouts, (every 2 seconds)
 
 //#define SUPPRESS_LIFEPO4_PLAUSI_WARNING   // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
+
+//#define USE_NO_LCD
+#if !defined(USE_NO_LCD)
+#define USE_SERIAL_LCD
+#endif
+
+#if defined(USE_SERIAL_LCD) || defined(USE_PARALLEL_LCD)
+#define USE_LCD
+#endif
+
+#if defined(USE_LCD)
+/*
+ * Display timeouts, may be adapted to your requirements
+ */
+#  if defined(DEBUG)
+#define DISPLAY_ON_TIME_STRING               "30s  "
+#define DISPLAY_ON_TIME_SECONDS              30L // L to avoid overflow at macro processing
+#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT   20L
+//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps
+#define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      10L // 10 s
+#  else
+#define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
+#define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
+#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT  180L // 3 minutes
+#  endif // DEBUG
+
+//#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
+#  if !defined(DISPLAY_ALWAYS_ON)
+bool sSerialLCDIsSwitchedOff = false;
+uint16_t sFrameCounterForLCDTAutoOff = 0;
+#  endif
+#endif // defined(USE_LCD)
 
 /*
  * Page and debug button stuff
@@ -187,20 +198,25 @@ uint8_t sBeepTimeoutCounter;
  * Button at INT0 / D2 for switching LCD pages
  * Button at INT1 / D3 for entering debug print and LCD CAN page
  */
+#if defined(USE_LCD)
 #define USE_BUTTON_0              // Enable code for 1. button at INT0 / D2
+#endif
 #define USE_BUTTON_1              // Enable code for 2. button at INT1 / D3
 #define BUTTON_DEBOUNCING_MILLIS 80 // With this you can adapt to the characteristic of your button. Default is 50.
 #define NO_BUTTON_RELEASE_CALLBACK  // Disables the code for release callback. This saves 2 bytes RAM and 64 bytes program memory.
 #include "EasyButtonAtInt01.hpp"
 
+#if defined(USE_LCD)
 volatile bool sPageButtonJustPressed = false;
+void handlePageButtonPress(bool aButtonToggleState);     // The button press callback function sets just a flag.
+EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);   // Button is connected to INT0
+#endif
 volatile bool sDebugButtonJustPressed = false;
 bool sDebugModeJustActivated = false;
-void handlePageButtonPress(bool aButtonToggleState);     // The button press callback function sets just a flag.
 void handleDebugButtonPress(bool aButtonToggleState);    // The button press callback function sets just a flag.
-EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);   // Button is connected to INT0
 EasyButton DebugButtonAtPin2(BUTTON_AT_INT1_OR_PCINT, &handleDebugButtonPress); // Button is connected to INT1
 void checkButtonStateChange();
+
 bool readJK_BMSStatusFrame();
 void processJK_BMSStatusFrame();
 void handleFrameReceiveTimeout();
@@ -247,14 +263,16 @@ uint32_t sMillisOfLastCANFrameSent = 0; // For CAN timing
 bool sEnableSleep = false; // True if one status frame was received and processed or timeout happened. Then we can do a sleep at the end of the loop.
 
 /*
- * LCD hardware stuff
+ * Optional LCD hardware stuff
  */
+#if defined(USE_SERIAL_LCD)
 #define LCD_COLUMNS     20
 #define LCD_ROWS         4
 #define LCD_I2C_ADDRESS 0x27     // Default LCD address is 0x27 for a 20 chars and 4 line / 2004 display
+bool sSerialLCDAvailable;
+
 #include "LiquidCrystal_I2C.hpp" // This defines USE_SOFT_I2C_MASTER, if SoftI2CMasterConfig.h is available. Use only the modified version delivered with this program!
 LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
-bool sSerialLCDAvailable;
 
 /*
  * Big numbers for LCD JK_BMS_PAGE_BIG_INFO page
@@ -289,6 +307,7 @@ void printBMSDataOnLCD();
 void printCANInfoOnLCD();
 void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint);
 void LCDClearLine(uint8_t aLineNumber);
+#endif // defined(USE_SERIAL_LCD)
 
 /*
  * Miscellaneous
@@ -366,6 +385,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 
     tone(BUZZER_PIN, 2200, 50);
 
+#if defined(USE_SERIAL_LCD)
     /*
      * Initialize I2C and check for bus lockup
      */
@@ -395,55 +415,65 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     } else {
         Serial.println(F("No I2C LCD connected at address " STR(LCD_I2C_ADDRESS)));
     }
+#endif
 
     /*
      * 115200 baud soft serial to JK-BMS. For serial from BMS we use the hardware Serial RX.
      */
     TxToJKBMS.begin(115200);
     Serial.println(F("Serial to JK-BMS started with 115200 bit/s!"));
+#if defined(USE_LCD)
     if (sSerialLCDAvailable) {
         myLCD.setCursor(0, 2);
         myLCD.print(F("BMS serial started"));
     }
-
+#endif
     /*
      * CAN initialization
      */
     //    if (CAN.begin(500000)) { // Resets the device and start the CAN bus at 500 kbps
     if (initializeCAN(CAN_BAUDRATE, MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE, &Serial) == MCP2515_RETURN_OK) { // Resets the device and start the CAN bus at 500 kbps
         Serial.println(F("CAN started with 500 kbit/s!"));
+#if defined(USE_LCD)
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("CAN started"));
             delay(4000); // To see the info
         }
+#endif
     } else {
         Serial.println(F("Starting CAN failed!"));
+#if defined(USE_LCD)
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("Starting CAN failed!"));
-#if defined(STANDALONE_TEST)
+#  if defined(STANDALONE_TEST)
             delay(2000);
-#else
+#  else
             delay(8000); // To see the info
-#endif
+#  endif
         }
+#endif
+
     }
 
     /*
      * Print debug pin info
      */
+#if defined(USE_LCD)
     Serial.println(F("Page switching button is at pin " STR(LCD_PAGE_BUTTON_PIN)));
+#endif
     Serial.println(F("If you push the debug button at pin " STR(DEBUG_PIN) ", additional debug data is printed once"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) " ms between 2 BMS requests"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_CAN_FRAME_SEND) " ms between 2 CAN transmissions"));
     Serial.println();
 
+#if defined(USE_LCD)
     if (sSerialLCDAvailable) {
-#if !defined(DISPLAY_ALWAYS_ON)
+#  if !defined(DISPLAY_ALWAYS_ON)
         myLCD.setCursor(0, 0);
         myLCD.print(F("Screen timeout " DISPLAY_ON_TIME_STRING));
-#endif
+#  endif
         myLCD.setCursor(0, 1);
         myLCD.print(F("Debug pin = " STR(DEBUG_PIN) "  "));
         myLCD.setCursor(0, 2);
@@ -453,34 +483,34 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         delay(2000); // To see the messages
         myLCD.clear();
     }
+#endif
+
     initSleep(SLEEP_MODE_PWR_SAVE); // The timer 0 (required for millis() is disabled here
 
 #if defined(STANDALONE_TEST)
-    /*
-     * Copy test data to receive buffer
-     */
-    Serial.println(F("Standalone test. Use fixed demo data"));
-    Serial.println();
-    memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
-    sReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
-    printJKReplyFrameBuffer();
-    Serial.println();
-    processReceivedData();
-    printReceivedData();
-    /*
-     * Copy complete reply and computed values for change determination
-     */
-    lastJKComputedData = JKComputedData;
-    lastJKReply = *sJKFAllReplyPointer; // 221 bytes
-    doStandaloneTest();
+/*
+ * Copy test data to receive buffer
+ */
+Serial.println(F("Standalone test. Use fixed demo data"));
+Serial.println();
+memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
+sReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
+printJKReplyFrameBuffer();
+Serial.println();
+processReceivedData();
+printReceivedData();
+/*
+ * Copy complete reply and computed values for change determination
+ */
+lastJKComputedData = JKComputedData;
+lastJKReply = *sJKFAllReplyPointer; // 221 bytes
+doStandaloneTest();
 #endif
 }
 
 void loop() {
 
-    if (sSerialLCDAvailable) {
-        checkButtonStateChange();
-    }
+    checkButtonStateChange();
 
     /*
      * Request status frame every 2 seconds
@@ -573,12 +603,15 @@ void loop() {
                  * Not required for non errors
                  */
                 sErrorStatusJustChanged = false;
-                setDisplayPage(JK_BMS_PAGE_OVERVIEW);
+#if defined(USE_LCD)
+                setDisplayPage (JK_BMS_PAGE_OVERVIEW);
+#endif
             }
         }
 
+#if defined(USE_LCD)
         if (sSerialLCDAvailable) {
-#if !defined(DISPLAY_ALWAYS_ON)
+#  if !defined(DISPLAY_ALWAYS_ON)
             /*
              * Display backlight handling
              */
@@ -597,12 +630,13 @@ void loop() {
                 sFrameCounterForLCDTAutoOff = 0; // start again to enable switch off after 5 minutes
                 Serial.println(F("Switch on LCD display, triggered by successfully receiving a BMS status frame"));
             }
-#endif
+#  endif
         }
+#endif
 
-        /*
-         * Beep handling
-         */
+    /*
+     * Beep handling
+     */
 #if !defined(NO_BEEP_ON_ERROR)      // Beep enabled
 #  if defined(ONE_BEEP_ON_ERROR)    // Beep once
         if (sDoErrorBeep) {
@@ -617,88 +651,100 @@ void loop() {
             sLastDoErrorBeep = sDoErrorBeep; // Reset sLastDoErrorBeep
         }
 #  endif
-        if (sDoErrorBeep) {
-            sDoErrorBeep = false;
+    if (sDoErrorBeep) {
+        sDoErrorBeep = false;
 #  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
-            sBeepTimeoutCounter++;
-            if (sBeepTimeoutCounter == (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                Serial.println(F("Timeout reached, suppress consecutive error beeps"));
-            } else if (sBeepTimeoutCounter > (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                sBeepTimeoutCounter--; // To avoid overflow
-            } else
+        sBeepTimeoutCounter++;
+        if (sBeepTimeoutCounter == (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+            Serial.println(F("Timeout reached, suppress consecutive error beeps"));
+        } else if (sBeepTimeoutCounter > (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+            sBeepTimeoutCounter--; // To avoid overflow
+        } else
 #  endif
-            {
-                tone(BUZZER_PIN, 2200);
-                tone(BUZZER_PIN, 2200, 50);
-                delay(200);
-                tone(BUZZER_PIN, 2200, 50);
-                delay(200);
-                noTone(BUZZER_PIN); // to avoid tone interrupts waking us up from sleep
-            }
+        {
+            tone(BUZZER_PIN, 2200);
+            tone(BUZZER_PIN, 2200, 50);
+            delay(200);
+            tone(BUZZER_PIN, 2200, 50);
+            delay(200);
+            noTone(BUZZER_PIN); // to avoid tone interrupts waking us up from sleep
         }
+    }
 #endif // NO_BEEP_ON_ERROR
 
-        /*
-         * Sleep instead of checking millis(). This saves only 5 mA during sleep.
-         */
+    /*
+     * Sleep instead of checking millis(). This saves only 5 mA during sleep.
+     */
 #if MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS == 2000 && MILLISECONDS_BETWEEN_CAN_FRAME_SEND == 2000
-        // currently not in the mood to compute it more general ;-)
-        sEnableSleep = false;
-        Serial.flush();
-        // Interrupts, like button press will wake us up early, but millis will be incremented anyway
-        if (!sPageButtonJustPressed && !sDebugButtonJustPressed) { // skip if button was pressed
+// currently not in the mood to compute it more general ;-)
+    sEnableSleep = false;
+    Serial.flush();
+// Interrupts, like button press will wake us up early, but millis will be incremented anyway
+#if defined(USE_LCD)
+    if (!sPageButtonJustPressed && !sDebugButtonJustPressed) { // skip if button was pressed
+#else
+    if (!sDebugButtonJustPressed) { // skip if button was pressed
+#endif
 #if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, HIGH);
 #endif
-            sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
-        }
-        if (!sPageButtonJustPressed && !sDebugButtonJustPressed) { // skip if button was pressed
+        sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
+    }
+#if defined(USE_LCD)
+    if (!sPageButtonJustPressed && !sDebugButtonJustPressed) { // skip if button was pressed
+#else
+    if (!sDebugButtonJustPressed) { // skip if button was pressed
+#endif
 #if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, LOW);
 #endif
-            sleepWithWatchdog(WDTO_500MS, true);
-        }
-        if (!sPageButtonJustPressed && !sDebugButtonJustPressed) { // skip if button was pressed
+        sleepWithWatchdog(WDTO_500MS, true);
+    }
+#if defined(USE_LCD)
+    if (!sPageButtonJustPressed && !sDebugButtonJustPressed) { // skip if button was pressed
+#else
+    if (!sDebugButtonJustPressed) { // skip if button was pressed
+#endif
 #if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, HIGH);
 #endif
-            sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
+        sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
 #if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, LOW);
 #endif
-        }
+    }
 #endif
-    } // if (sEnableSleep)
+} // if (sEnableSleep)
 }
 
 /*
  * Process the complete receiving of the status frame and set the appropriate flags
  */
 void processJK_BMSStatusFrame() {
-    if (sDebugModeJustActivated) {
-        /*
-         * Do it once at every debug start
-         */
-        if (sReplyFrameBufferIndex == 0) {
-            Serial.println(F("sReplyFrameBufferIndex is 0"));
-        } else {
-            Serial.print(sReplyFrameBufferIndex + 1);
-            Serial.println(F(" bytes received"));
-            printJKReplyFrameBuffer();
-        }
-        Serial.println();
-    }
-    sFrameIsRequested = false; // do not try to receive more
-    sEnableSleep = true;
-    sJKBMSFrameHasTimeout = false;
-    sTimeoutFrameCounter = 0;
-    processReceivedData();
-    printReceivedData();
+if (sDebugModeJustActivated) {
     /*
-     * Copy complete reply and computed values for change determination
+     * Do it once at every debug start
      */
-    lastJKComputedData = JKComputedData;
-    lastJKReply = *sJKFAllReplyPointer; // 221 bytes
+    if (sReplyFrameBufferIndex == 0) {
+        Serial.println(F("sReplyFrameBufferIndex is 0"));
+    } else {
+        Serial.print(sReplyFrameBufferIndex + 1);
+        Serial.println(F(" bytes received"));
+        printJKReplyFrameBuffer();
+    }
+    Serial.println();
+}
+sFrameIsRequested = false; // do not try to receive more
+sEnableSleep = true;
+sJKBMSFrameHasTimeout = false;
+sTimeoutFrameCounter = 0;
+processReceivedData();
+printReceivedData();
+/*
+ * Copy complete reply and computed values for change determination
+ */
+lastJKComputedData = JKComputedData;
+lastJKReply = *sJKFAllReplyPointer; // 221 bytes
 }
 
 /*
@@ -707,27 +753,27 @@ void processJK_BMSStatusFrame() {
  * @return true if frame was completely received
  */
 bool readJK_BMSStatusFrame() {
-    sMillisOfLastReceivedByte = millis();
-    uint8_t tReceiveResultCode = readJK_BMSStatusFrameByte();
-    if (tReceiveResultCode == JK_BMS_RECEIVE_FINISHED) {
-        /*
-         * All JK-BMS status frame data received
-         */
-        return true;
+sMillisOfLastReceivedByte = millis();
+uint8_t tReceiveResultCode = readJK_BMSStatusFrameByte();
+if (tReceiveResultCode == JK_BMS_RECEIVE_FINISHED) {
+    /*
+     * All JK-BMS status frame data received
+     */
+    return true;
 
-    } else if (tReceiveResultCode != JK_BMS_RECEIVE_OK) {
-        /*
-         * Error here
-         */
-        Serial.print(F("Receive error="));
-        Serial.print(tReceiveResultCode);
-        Serial.print(F(" at index"));
-        Serial.println(sReplyFrameBufferIndex);
-        sFrameIsRequested = false; // do not try to receive more
-        sEnableSleep = true;
-        printJKReplyFrameBuffer();
-    }
-    return false;
+} else if (tReceiveResultCode != JK_BMS_RECEIVE_OK) {
+    /*
+     * Error here
+     */
+    Serial.print(F("Receive error="));
+    Serial.print(tReceiveResultCode);
+    Serial.print(F(" at index"));
+    Serial.println(sReplyFrameBufferIndex);
+    sFrameIsRequested = false; // do not try to receive more
+    sEnableSleep = true;
+    printJKReplyFrameBuffer();
+}
+return false;
 }
 
 /*
@@ -735,35 +781,38 @@ bool readJK_BMSStatusFrame() {
  * If no bytes received before (because of BMS disconnected), print it only once
  */
 void handleFrameReceiveTimeout() {
-    sDoErrorBeep = true;
-    if (!sCANDataIsInitialized) {
-        sDebugModeJustActivated = false; // Must be reset here, since we do not send CAN frames
+sDoErrorBeep = true;
+if (!sCANDataIsInitialized) {
+    sDebugModeJustActivated = false; // Must be reset here, since we do not send CAN frames
+}
+sFrameIsRequested = false; // Do not try to receive more
+sEnableSleep = true;
+sJKBMSFrameHasTimeout = true;
+if (sReplyFrameBufferIndex != 0 || sTimeoutFrameCounter == 0) {
+    /*
+     * No byte received here -BMS may be off or disconnected
+     * Do it only once if we receive 0 bytes
+     */
+    Serial.print(F("Receive timeout at ReplyFrameBufferIndex="));
+    Serial.println(sReplyFrameBufferIndex);
+    if (sReplyFrameBufferIndex != 0) {
+        printJKReplyFrameBuffer();
     }
-    sFrameIsRequested = false; // Do not try to receive more
-    sEnableSleep = true;
-    sJKBMSFrameHasTimeout = true;
-    if (sReplyFrameBufferIndex != 0 || sTimeoutFrameCounter == 0) {
-        /*
-         * No byte received here -BMS may be off or disconnected
-         * Do it only once if we receive 0 bytes
-         */
-        Serial.print(F("Receive timeout at ReplyFrameBufferIndex="));
-        Serial.println(sReplyFrameBufferIndex);
-        if (sReplyFrameBufferIndex != 0) {
-            printJKReplyFrameBuffer();
-        }
-        modifyAllCanDataToInactive();
+    modifyAllCanDataToInactive();
+#if defined(USE_LCD)
         if (sSerialLCDAvailable && sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
             // Update the changed values on LCD
             myLCD.clear();
             myLCD.setCursor(0, 0);
             printCANInfoOnLCD();
         }
-    }
-    sTimeoutFrameCounter++;
-    if (sTimeoutFrameCounter == 0) {
-        sTimeoutFrameCounter--; // To avoid overflow, we have an unsigned integer here
-    }
+#endif
+}
+sTimeoutFrameCounter++;
+if (sTimeoutFrameCounter == 0) {
+    sTimeoutFrameCounter--; // To avoid overflow, we have an unsigned integer here
+}
+#if defined(USE_LCD)
     if (sSerialLCDAvailable) {
         if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
             myLCD.clear();
@@ -773,7 +822,7 @@ void handleFrameReceiveTimeout() {
             myLCD.setCursor(0, 1);
             myLCD.print(F("Is BMS switched off?"));
         }
-#if !defined(DISPLAY_ALWAYS_ON)
+#  if !defined(DISPLAY_ALWAYS_ON)
         /*
          * Check for display timeout here
          */
@@ -782,41 +831,57 @@ void handleFrameReceiveTimeout() {
             sSerialLCDIsSwitchedOff = true;
             Serial.println(F("Switch off LCD display now, triggered by receive timeouts."));
         }
-#endif
+#  endif
     }
+#endif
 }
 
 void processReceivedData() {
-    /*
-     * Set the static pointer to the start of the reply data which depends on the number of cell voltage entries
-     * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
-     */
-    sJKFAllReplyPointer = reinterpret_cast<JKReplyStruct*>(&JKReplyFrameBuffer[JK_BMS_FRAME_HEADER_LENGTH + 2
-            + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH]]);
+/*
+ * Set the static pointer to the start of the reply data which depends on the number of cell voltage entries
+ * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
+ */
+sJKFAllReplyPointer = reinterpret_cast<JKReplyStruct*>(&JKReplyFrameBuffer[JK_BMS_FRAME_HEADER_LENGTH + 2
+        + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH]]);
 
-    fillJKConvertedCellInfo();
-    fillJKComputedData();
+fillJKConvertedCellInfo();
+fillJKComputedData();
 
-    handleAndPrintAlarmInfo();
-    computeUpTimeString();
+handleAndPrintAlarmInfo();
+computeUpTimeString();
 
-    fillAllCANData(sJKFAllReplyPointer);
-    sCANDataIsInitialized = true;
+fillAllCANData(sJKFAllReplyPointer);
+sCANDataIsInitialized = true;
 }
 
 void printReceivedData() {
-    if (!sStaticInfoWasSent) {
-        sStaticInfoWasSent = true;
-        printJKStaticInfo();
-    }
-    printJKDynamicInfo();
+if (!sStaticInfoWasSent) {
+    sStaticInfoWasSent = true;
+    printJKStaticInfo();
+}
+printJKDynamicInfo();
+#if defined(USE_LCD)
     if (sSerialLCDAvailable
-#if !defined(DISPLAY_ALWAYS_ON)
+#  if !defined(DISPLAY_ALWAYS_ON)
             && !sSerialLCDIsSwitchedOff
-#endif
-    ) {
+#  endif
+            ) {
         printBMSDataOnLCD();
     }
+#endif
+}
+
+#if defined(USE_LCD)
+void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint) {
+    for (uint_fast8_t i = 0; i < aNumberOfSpacesToPrint; ++i) {
+        myLCD.print(' ');
+    }
+}
+
+void LCDClearLine(uint8_t aLineNumber) {
+    myLCD.setCursor(0, aLineNumber);
+    LCDPrintSpaces(20);
+    myLCD.setCursor(0, aLineNumber);
 }
 
 void printShortEnableFlagsOnLCD() {
@@ -1319,89 +1384,105 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
 void handlePageButtonPress(bool aButtonToggleState __attribute__((unused))) {
     sPageButtonJustPressed = true;
 }
+#endif // #if defined(USE_LCD)
 
 void handleDebugButtonPress(bool aButtonToggleState __attribute__((unused))) {
-    sDebugButtonJustPressed = true;
+sDebugButtonJustPressed = true;
 }
 
 /*
  * Manually check button state change
  */
 void checkButtonStateChange() {
+#if defined(USE_LCD)
+    if (sSerialLCDAvailable) {
+#  if !defined(DISPLAY_ALWAYS_ON)
+        if ((sPageButtonJustPressed || sDebugButtonJustPressed) && sSerialLCDIsSwitchedOff) {
+            /*
+             * If backlight LED off, switch it on, but do not select next page, except if debug button was pressed.
+             */
+            myLCD.backlight();
+            sSerialLCDIsSwitchedOff = false;
+            Serial.println(F("Switch on LCD display, triggered by button press"));
+            sPageButtonJustPressed = false; // avoid switching pages if page button was pressed.
 
-#if !defined(DISPLAY_ALWAYS_ON)
-    if ((sPageButtonJustPressed || sDebugButtonJustPressed) && sSerialLCDIsSwitchedOff) {
-        /*
-         * If backlight LED off, switch it on, but do not select next page, except if debug button was pressed.
-         */
-        myLCD.backlight();
-        sSerialLCDIsSwitchedOff = false;
-        Serial.println(F("Switch on LCD display, triggered by button press"));
-        sPageButtonJustPressed = false; // avoid switching pages if page button was pressed.
-
-        sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
-        if (sTimeoutFrameCounter > 0) {
-            sTimeoutFrameCounter = 1; // start again to enable switch off after 3 minutes, but save "timeout flag"
+            sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
+            if (sTimeoutFrameCounter > 0) {
+                sTimeoutFrameCounter = 1; // start again to enable switch off after 3 minutes, but save "timeout flag"
+            }
         }
-    }
-#endif
+#  endif
 
-    /*
-     * Handle Debug button
-     */
-    if (sDebugButtonJustPressed) {
-        sDebugButtonJustPressed = false;
-        sDebugModeJustActivated = true; // Is set to false in loop
-        Serial.println(F("One time debug print just activated and switch to CAN page"));
-        setDisplayPage(JK_BMS_PAGE_CAN_INFO);
-#if !defined(DISPLAY_ALWAYS_ON)
-        sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
-#endif
-    }
-
-    /*
-     * Handle Page button
-     */
-    if (sPageButtonJustPressed) {
-        sPageButtonJustPressed = false;
         /*
-         * Switch display pages to next page
+         * Handle Debug button
          */
-        uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
-        tDisplayPageNumber++;
-
-        if (sJKBMSFrameHasTimeout || tDisplayPageNumber > JK_BMS_PAGE_MAX) {
-            // Receive timeout or wrap around here
-            tDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-
-        } else if (tDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
-            // Create symbols character for maximum and minimum
-            bigNumberLCD._createChar(1, bigNumbersTopBlock);
-            bigNumberLCD._createChar(2, bigNumbersBottomBlock);
-
-            // Prepare for statistics page here display max first
-            sCellStatisticsDisplayCounter = 0;
-
-        } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
-            bigNumberLCD.begin(); // Creates custom character used for generating big numbers
+        if (sDebugButtonJustPressed) {
+            sDebugButtonJustPressed = false;
+            sDebugModeJustActivated = true; // Is set to false in loop
+            if (sSerialLCDAvailable) {
+                Serial.println(F("One time debug print just activated and switch to CAN page"));
+                setDisplayPage(JK_BMS_PAGE_CAN_INFO);
+#  if !defined(DISPLAY_ALWAYS_ON)
+                sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
+#  endif
+            }
         }
-        setDisplayPage(tDisplayPageNumber);
-    } // PageSwitchButtonAtPin2.ButtonStateHasJustChanged
+
+        /*
+         * Handle Page button
+         */
+        if (sPageButtonJustPressed) {
+            sPageButtonJustPressed = false;
+            /*
+             * Switch display pages to next page
+             */
+            uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
+            tDisplayPageNumber++;
+
+            if (sJKBMSFrameHasTimeout || tDisplayPageNumber > JK_BMS_PAGE_MAX) {
+                // Receive timeout or wrap around here
+                tDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+
+            } else if (tDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+                // Create symbols character for maximum and minimum
+                bigNumberLCD._createChar(1, bigNumbersTopBlock);
+                bigNumberLCD._createChar(2, bigNumbersBottomBlock);
+
+                // Prepare for statistics page here display max first
+                sCellStatisticsDisplayCounter = 0;
+
+            } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+                bigNumberLCD.begin(); // Creates custom character used for generating big numbers
+            }
+            setDisplayPage(tDisplayPageNumber);
+        } // PageSwitchButtonAtPin2.ButtonStateHasJustChanged
+    }
+#else
+/*
+ * Handle Debug button
+ */
+if (sDebugButtonJustPressed) {
+    sDebugButtonJustPressed = false;
+    sDebugModeJustActivated = true; // Is set to false in loop
+    Serial.println(F("One time debug print just activated"));
+}
+#endif // defined(USE_LCD)
+
 }
 
 #if defined(STANDALONE_TEST)
 void doStandaloneTest() {
 
 #  if defined(LCD_PAGES_TEST)
-        if (sSerialLCDAvailable) {
-            testLCDPages();
-            delay(2000);
+    if (sSerialLCDAvailable) {
+        testLCDPages();
+        delay(2000);
 #    if defined(BIG_NUMBER_TEST)
-            testBigNumbers();
+        testBigNumbers();
 #    endif
-            memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
-            processReceivedData(); // to clear every changes
-        }
+        memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
+        processReceivedData(); // to clear every changes
+    }
 #  endif
 }
 
@@ -1458,10 +1539,10 @@ void testLCDPages() {
     delay(2000);
     printBMSDataOnLCD();
 
-    lastJKReply.AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true; // to enable reset of LCD alarm string
+    lastJKReply.AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;// to enable reset of LCD alarm string
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
     JKComputedData.TemperaturePowerMosFet = 33;
-    handleAndPrintAlarmInfo(); // this resets the LCD alarm string
+    handleAndPrintAlarmInfo();// this resets the LCD alarm string
 
     sJKFAllReplyPointer->SOCPercent = 100;
     JKComputedData.BatteryLoadCurrentFloat = -100;
@@ -1507,37 +1588,27 @@ void testBigNumbers() {
 }
 #endif
 
-void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint) {
-    for (uint_fast8_t i = 0; i < aNumberOfSpacesToPrint; ++i) {
-        myLCD.print(' ');
-    }
-}
-
-void LCDClearLine(uint8_t aLineNumber) {
-    myLCD.setCursor(0, aLineNumber);
-    LCDPrintSpaces(20);
-    myLCD.setCursor(0, aLineNumber);
-}
-
 void handleOvervoltage() {
+#if defined(USE_LCD)
     if (sSerialLCDAvailable) {
-#if !defined(DISPLAY_ALWAYS_ON)
+#  if !defined(DISPLAY_ALWAYS_ON)
         if (sSerialLCDIsSwitchedOff) {
             myLCD.backlight();
             sSerialLCDIsSwitchedOff = false;
         }
-#endif
+#  endif
         myLCD.clear();
         myLCD.setCursor(0, 0);
         myLCD.print(F("VCC overvoltage"));
         myLCD.setCursor(0, 1);
         myLCD.print(F("VCC > 5.25 V"));
     }
+#endif
 // Do it as long as overvoltage happens
-    tone(BUZZER_PIN, 1100, 300);
-    delay(300);
-    tone(BUZZER_PIN, 2200, 1000);
-    delay(1000);
+tone(BUZZER_PIN, 1100, 300);
+delay(300);
+tone(BUZZER_PIN, 2200, 1000);
+delay(1000);
 }
 
 #ifndef _ADC_UTILS_HPP
@@ -1551,16 +1622,16 @@ void handleOvervoltage() {
  * @return true if overvoltage reached
  */
 bool isVCCTooHighSimple() {
-    ADMUX = 14 | (DEFAULT << 6);
+ADMUX = 14 | (DEFAULT << 6);
 // ADCSRB = 0; // Only active if ADATE is set to 1.
 // ADSC-StartConversion ADIF-Reset Interrupt Flag - NOT free running mode
-    ADCSRA = (_BV(ADEN) | _BV(ADSC) | _BV(ADIF) | 7); //  7 -> 104 microseconds per ADC conversion at 16 MHz --- Arduino default
+ADCSRA = (_BV(ADEN) | _BV(ADSC) | _BV(ADIF) | 7); //  7 -> 104 microseconds per ADC conversion at 16 MHz --- Arduino default
 // wait for single conversion to finish
-    loop_until_bit_is_clear(ADCSRA, ADSC);
+loop_until_bit_is_clear(ADCSRA, ADSC);
 
 // Get value
-    uint16_t tRawValue = ADCL | (ADCH << 8);
+uint16_t tRawValue = ADCL | (ADCH << 8);
 
-    return tRawValue < 214;
+return tRawValue < 214;
 }
 #endif
