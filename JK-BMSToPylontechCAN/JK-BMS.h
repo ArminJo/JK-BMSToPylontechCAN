@@ -160,7 +160,7 @@ struct JKComputedDataStruct {
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
-    bool BMSIsStarting;                 // True if SOC and Capacity are both 0
+    bool BMSIsStarting;                 // True if SOC and Capacity are both 0, for around 16 seconds during JK-BMS startup.
 };
 
 /*

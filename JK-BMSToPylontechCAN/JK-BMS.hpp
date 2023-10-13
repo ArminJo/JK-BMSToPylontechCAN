@@ -449,7 +449,8 @@ void fillJKConvertedCellInfo() {
     Serial.print(tNumberOfCellInfo);
     Serial.println(F(" cell voltages processed"));
 #endif
-    if (tNumberOfNonNullCellInfo < tNumberOfCellInfo) {
+    // During JK-BMS startup all cell voltages are sent as zero for around 6 seconds
+    if (tNumberOfNonNullCellInfo < tNumberOfCellInfo && !JKComputedData.BMSIsStarting) {
         Serial.print(F("Problem: "));
         Serial.print(tNumberOfCellInfo);
         Serial.print(F(" cells configured in BMS, but only "));
@@ -477,7 +478,9 @@ void fillJKComputedData() {
     // 16 bit multiplication gives overflow at 640 Ah
     JKComputedData.RemainingCapacityAmpereHour = ((uint32_t) JKComputedData.TotalCapacityAmpereHour
             * sJKFAllReplyPointer->SOCPercent) / 100;
-    JKComputedData.BMSIsStarting = (sJKFAllReplyPointer->SOCPercent == 0);
+
+    // Two values which are zero during JK-BMS startup for around 16 seconds
+    JKComputedData.BMSIsStarting = (sJKFAllReplyPointer->SOCPercent == 0 && sJKFAllReplyPointer->Cycles == 0);
 
     JKComputedData.BatteryFullVoltage10Millivolt = swap(sJKFAllReplyPointer->BatteryOvervoltageProtection10Millivolt);
     JKComputedData.BatteryVoltage10Millivolt = swap(sJKFAllReplyPointer->Battery10Millivolt);

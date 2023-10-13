@@ -304,7 +304,6 @@ public:
     void handleINT01Interrupts(); // internal use only
 
     bool LastBounceWasChangeToInactive; // Internal state, reflects actual reading with spikes and bouncing. Negative logic: true / active means button pin is LOW
-    volatile bool ButtonStateIsActive; // State at last change. Negative logic: true / active means button pin is LOW. If last press duration < BUTTON_DEBOUNCING_MILLIS it holds wrong value (true instead of false) :-(
     volatile bool ButtonToggleState;    // Toggle is on press, not on release - initial value is false
 
     /*
@@ -351,6 +350,13 @@ public:
 #if defined(USE_BUTTON_1)
     static EasyButton *sPointerToButton1ForISR;
 #endif
+
+private:
+    /*
+     * If last press duration < BUTTON_DEBOUNCING_MILLIS it holds wrong value (true instead of false), therefore it is private.
+     * To get current state, use readButtonState().
+     */
+    volatile bool ButtonStateIsActive; // State at last change. Negative logic: true / active means button pin is LOW.
 };
 // end of class definition
 
@@ -371,8 +377,9 @@ void __attribute__ ((weak)) handleINT1Interrupt();
 #endif // defined(__AVR__)
 
 /*
- *  Version 3.3.2 - 9/2022
+ *  Version 3.3.2 - 10/2023
  *  - Added NO_INITIALIZE_IN_CONSTRUCTOR macro to enable late initializing.
+ *  - ButtonStateIsActive is now private, since it is not reliable after bouncing. Use readButtonState() instead.
  *
  *  Version 3.3.1 - 2/2022
  *  - Avoid mistakenly double press detection after boot.

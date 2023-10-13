@@ -47,23 +47,23 @@ At around 100% SOC, the JK-BMS seems to send strange current information of more
 
 <br/>
 
- # Screenshots
+# Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info Page  with difference voltage between<br/>actual and 100% voltage and display of<br/>"C"harging "D"ischarging and "B"alancing<br/>active flags | Overview Page |
+| Big Info page  with difference voltage between<br/>actual and 100% voltage and display of<br/>"C"harging "D"ischarging and "B"alancing<br/>active flags | Overview page |
 | :-: | :-: |
-| ![Big Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
-| Cell Info Page with maximum and minimum indicators |  Overview / Error Page with start of error message in first line |
-| ![Cell Info Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Error Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |
-| Maximum Cell Statistics Page with total Time of Balancing | Maximum Cell Statistics Page |
-| ![Max Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
-| CAN Info Page |  |
-| ![Overview Page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
+| ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
+| Cell info page with maximum and minimum indicators |  Overview / Error page with start of error message in first line |
+| ![Cell info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Error page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |
+| Maximum Cell Statistics page with total Time of Balancing | Maximum Cell Statistics page |
+| ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
+| CAN info page |  |
+| ![CAN info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
 
 
 <br/>
 
- # Pictures
+# Pictures
 
 | My installation | Automatic brightness |
 | :-: | :-: |
@@ -231,6 +231,9 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 2.1.1
+- Fixed SOH == 0 bug.
+
 ### Version 2.1
 - New compile option / macro `USE_NO_LCD`.
 - GUI and print improvements.
@@ -246,7 +249,7 @@ This program uses the following libraries, which are already included in this re
 - Initial version.
 
 # Sample Serial output
-See also [here](https://github.com/ArminJo/tree/main/extras).
+See also [here](https://github.com/ArminJo/JK-BMSToPylontechCAN/tree/main/extras).
 
 ```
 START ../src/JK-BMSToPylontechCAN.cpp
