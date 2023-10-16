@@ -97,7 +97,14 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "2.1"
+/*
+ * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
+ */
+#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        5
+//#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
+const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
+
+#define VERSION_EXAMPLE "2.2"
 
 /*
  * Pin layout, may be adapted to your requirements
@@ -193,29 +200,21 @@ uint16_t sFrameCounterForLCDTAutoOff = 0;
 #endif // defined(USE_LCD)
 
 /*
- * Page and debug button stuff
+ * Page button stuff
  *
  * Button at INT0 / D2 for switching LCD pages
- * Button at INT1 / D3 for entering debug print and LCD CAN page
  */
-#if defined(USE_LCD)
 #define USE_BUTTON_0              // Enable code for 1. button at INT0 / D2
-#endif
-#define USE_BUTTON_1              // Enable code for 2. button at INT1 / D3
 #define BUTTON_DEBOUNCING_MILLIS 80 // With this you can adapt to the characteristic of your button. Default is 50.
 #define NO_BUTTON_RELEASE_CALLBACK  // Disables the code for release callback. This saves 2 bytes RAM and 64 bytes program memory.
 #include "EasyButtonAtInt01.hpp"
 
-#if defined(USE_LCD)
 volatile bool sPageButtonJustPressed = false;
 void handlePageButtonPress(bool aButtonToggleState);     // The button press callback function sets just a flag.
 EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);   // Button is connected to INT0
-#endif
-volatile bool sDebugButtonJustPressed = false;
-bool sDebugModeActivated = false;
-void handleDebugButtonPress(bool aButtonToggleState);    // The button press callback function sets just a flag.
-EasyButton DebugButtonAtPin2(BUTTON_AT_INT1_OR_PCINT, &handleDebugButtonPress); // Button is connected to INT1
-void checkButtonStateChange();
+#define LONG_PRESS_BUTTON_DURATION_MILLIS   1000
+bool sDebugModeActivated = false; // Is activated on long press
+void checkButtonPress();
 
 bool readJK_BMSStatusFrame();
 void processJK_BMSStatusFrame();
@@ -250,16 +249,22 @@ uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
 #if !defined(MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE)
 // Must be specified before #include "MCP2515_TX.hpp"
 #define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE  16 // 16 MHz is default for the Arduino CAN bus shield
-//#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE   8 // 8 MHz is default for the Chinese breakout board. !!! This does not work with 500 kB !!!
+//#define MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE   8 // 8 MHz is default for the Chinese breakout board. !!! 8MHz does not work with 500 kB !!!
 #endif
-#include "MCP2515_TX.hpp" // my reduced tx only driver
-bool sCANDataIsInitialized = false;
-uint32_t sMillisOfLastCANFrameSent = 0; // For CAN timing
+#include "MCP2515_TX.hpp"                   // my reduced tx only driver
+bool sCANDataIsInitialized = false;         // One time flag, it is never set to false again.
+uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 
 /*
- * Sleep stuff
+ * Optional sleep stuff
  */
+//#define USE_SLEEP
+#if defined(USE_SLEEP) && MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS == 2000 && MILLISECONDS_BETWEEN_CAN_FRAME_SEND == 2000
+// currently not in the mood to compute it more general ;-)
+void LoopDelayWithSleep();
 #include "AVRUtils.h"
+#endif
+
 bool sBMSFrameProcessingComplete = false; // True if one status frame was received and processed or timeout happened. Then we can do a sleep at the end of the loop.
 
 /*
@@ -462,8 +467,11 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
      */
 #if defined(USE_LCD)
     Serial.println(F("Page switching button is at pin " STR(LCD_PAGE_BUTTON_PIN)));
+    Serial.println(F("At long press, CAN Info page is entered and additional debug data is printed as long as button is pressed"));
+#else
+    Serial.println(F("Debug button is at pin " STR(LCD_PAGE_BUTTON_PIN)));
+    Serial.println(F("Additional debug data is printed as long as button is pressed"));
 #endif
-    Serial.println(F("If you push the debug button at pin " STR(DEBUG_PIN) ", additional debug data is printed once"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) " ms between 2 BMS requests"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_CAN_FRAME_SEND) " ms between 2 CAN transmissions"));
     Serial.println();
@@ -475,7 +483,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         myLCD.print(F("Screen timeout " DISPLAY_ON_TIME_STRING));
 #  endif
         myLCD.setCursor(0, 1);
-        myLCD.print(F("Debug pin = " STR(DEBUG_PIN) "  "));
+        myLCD.print(F("Long press = debug"));
         myLCD.setCursor(0, 2);
         myLCD.print(F("Get  BMS every " SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS " s  "));
         myLCD.setCursor(0, 3);
@@ -485,32 +493,34 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     }
 #endif
 
-    initSleep(SLEEP_MODE_PWR_SAVE); // The timer 0 (required for millis() is disabled here
+#if defined(USE_SLEEP)
+    initSleep(SLEEP_MODE_PWR_SAVE);
+#endif
 
 #if defined(STANDALONE_TEST)
-/*
- * Copy test data to receive buffer
- */
-Serial.println(F("Standalone test. Use fixed demo data"));
-Serial.println();
-memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
-sReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
-printJKReplyFrameBuffer();
-Serial.println();
-processReceivedData();
-printReceivedData();
-/*
- * Copy complete reply and computed values for change determination
- */
-lastJKComputedData = JKComputedData;
-lastJKReply = *sJKFAllReplyPointer; // 221 bytes
-doStandaloneTest();
+    /*
+     * Copy test data to receive buffer
+     */
+    Serial.println(F("Standalone test. Use fixed demo data"));
+    Serial.println();
+    memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
+    sReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
+    printJKReplyFrameBuffer();
+    Serial.println();
+    processReceivedData();
+    printReceivedData();
+    /*
+     * Copy complete reply and computed values for change determination
+     */
+    lastJKComputedData = JKComputedData;
+    lastJKReply = *sJKFAllReplyPointer; // 221 bytes
+    doStandaloneTest();
 #endif
 }
 
 void loop() {
 
-    checkButtonStateChange();
+    checkButtonPress();
 
     /*
      * Request status frame every 2 seconds
@@ -578,13 +588,14 @@ void loop() {
             Serial.println(F("Send CAN"));
         }
         sendPylontechAllCANFrames(sDebugModeActivated);
-        sDebugModeActivated = false;
     }
 
     /*
      * Do this once after each complete status frame or timeout
      */
     if (sBMSFrameProcessingComplete) {
+        sDebugModeActivated = false; // reset flag here. It may be set again at start of next loop.
+
         /*
          * Check for overvoltage
          */
@@ -672,52 +683,14 @@ void loop() {
         }
 #endif // NO_BEEP_ON_ERROR
 
+        sBMSFrameProcessingComplete = false; // prepare for next loop
+
+#if defined(USE_SLEEP)
         /*
          * Sleep instead of checking millis(). This saves only 5 mA during sleep.
          */
-#if MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS == 2000 && MILLISECONDS_BETWEEN_CAN_FRAME_SEND == 2000
-// currently not in the mood to compute it more general ;-)
-        sBMSFrameProcessingComplete = false; // prepare for next loop
-        Serial.flush();
-
-        /*
-         * Interrupts, like button press will wake us up early.
-         * The millis() timer is disabled during sleep, but millis will be incremented by sleepWithWatchdog() function.
-         */
-        if (!sDebugButtonJustPressed
-#if defined(USE_LCD)
-                && !sPageButtonJustPressed
-#endif
-                ) { // skip next delays if button was pressed after loop button processing, to enable fast response
-#if defined(TIMING_TEST)
-            digitalWriteFast(TIMING_TEST_PIN, HIGH);
-#endif
-            sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
-        }
-        if (!sDebugButtonJustPressed
-#if defined(USE_LCD)
-                && !sPageButtonJustPressed
-#endif
-                ) { // skip next delays if button was pressed during sleep, which waked us up, to enable fast response
-#if defined(TIMING_TEST)
-            digitalWriteFast(TIMING_TEST_PIN, LOW);
-#endif
-            sleepWithWatchdog(WDTO_500MS, true);
-        }
-        if (!sDebugButtonJustPressed
-#if defined(USE_LCD)
-                && !sPageButtonJustPressed
-#endif
-                ) { // skip next delay if button was pressed during sleep, which waked us up, to enable fast response
-#if defined(TIMING_TEST)
-            digitalWriteFast(TIMING_TEST_PIN, HIGH);
-#endif
-            sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
-#if defined(TIMING_TEST)
-            digitalWriteFast(TIMING_TEST_PIN, LOW);
-#endif
-        }
-#endif
+        void LoopDelayWithSleep();
+#endif // defined(USE_SLEEP)
     } // if (sBMSFrameProcessingComplete)
 }
 
@@ -787,9 +760,6 @@ bool readJK_BMSStatusFrame() {
  */
 void handleFrameReceiveTimeout() {
     sDoErrorBeep = true;
-    if (!sCANDataIsInitialized) {
-        sDebugModeActivated = false; // Must be reset here, since we do not send CAN frames
-    }
     sFrameIsRequested = false; // Do not try to receive more
     sBMSFrameProcessingComplete = true;
     sJKBMSFrameHasTimeout = true;
@@ -856,7 +826,7 @@ void processReceivedData() {
     computeUpTimeString();
 
     fillAllCANData(sJKFAllReplyPointer);
-    sCANDataIsInitialized = true;
+    sCANDataIsInitialized = true; // One time flag
 }
 
 void printReceivedData() {
@@ -1247,6 +1217,7 @@ void printCANInfoOnLCD() {
             myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius % 10);
         }
         myLCD.print(F("\xDF" "C "));
+
         /*
          * Request flags in row 4
          */
@@ -1373,7 +1344,7 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
     Serial.print(F("Set LCD display page to: "));
     Serial.println(aDisplayPageNumber);
 
-    // If timeout, only timeout message or CAN Info page can be displayed.
+    // If BMS communication timeout, only timeout message or CAN Info page can be displayed.
     if (!sJKBMSFrameHasTimeout || aDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
         /*
          * Show new page
@@ -1381,28 +1352,24 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
         printBMSDataOnLCD();
     }
 }
+#endif // #if defined(USE_LCD)
 
 /*
  * Callback handlers for button press
- * Just set flags for evaluation in checkButtonStateChange(), otherwise readButtonState() may again be false when checkButtonStateChange() is called
+ * Just set flags for evaluation in checkButtonPress(), otherwise readButtonState() may again be false when checkButtonPress() is called
  */
 void handlePageButtonPress(bool aButtonToggleState __attribute__((unused))) {
     sPageButtonJustPressed = true;
 }
-#endif // #if defined(USE_LCD)
-
-void handleDebugButtonPress(bool aButtonToggleState __attribute__((unused))) {
-    sDebugButtonJustPressed = true;
-}
 
 /*
- * Manually check button state change
+ * Manually handle button press
  */
-void checkButtonStateChange() {
+void checkButtonPress() {
 #if defined(USE_LCD)
     if (sSerialLCDAvailable) {
 #  if !defined(DISPLAY_ALWAYS_ON)
-        if ((sPageButtonJustPressed || sDebugButtonJustPressed) && sSerialLCDIsSwitchedOff) {
+        if ((sPageButtonJustPressed) && sSerialLCDIsSwitchedOff) {
             /*
              * If backlight LED off, switch it on, but do not select next page, except if debug button was pressed.
              */
@@ -1419,33 +1386,14 @@ void checkButtonStateChange() {
 #  endif
 
         /*
-         * Handle Debug button
-         */
-        if (sDebugButtonJustPressed) {
-            sDebugButtonJustPressed = false;
-            sDebugModeActivated = true; // Is set to false in loop
-            if (sSerialLCDAvailable) {
-                Serial.println();
-                Serial.println(F("One time debug print just activated and switch to CAN page"));
-                setDisplayPage(JK_BMS_PAGE_CAN_INFO);
-#  if !defined(DISPLAY_ALWAYS_ON)
-                sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
-#  endif
-            }
-        } else if (DebugButtonAtPin2.readButtonState()) {
-            // Button is still pressed
-            sDebugModeActivated = true; // Is set to false in loop
-        }
-
-        /*
          * Handle Page button
          */
+        uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
         if (sPageButtonJustPressed) {
             sPageButtonJustPressed = false;
             /*
              * Switch display pages to next page
              */
-            uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
             tDisplayPageNumber++;
 
             if (sJKBMSFrameHasTimeout || tDisplayPageNumber > JK_BMS_PAGE_MAX) {
@@ -1464,16 +1412,38 @@ void checkButtonStateChange() {
                 bigNumberLCD.begin(); // Creates custom character used for generating big numbers
             }
             setDisplayPage(tDisplayPageNumber);
+        } else if (PageSwitchButtonAtPin2.readDebouncedButtonState()) {
+            if (tDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
+                // Button is still pressed
+                sDebugModeActivated = true; // Is set to false in loop
+            }
+            if (PageSwitchButtonAtPin2.checkForLongPress(LONG_PRESS_BUTTON_DURATION_MILLIS) == EASY_BUTTON_LONG_PRESS_DETECTED) {
+                /*
+                 * Long press detected -> switch to CAN Info page
+                 */
+                sDebugModeActivated = true; // Is set to false in loop
+                if (sSerialLCDAvailable && tDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
+                    Serial.println();
+                    Serial.println(F("Long press detected -> switch to CAN page and activate one time debug print"));
+                    setDisplayPage(JK_BMS_PAGE_CAN_INFO);
+#  if !defined(DISPLAY_ALWAYS_ON)
+                    sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
+#  endif
+                }
+            }
         } // PageSwitchButtonAtPin2.ButtonStateHasJustChanged
     }
 #else
     /*
-     * Handle Debug button
+     * Treat Page button as Debug button
      */
-    if (sDebugButtonJustPressed) {
-        sDebugButtonJustPressed = false;
+    if (sPageButtonJustPressed) {
+        sPageButtonJustPressed = false;
         sDebugModeActivated = true; // Is set to false in loop
         Serial.println(F("One time debug print just activated"));
+    } else if (PageSwitchButtonAtPin2.readDebouncedButtonState()) {
+        // Button is still pressed
+        sDebugModeActivated = true; // Is set to false in loop
     }
 #endif // defined(USE_LCD)
 
@@ -1548,10 +1518,10 @@ void testLCDPages() {
     delay(2000);
     printBMSDataOnLCD();
 
-    lastJKReply.AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;// to enable reset of LCD alarm string
+    lastJKReply.AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true; // to enable reset of LCD alarm string
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
     JKComputedData.TemperaturePowerMosFet = 33;
-    handleAndPrintAlarmInfo();// this resets the LCD alarm string
+    handleAndPrintAlarmInfo(); // this resets the LCD alarm string
 
     sJKFAllReplyPointer->SOCPercent = 100;
     JKComputedData.BatteryLoadCurrentFloat = -100;
@@ -1642,5 +1612,37 @@ bool isVCCTooHighSimple() {
     uint16_t tRawValue = ADCL | (ADCH << 8);
 
     return tRawValue < 214;
+}
+#endif
+
+#if defined(USE_SLEEP)
+void LoopDelayWithSleep() {
+    Serial.flush();
+
+    /*
+     * Interrupts, like button press will wake us up early.
+     * The millis() timer is disabled during sleep, but millis will be incremented by sleepWithWatchdog() function.
+     */
+    if (!sPageButtonJustPressed) { // skip next delays if button was pressed after loop button processing, to enable fast response
+#  if defined(TIMING_TEST)
+        digitalWriteFast(TIMING_TEST_PIN, HIGH);
+#  endif
+        sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
+    }
+    if (!sPageButtonJustPressed) { // skip next delays if button was pressed during sleep, which waked us up, to enable fast response
+#  if defined(TIMING_TEST)
+        digitalWriteFast(TIMING_TEST_PIN, LOW);
+#  endif
+        sleepWithWatchdog(WDTO_500MS, true);
+    }
+    if (!sPageButtonJustPressed) { // skip next delay if button was pressed during sleep, which waked us up, to enable fast response
+#  if defined(TIMING_TEST)
+        digitalWriteFast(TIMING_TEST_PIN, HIGH);
+#  endif
+        sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
+#  if defined(TIMING_TEST)
+        digitalWriteFast(TIMING_TEST_PIN, LOW);
+#  endif
+    }
 }
 #endif

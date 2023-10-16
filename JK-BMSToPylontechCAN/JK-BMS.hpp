@@ -100,9 +100,6 @@ bool sErrorStatusIsError = false; // True if status is error and beep should be 
  * 1.85 ms
  */
 void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive) {
-    for (uint8_t i = 0; i < sizeof(JKRequestStatusFrame); ++i) {
-        aSerial->write(JKRequestStatusFrame[i]);
-    }
     if (aDebugModeActive) {
         Serial.println();
         Serial.println(F("Send requestFrame with TxToJKBMS"));
@@ -111,6 +108,11 @@ void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive) 
             Serial.print(JKRequestStatusFrame[i], HEX);
         }
         Serial.println();
+    }
+    Serial.flush();
+
+    for (uint8_t i = 0; i < sizeof(JKRequestStatusFrame); ++i) {
+        aSerial->write(JKRequestStatusFrame[i]);
     }
 }
 

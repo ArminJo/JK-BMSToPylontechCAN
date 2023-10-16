@@ -54,8 +54,6 @@
 #define PYLON_CAN_BATTERY_LIMITS_FRAME_ID           0x351 // Battery voltage + current limits
 #define PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID   0x359 // Protection & Alarm flags
 
-#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I      15
-
 extern struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
 extern struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
 extern struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
@@ -136,6 +134,7 @@ struct PylontechCANBatteryRequesFrameStruct {
          * This is to stop SOC calculations drifting too far from reality when the battery has not had a full charge for n days.
          */
         bool FullChargeRequest :1; // sent as always 0
+
         // Force to charge battery even from the grid.
         // From Battery-Communications-Integration-Guide-V2.5-1.pdf: Command sent by the BMS telling the inverter to charge the battery from any available power source regardless of inverter settings.
         bool ForceChargeRequestII :1;
@@ -147,8 +146,8 @@ struct PylontechCANBatteryRequesFrameStruct {
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         FrameData.FullChargeRequest = 0;
 
-        // I do not know the semantics of ForceChargeRequest flags so it is only a guess here
-        if (aJKFAllReply->SOCPercent < SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I) {
+        if (aJKFAllReply->SOCPercent < sSOCThresholdForForceCharge) {
+            // ForceChargeRequestI forces the inverter to charge the battery from any available power source regardless of inverter settings
             FrameData.ForceChargeRequestI = 1;
         } else {
             FrameData.ForceChargeRequestI = 0;

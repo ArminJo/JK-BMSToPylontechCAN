@@ -35,10 +35,10 @@
 #ifndef _EASY_BUTTON_AT_INT01_H
 #define _EASY_BUTTON_AT_INT01_H
 
-#define VERSION_EASY_BUTTON "3.3.2"
+#define VERSION_EASY_BUTTON "3.4.0"
 #define VERSION_EASY_BUTTON_MAJOR 3
-#define VERSION_EASY_BUTTON_MINOR 3
-#define VERSION_EASY_BUTTON_PATCH 2
+#define VERSION_EASY_BUTTON_MINOR 4
+#define VERSION_EASY_BUTTON_PATCH 0
 // The change log is at the bottom of the file
 
 /*
@@ -291,6 +291,7 @@ public:
     bool checkForDoublePress(uint16_t aDoublePressDelayMillis = EASY_BUTTON_DOUBLE_PRESS_DEFAULT_MILLIS);
 
     bool readButtonState();
+    bool getButtonStateIsActive(); // get private member
     bool readDebouncedButtonState();
     bool updateButtonState();
     uint16_t updateButtonPressDuration(); // Updates the ButtonPressDurationMillis by polling, since this cannot be done by interrupt.
@@ -379,7 +380,7 @@ void __attribute__ ((weak)) handleINT1Interrupt();
 /*
  *  Version 3.3.2 - 10/2023
  *  - Added NO_INITIALIZE_IN_CONSTRUCTOR macro to enable late initializing.
- *  - ButtonStateIsActive is now private, since it is not reliable after bouncing. Use readButtonState() instead.
+ *  - ButtonStateIsActive is now private, since it is not reliable after bouncing. Use readButtonState() or readDebouncedButtonState() instead.
  *
  *  Version 3.3.1 - 2/2022
  *  - Avoid mistakenly double press detection after boot.

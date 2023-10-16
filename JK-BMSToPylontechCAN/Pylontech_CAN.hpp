@@ -44,10 +44,11 @@
 struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
 struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
 struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
-struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
 struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
-struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
 struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
+// Frames with fixed data
+struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
+struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
 
 void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
     PylontechCANBatteryLimitsFrame.fillFrame(aJKFAllReply);

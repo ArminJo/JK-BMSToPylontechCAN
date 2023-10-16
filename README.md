@@ -28,16 +28,18 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 # Features
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Display of BMS information, Cell voltages and alarms on a locally attached serial 2004 LCD.
-- Page button for switching 3 LCD display pages.
-- Switch off LCD backlight after timeout.
-- Beep on alarm and connection timeouts with selectable timeout.
-- Debug button for realtime monitoring some CAN data sent.
-- Serial.print() function is still available for monitoring and debugging.
+- Page button for switching 4 LCD display pages.
 - Statistics of minimum and maximum cells during balancing to identify conspicious cells.
+- Realtime monitoring of some CAN data sent by long button press.
+- Switch off LCD backlight after timeout (can be disabled).
+- Beep on alarm and connection timeouts with selectable timeout.
+- Serial.print() function is still available for monitoring and debugging.
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
 **The MCP2515 / TJA1050 kit for Arduino must be supplied by an extra 5 V regulator, because the Arduino-Nano internal regulator cannot provide more than 100 mA and got defect on my site after a few days.**
+
+**By default, the program sends a request to force charge the battery if SOC is below 5 %. This can be adapted by changing the line `#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I 5`.**
 
 At around 100% SOC, the JK-BMS seems to send strange current information of more than +/- 1 ampere.
 
@@ -231,6 +233,10 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 2.2
+- Long press of page button instead of debug button.
+- Do not use sleep any more by default.
+
 ### Version 2.1.1
 - Fixed SOH == 0 bug.
 

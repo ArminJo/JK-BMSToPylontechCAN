@@ -372,6 +372,10 @@ bool EasyButton::readButtonState() {
 
 // @formatter:on
 
+bool EasyButton::getButtonStateIsActive() {
+    return ButtonStateIsActive;
+
+}
 /*
  * Returns stored state if in debouncing period otherwise current state of button
  */

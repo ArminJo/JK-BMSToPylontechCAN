@@ -54,6 +54,8 @@ uint8_t readJK_BMSStatusFrameByte();
 void fillJKConvertedCellInfo();
 void fillJKComputedData();
 
+extern const uint8_t sSOCThresholdForForceCharge;
+
 extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to write to array, thus starting with 0.
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
@@ -160,7 +162,7 @@ struct JKComputedDataStruct {
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
-    bool BMSIsStarting;                 // True if SOC and Capacity are both 0, for around 16 seconds during JK-BMS startup.
+    bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
 
 /*
