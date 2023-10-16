@@ -63,6 +63,9 @@ void sendPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
             aPylontechCANFrame->FrameData.UBytes);
 }
 
+/*
+ * Called in case of BMS communication timeout
+ */
 void modifyAllCanDataToInactive() {
     PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere = 0;
     // Clear all requests in case of timeout / BMS switched off, before sending

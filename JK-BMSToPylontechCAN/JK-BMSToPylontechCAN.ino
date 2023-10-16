@@ -104,7 +104,7 @@
 //#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
 const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
 
-#define VERSION_EXAMPLE "2.2"
+#define VERSION_EXAMPLE "2.2.2"
 
 /*
  * Pin layout, may be adapted to your requirements
@@ -132,18 +132,15 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 
 //#define TIMING_TEST
 #define TIMING_TEST_PIN             7
-#if !defined(DEBUG)
-//#define DEBUG
-#endif
 
 /*
  * Program timing, may be adapted to your requirements
  */
-#if defined(DEBUG)
-#define MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS     5000
-#define MILLISECONDS_BETWEEN_CAN_FRAME_SEND             5000
-#define SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS          "5" // Only for display on LCD
-#define SECONDS_BETWEEN_CAN_FRAME_SEND                  "5" // Only for display on LCD
+#if defined(STANDALONE_TEST)
+#define MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS     1000
+#define MILLISECONDS_BETWEEN_CAN_FRAME_SEND             1000
+#define SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS          "1" // Only for display on LCD
+#define SECONDS_BETWEEN_CAN_FRAME_SEND                  "1" // Only for display on LCD
 #else
 #define MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS     2000
 #define MILLISECONDS_BETWEEN_CAN_FRAME_SEND             2000
@@ -180,20 +177,20 @@ uint16_t sTimeoutFrameCounter = 0;      // Counts BMS frame timeouts, (every 2 s
 /*
  * Display timeouts, may be adapted to your requirements
  */
-#  if defined(DEBUG)
-#define DISPLAY_ON_TIME_STRING               "30s  "
+#  if defined(STANDALONE_TEST)
+#define DISPLAY_ON_TIME_STRING               "30 s"
 #define DISPLAY_ON_TIME_SECONDS              30L // L to avoid overflow at macro processing
-#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT   20L
 //#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps
 #define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      10L // 10 s
 #  else
 #define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
 #define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
-#define DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT  180L // 3 minutes
 #  endif // DEBUG
 
 //#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
 #  if !defined(DISPLAY_ALWAYS_ON)
+void doLCDBacklightTimeoutHandling();
+bool checkAndTurnLCDOn();
 bool sSerialLCDIsSwitchedOff = false;
 uint16_t sFrameCounterForLCDTAutoOff = 0;
 #  endif
@@ -474,6 +471,9 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 #endif
     Serial.println(F(STR(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) " ms between 2 BMS requests"));
     Serial.println(F(STR(MILLISECONDS_BETWEEN_CAN_FRAME_SEND) " ms between 2 CAN transmissions"));
+#if defined(USE_LCD) && !defined(DISPLAY_ALWAYS_ON)
+    Serial.println(F("LCD Backlight timeout is " DISPLAY_ON_TIME_STRING));
+#endif
     Serial.println();
 
 #if defined(USE_LCD)
@@ -485,7 +485,11 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         myLCD.setCursor(0, 1);
         myLCD.print(F("Long press = debug"));
         myLCD.setCursor(0, 2);
+#if defined(STANDALONE_TEST)
+        myLCD.print(F("Test -fixed BMS data"));
+#else
         myLCD.print(F("Get  BMS every " SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS " s  "));
+#endif
         myLCD.setCursor(0, 3);
         myLCD.print(F("Send CAN every " SECONDS_BETWEEN_CAN_FRAME_SEND " s  "));
         delay(2000); // To see the messages
@@ -546,8 +550,10 @@ void loop() {
     }
 
 #if defined(STANDALONE_TEST)
+    sBMSFrameProcessingComplete = true; // for LCD timeout etc.
     processReceivedData(); // for statistics
-    delay(500);
+    printBMSDataOnLCD(); // for switching between MAX and MIN display
+    delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS); // do it simple :-)
 #else
     /*
      * Get reply from BMS and check timeout
@@ -616,32 +622,18 @@ void loop() {
                 sErrorStatusJustChanged = false;
 #if defined(USE_LCD)
                 setDisplayPage(JK_BMS_PAGE_OVERVIEW);
+#  if !defined(DISPLAY_ALWAYS_ON)
+                if (checkAndTurnLCDOn()) {
+                    Serial.println(F("error status changing")); // Switch on LCD display, triggered by error status changing
+                }
+#  endif
 #endif
             }
         }
 
-#if defined(USE_LCD)
+#if defined(USE_LCD) && !defined(DISPLAY_ALWAYS_ON)
         if (sSerialLCDAvailable) {
-#  if !defined(DISPLAY_ALWAYS_ON)
-            /*
-             * Display backlight handling
-             */
-            sFrameCounterForLCDTAutoOff++;
-            if (sFrameCounterForLCDTAutoOff == 0) {
-                sFrameCounterForLCDTAutoOff--; // To avoid overflow, we have an unsigned integer here
-            }
-            if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                myLCD.noBacklight(); // switch off backlight after 5 minutes
-                sSerialLCDIsSwitchedOff = true;
-                Serial.println(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
-            }
-            if (!sDoErrorBeep && sSerialLCDIsSwitchedOff) {
-                myLCD.backlight(); // Switch backlight LED on after timeout
-                sSerialLCDIsSwitchedOff = false;
-                sFrameCounterForLCDTAutoOff = 0; // start again to enable switch off after 5 minutes
-                Serial.println(F("Switch on LCD display, triggered by successfully receiving a BMS status frame"));
-            }
-#  endif
+            doLCDBacklightTimeoutHandling();
         }
 #endif
 
@@ -712,10 +704,18 @@ void processJK_BMSStatusFrame() {
         Serial.println();
     }
 
-    sFrameIsRequested = false; // do not try to receive more
+    sFrameIsRequested = false; // Everything OK, do not try to receive more
     sBMSFrameProcessingComplete = true;
     sJKBMSFrameHasTimeout = false;
-    sTimeoutFrameCounter = 0;
+    if (sTimeoutFrameCounter > 0) {
+        // First frame after timeout
+        sTimeoutFrameCounter = 0;
+#if defined(USE_LCD) && !defined(DISPLAY_ALWAYS_ON)
+        if (checkAndTurnLCDOn()) {
+            Serial.println(F("successfully receiving first BMS status frame after BMS communication timeout")); // Switch on LCD display, triggered by successfully receiving first BMS status frame
+        }
+#endif
+    }
     processReceivedData();
     printReceivedData();
     /*
@@ -781,32 +781,33 @@ void handleFrameReceiveTimeout() {
             myLCD.setCursor(0, 0);
             printCANInfoOnLCD();
         }
+#  if !defined(DISPLAY_ALWAYS_ON)
+        if (checkAndTurnLCDOn()) {
+            Serial.println(F("BMS communication timeout")); // Switch on LCD display, triggered by BMS communication timeout
+        }
+#  endif
 #endif
     }
     sTimeoutFrameCounter++;
     if (sTimeoutFrameCounter == 0) {
         sTimeoutFrameCounter--; // To avoid overflow, we have an unsigned integer here
     }
+
 #if defined(USE_LCD)
-    if (sSerialLCDAvailable) {
-        if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
-            myLCD.clear();
-            myLCD.setCursor(0, 0);
-            myLCD.print(F("Receive timeout "));
-            myLCD.print(sTimeoutFrameCounter);
-            myLCD.setCursor(0, 1);
-            myLCD.print(F("Is BMS switched off?"));
-        }
+    /*
+     * Global timeout message
+     */
+    if (sSerialLCDAvailable
 #  if !defined(DISPLAY_ALWAYS_ON)
-        /*
-         * Check for display timeout here
-         */
-        if (sTimeoutFrameCounter == ((DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT * 1000) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
-            myLCD.noBacklight(); // switch off backlight after 3 minutes
-            sSerialLCDIsSwitchedOff = true;
-            Serial.println(F("Switch off LCD display now, triggered by receive timeouts."));
-        }
+            && !sSerialLCDIsSwitchedOff
 #  endif
+            && sLCDDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
+        myLCD.clear();
+        myLCD.setCursor(0, 0);
+        myLCD.print(F("Receive timeout "));
+        myLCD.print(sTimeoutFrameCounter);
+        myLCD.setCursor(0, 1);
+        myLCD.print(F("Is BMS switched off?"));
     }
 #endif
 }
@@ -847,6 +848,44 @@ void printReceivedData() {
 }
 
 #if defined(USE_LCD)
+#  if !defined(DISPLAY_ALWAYS_ON)
+
+/*
+ * Called on button press, BMS communication timeout and new error
+ * Always reset timeout counter!
+ * @return true if LCD was switched off before
+ */
+bool checkAndTurnLCDOn() {
+    sFrameCounterForLCDTAutoOff = 0; // Always start again to enable backlight switch off after 5 minutes
+
+    if (sSerialLCDIsSwitchedOff) {
+        /*
+         * If backlight LED off, switch it on, but do not select next page, except if debug button was pressed.
+         */
+        myLCD.backlight();
+        sSerialLCDIsSwitchedOff = false;
+        Serial.print(F("Switch on LCD display, triggered by ")); // to be continued by caller
+        return true;
+    }
+    return false;
+}
+/*
+ * Display backlight handling
+ */
+void doLCDBacklightTimeoutHandling() {
+    sFrameCounterForLCDTAutoOff++;
+    if (sFrameCounterForLCDTAutoOff == 0) {
+        sFrameCounterForLCDTAutoOff--; // To avoid overflow, we have an unsigned integer here
+    }
+
+    if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+        myLCD.noBacklight(); // switch off backlight after 5 minutes
+        sSerialLCDIsSwitchedOff = true;
+        Serial.println(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
+    }
+}
+#  endif
+
 void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint) {
     for (uint_fast8_t i = 0; i < aNumberOfSpacesToPrint; ++i) {
         myLCD.print(' ');
@@ -1014,7 +1053,7 @@ void printCellStatisticsOnLCD() {
         myLCD.print(F("% "));
         if (i % 4 == 3) {
             /*
-             * Use the last 4 characters for information
+             * Use the last 4 characters of a LCD row for information
              * about min or max and the total balancing time
              */
             if (i == 3) {
@@ -1368,50 +1407,44 @@ void handlePageButtonPress(bool aButtonToggleState __attribute__((unused))) {
 void checkButtonPress() {
 #if defined(USE_LCD)
     if (sSerialLCDAvailable) {
-#  if !defined(DISPLAY_ALWAYS_ON)
-        if ((sPageButtonJustPressed) && sSerialLCDIsSwitchedOff) {
-            /*
-             * If backlight LED off, switch it on, but do not select next page, except if debug button was pressed.
-             */
-            myLCD.backlight();
-            sSerialLCDIsSwitchedOff = false;
-            Serial.println(F("Switch on LCD display, triggered by button press"));
-            sPageButtonJustPressed = false; // avoid switching pages if page button was pressed.
-
-            sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
-            if (sTimeoutFrameCounter > 0) {
-                sTimeoutFrameCounter = 1; // start again to enable switch off after 3 minutes, but save "timeout flag"
-            }
-        }
-#  endif
-
         /*
          * Handle Page button
          */
         uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
         if (sPageButtonJustPressed) {
             sPageButtonJustPressed = false;
+#  if !defined(DISPLAY_ALWAYS_ON)
             /*
-             * Switch display pages to next page
+             * If backlight LED off, switch it on, but do not select next page
              */
-            tDisplayPageNumber++;
+            if (checkAndTurnLCDOn()) {
+                Serial.println(F("button press")); // Switch on LCD display, triggered by button press
+                sPageButtonJustPressed = false; // avoid switching pages if page button was pressed.
+            } else
+#  endif
+            {
+                /*
+                 * Switch display pages to next page
+                 */
+                tDisplayPageNumber++;
 
-            if (sJKBMSFrameHasTimeout || tDisplayPageNumber > JK_BMS_PAGE_MAX) {
-                // Receive timeout or wrap around here
-                tDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+                if (sJKBMSFrameHasTimeout || tDisplayPageNumber > JK_BMS_PAGE_MAX) {
+                    // Receive timeout or wrap around here
+                    tDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
 
-            } else if (tDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
-                // Create symbols character for maximum and minimum
-                bigNumberLCD._createChar(1, bigNumbersTopBlock);
-                bigNumberLCD._createChar(2, bigNumbersBottomBlock);
+                } else if (tDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+                    // Create symbols character for maximum and minimum
+                    bigNumberLCD._createChar(1, bigNumbersTopBlock);
+                    bigNumberLCD._createChar(2, bigNumbersBottomBlock);
 
-                // Prepare for statistics page here display max first
-                sCellStatisticsDisplayCounter = 0;
+                    // Prepare for statistics page here display max first but for half the regular time
+                    sCellStatisticsDisplayCounter = (CELL_STATISTICS_COUNTER_MASK >> 1) - 1;
 
-            } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
-                bigNumberLCD.begin(); // Creates custom character used for generating big numbers
+                } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+                    bigNumberLCD.begin(); // Creates custom character used for generating big numbers
+                }
+                setDisplayPage(tDisplayPageNumber);
             }
-            setDisplayPage(tDisplayPageNumber);
         } else if (PageSwitchButtonAtPin2.readDebouncedButtonState()) {
             if (tDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
                 // Button is still pressed
@@ -1426,9 +1459,6 @@ void checkButtonPress() {
                     Serial.println();
                     Serial.println(F("Long press detected -> switch to CAN page and activate one time debug print"));
                     setDisplayPage(JK_BMS_PAGE_CAN_INFO);
-#  if !defined(DISPLAY_ALWAYS_ON)
-                    sFrameCounterForLCDTAutoOff = 0; // start again to enable backlight switch off after 5 minutes
-#  endif
                 }
             }
         } // PageSwitchButtonAtPin2.ButtonStateHasJustChanged

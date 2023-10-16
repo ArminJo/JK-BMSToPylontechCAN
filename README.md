@@ -29,7 +29,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Display of BMS information, Cell voltages and alarms on a locally attached serial 2004 LCD.
 - Page button for switching 4 LCD display pages.
-- Statistics of minimum and maximum cells during balancing to identify conspicious cells.
+- Statistics of minimum and maximum cells during balancing to identify conspicuous cells.
 - Realtime monitoring of some CAN data sent by long button press.
 - Switch off LCD backlight after timeout (can be disabled).
 - Beep on alarm and connection timeouts with selectable timeout.
@@ -41,7 +41,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 **By default, the program sends a request to force charge the battery if SOC is below 5 %. This can be adapted by changing the line `#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I 5`.**
 
-At around 100% SOC, the JK-BMS seems to send strange current information of more than +/- 1 ampere.
+At around 100% SOC, the JK-BMS seems to send strange current information of more than +/- 1 ampere.<br/>
+If CAN communications breaks, the inverter may use different values for controlling the battery (e.g. "Use Batt V"), which may lead to additional discharging / charging.
 
 <br/>
 
@@ -71,7 +72,7 @@ At around 100% SOC, the JK-BMS seems to send strange current information of more
 | :-: | :-: |
 | ![My installation](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CompleteInstallation.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
 | Breadboard detail |  |
-| ![Breadbaoard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadbaoardDetail.jpg) |  |
+| ![Breadboard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardDetail.jpg) |  |
 | No-breadboard version overview | No-breadboard version overview |
 | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
 | Nano top view | Nano bottom view |
@@ -86,7 +87,7 @@ Also usable as connection schematic.
 - [Wokwi JK-BMSToPylontechCAN example](https://wokwi.com/projects/371657348012321793).
 
  <br/>
- 
+
 # Connection schematic
 The standard **RX** of the Arduino is used for the JK_BMS connection.<br/>
 A **schottky diode** is inserted into the RX line to allow programming the AVR with the JK-BMS still connected and switched on.
@@ -100,7 +101,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 
 ```
                                             78L05        Schottky diode - From Uno / Nano 5 V
-                                             ___                          to enable powering CAN 
+                                             ___                          to enable powering CAN
  External 6.6 V from Battery #2 >--o--------|___|-------o--|<|-< Uno 5V   module by Nano USB,
                                    |          |         |                 if battery is not attached
   __________ Schottky diode    ____|____     ---    ____|____             _________
@@ -122,8 +123,8 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
    |   |   --|<|-- RX of Uno / Nano
    |   ----------- D4 (or other pin, if specified)
    --------------- GND
-   
-   
+
+
   # Automatic brightness control for 2004 LCD
    5V O------o------o
              |      |
