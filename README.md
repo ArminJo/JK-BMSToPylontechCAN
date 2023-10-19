@@ -73,6 +73,8 @@ If CAN communications breaks, the inverter may use different values for controll
 | ![My installation](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CompleteInstallation.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
 | Breadboard detail |  |
 | ![Breadboard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardDetail.jpg) |  |
+| Breadboard without BMS connected | Standalone test |
+| ![Breadboard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardSimple.jpg) | ![Standalone test](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StandaloneTest.jpg) |
 | No-breadboard version overview | No-breadboard version overview |
 | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
 | Nano top view | Nano bottom view |
@@ -142,7 +144,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 
 
 [EasyEda shematics by Ngoc Dang Dinh](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401|8c434b5057fc4d769d664a0dc9c7d66c)
-![EasyEda shematics by Ngoc Dang Dinh](https://user-images.githubusercontent.com/8839597/271840357-741d3036-e734-4fbe-8635-64cbb7f3fe25.png)
+![EasyEda shematics by Ngoc Dang Dinh](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)
 
 
 ### Board pinout diagrams
@@ -235,6 +237,7 @@ This program uses the following libraries, which are already included in this re
 
 # Revision History
 ### Version 2.2
+- Fixed LCD backlight timeout bug introduced in 1.3.0.
 - Long press of page button instead of debug button.
 - Do not use sleep any more by default.
 
