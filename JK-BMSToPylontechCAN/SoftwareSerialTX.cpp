@@ -1,5 +1,5 @@
 /*
-SoftwareSerialTX.h (from SoftSerial.h) - 
+SoftwareSerialTX.h (from SoftSerial.h) -
 Multi-instance software serial library for Arduino/Wiring
 -- Transmit-only imoplementation
 -- reduce footprint in code memory and RAM compared to SoftwareSerial
@@ -13,8 +13,8 @@ version 2.1 of the License, or (at your option) any later version.
 
 This library is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-Lesser General Public License for more details.
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
@@ -26,9 +26,9 @@ http://arduiniana.org.
 */
 
 #if defined(__AVR_ATmega168__) ||defined(__AVR_ATmega168P__) ||defined(__AVR_ATmega328P__)
-// 
+//
 // Includes
-// 
+//
 #include <Arduino.h>
 #include <util/delay_basic.h>
 #include "SoftwareSerialTX.h"
@@ -36,7 +36,7 @@ http://arduiniana.org.
 //
 // Constructor
 //
-SoftwareSerialTX::SoftwareSerialTX(uint8_t transmitPin) 
+SoftwareSerialTX::SoftwareSerialTX(uint8_t transmitPin)
 {
   setTX(transmitPin);
 }
@@ -77,7 +77,7 @@ size_t SoftwareSerialTX::write(uint8_t b)
 
   SREG = oldSREG; // turn interrupts back on
   _delay_loop_2(delay);
-  
+
   return 1;
 }
 

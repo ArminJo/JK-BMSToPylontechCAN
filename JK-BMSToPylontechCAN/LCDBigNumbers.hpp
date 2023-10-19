@@ -489,7 +489,7 @@ public:
         /*
          * Implement the gap after the character
          */
-        if (forceGapBetweenNumbers && (tCharacterWidth > 1 || aNumberOrSpecialCharacter == '-')) {
+        if (forceGapBetweenNumbers && (NumberWidth == 1 || tCharacterWidth > 1 || aNumberOrSpecialCharacter == '-')) {
             if (maximumColumnIndex != upperLeftColumnIndex) {
                 // We are not at the last column, so clear the gap after the number
                 for (uint_fast8_t tRow = 0; tRow < NumberHeight; tRow++) {

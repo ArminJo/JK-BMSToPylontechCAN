@@ -29,6 +29,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Display of BMS information, Cell voltages and alarms on a locally attached serial 2004 LCD.
 - Page button for switching 4 LCD display pages.
+- Debug output and extra CAN info page on long press of button.
 - Statistics of minimum and maximum cells during balancing to identify conspicuous cells.
 - Realtime monitoring of some CAN data sent by long button press.
 - Switch off LCD backlight after timeout (can be disabled).
@@ -73,6 +74,8 @@ If CAN communications breaks, the inverter may use different values for controll
 | ![My installation](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CompleteInstallation.jpg) | ![Automatic brightness](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AutomaticBrightness.jpg) |
 | Breadboard detail |  |
 | ![Breadboard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardDetail.jpg) |  |
+| Breadboard without BMS connected | Standalone test |
+| ![Breadboard detail](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardSimple.jpg) | ![Standalone test](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StandaloneTest.jpg) |
 | No-breadboard version overview | No-breadboard version overview |
 | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview1.jpg) | ![Overview no breadboard](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/NoBreadboardOverview2.jpg) |
 | Nano top view | Nano bottom view |
@@ -142,7 +145,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 
 
 [EasyEda shematics by Ngoc Dang Dinh](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401|8c434b5057fc4d769d664a0dc9c7d66c)
-![EasyEda shematics by Ngoc Dang Dinh](https://user-images.githubusercontent.com/8839597/271840357-741d3036-e734-4fbe-8635-64cbb7f3fe25.png)
+![EasyEda shematics by Ngoc Dang Dinh](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)
 
 
 ### Board pinout diagrams
@@ -152,7 +155,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 
 # Principle of operation
 1. A request to deliver all informations is sent to the BMS (1.85 ms).
-2. Wait and receive the The BMS status frame (0.18 to 1 ms + 25.5 ms).
+2. Wait and receive the BMS status frame (wait for 0.18 to 1 ms + receive 25.5 ms).
 3. The BMS status frame is stored in a buffer and parity and other plausi checks are made.
 4. The cell data are converted and enhanced to fill the JKConvertedCellInfoStruct.
    Other frame data are mapped to a C structure.
@@ -235,6 +238,7 @@ This program uses the following libraries, which are already included in this re
 
 # Revision History
 ### Version 2.2
+- Fixed LCD backlight timeout bug introduced in 1.3.0.
 - Long press of page button instead of debug button.
 - Do not use sleep any more by default.
 
