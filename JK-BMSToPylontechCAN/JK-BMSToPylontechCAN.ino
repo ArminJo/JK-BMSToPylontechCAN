@@ -104,7 +104,7 @@
 //#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
 const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
 
-#define VERSION_EXAMPLE "2.2.2"
+#define VERSION_EXAMPLE "2.3.0"
 
 /*
  * Pin layout, may be adapted to your requirements
@@ -241,6 +241,9 @@ uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
 /*
  * CAN stuff
  */
+#if !defined(NO_SMA_EXTENSIONS) // SMA
+#define SMA_EXTENSIONS // Add frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
+#endif
 #include "Pylontech_CAN.hpp" // Must be before #include "MCP2515_TX.hpp"
 #define CAN_BAUDRATE    500000  // 500 kB
 #if !defined(MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE)

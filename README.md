@@ -237,7 +237,10 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
-### Version 2.2
+### Version 2.3.0
+- Added frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
+
+### Version 2.2.0
 - Fixed LCD backlight timeout bug introduced in 1.3.0.
 - Long press of page button instead of debug button.
 - Do not use sleep any more by default.

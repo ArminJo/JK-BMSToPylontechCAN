@@ -46,6 +46,7 @@ struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
 struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
 struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
 struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
+struct PylontechCANSpecificationsFrameStruct PylontechCANSpecificationsFrame;
 // Frames with fixed data
 struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
 struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
@@ -56,6 +57,7 @@ void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
     PylontechCANBatteryRequestFrame.fillFrame(aJKFAllReply);
     PylontechCANErrorsWarningsFrame.fillFrame(aJKFAllReply);
     PylontechCANCurrentValuesFrame.fillFrame(aJKFAllReply);
+    PylontechCANSpecificationsFrame.fillFrame(aJKFAllReply);
 }
 
 void sendPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
@@ -102,6 +104,9 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
+#if defined(SMA_EXTENSIONS)
+        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSpecificationsFrame));
+#endif
     }
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSohSocFrame));
@@ -110,6 +115,9 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
+#if defined(SMA_EXTENSIONS)
+    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSpecificationsFrame));
+#endif
 }
 
 #if defined(LOCAL_DEBUG)

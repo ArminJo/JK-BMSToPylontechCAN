@@ -47,12 +47,13 @@
  * Frame ID's
  */
 #define PYLON_CAN_NETWORK_ALIVE_MSG_FRAME_ID        0x305
-#define PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID     0x35E // Manufacturer name ("PYLON")
-#define PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID   0x35C // Battery charge request flags
-#define PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID 0x356 // Voltage / Current / Temperature
-#define PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID          0x355 // State of Health (SOH) / State of Charge (SOC)
 #define PYLON_CAN_BATTERY_LIMITS_FRAME_ID           0x351 // Battery voltage + current limits
+#define PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID          0x355 // State of Health (SOH) / State of Charge (SOC)
+#define PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID 0x356 // Voltage / Current / Temperature
 #define PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID   0x359 // Protection & Alarm flags
+#define PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID   0x35C // Battery charge request flags
+#define PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID     0x35E // Manufacturer name ("PYLON")
+#define PYLON_CAN_BATTERY_SPECIFICATIONS_FRAME_ID   0x35F // Chemistry and Capacity for SMA Sunny Island inverters
 
 extern struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
 extern struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
@@ -61,6 +62,7 @@ extern struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
 extern struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
 extern struct PylontechCANAliveFrameStruct PylontechCANAliveFrameStruct;
 extern struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
+extern struct PylontechCANSpecificationsFrameStruct PylontechCANSpecificationsFrame;
 
 void fillPylontechCANBatteryLimitsFrame(struct JKReplyStruct *aJKFAllReply);
 void fillPylontechCANBatterySohSocFrame(struct JKReplyStruct *aJKFAllReply);
@@ -84,8 +86,15 @@ struct PylontechCANFrameStruct {
     LongLongUnion FrameData; // 8 byte
 };
 
+struct PylontechCANAliveFrameStruct {
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_NETWORK_ALIVE_MSG_FRAME_ID, 8 }; // 0x305
+    struct {
+        uint8_t AlivePacketArray[8] = { 33 };
+    } FrameData;
+};
+
 struct PylontechCANBatteryLimitsFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_LIMITS_FRAME_ID, 8 };
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_LIMITS_FRAME_ID, 8 }; // 0x351
     struct {
         int16_t BatteryChargeOvervoltage100Millivolt;       // 0 to 750
         int16_t BatteryChargeCurrentLimit100Milliampere;    // 0 to 5000
@@ -101,77 +110,36 @@ struct PylontechCANBatteryLimitsFrameStruct {
 };
 
 struct PylontechCANSohSocFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID, 4 };
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID, 4 }; // 0x355
     struct {
         uint16_t SOCPercent;
         uint16_t SOHPercent = 100; // fixed 100
+#if defined(SMA_EXTENSIONS)
+//        uint16_t SOCHighDefinition100PPM = 10000; // for SMA Sunny Island inverters
+#endif
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         FrameData.SOCPercent = aJKFAllReply->SOCPercent;
     }
 };
 
-struct PylontechCANManufacturerFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID, 8 };
+struct PylontechCANCurrentValuesFrameStruct {
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID, 6 }; // 0x356
     struct {
-        char ManufacturerName[8] = { 'P', 'Y', 'L', 'O', 'N', ' ', ' ', ' ' };
-    } FrameData;
-};
-
-/*
- * ForceChargeRequestI / bit 5 is designed for inverter allows battery to shut down, and able to wake battery up to charge it.
- * ForceChargeRequestII / bit 4 is designed for inverter doesn`t want battery to shut down, able to charge battery before shut down to avoid low energy.
- * 2 bytes
- */
-struct PylontechCANBatteryRequesFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID, 2 };
-    struct {
-        bool :3; // unused
-        // 0=off 1=Request
-        /*
-         * From Pylontech manual: Depending on the soc level, there will be a regularly (3 month) fully charge requesting during continuous operation as well.
-         * It will be handled automatically by the communication between BESS and external device.
-         * This is to stop SOC calculations drifting too far from reality when the battery has not had a full charge for n days.
-         */
-        bool FullChargeRequest :1; // sent as always 0
-
-        // Force to charge battery even from the grid.
-        // From Battery-Communications-Integration-Guide-V2.5-1.pdf: Command sent by the BMS telling the inverter to charge the battery from any available power source regardless of inverter settings.
-        bool ForceChargeRequestII :1;
-        bool ForceChargeRequestI :1;
-        bool DischargeEnable :1;
-        bool ChargeEnable :1;
-        uint8_t Filler = 0;
+        int16_t Voltage10Millivolt;        // 0 to 32767
+        int16_t Current100Milliampere;      // -2500 to 2500
+        int16_t Temperature100Millicelsius; // -500 to 750
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
-        FrameData.FullChargeRequest = 0;
-
-        if (aJKFAllReply->SOCPercent < sSOCThresholdForForceCharge) {
-            // ForceChargeRequestI forces the inverter to charge the battery from any available power source regardless of inverter settings
-            FrameData.ForceChargeRequestI = 1;
-        } else {
-            FrameData.ForceChargeRequestI = 0;
-        }
-        // If battery drops below lower voltage. See https://powerforum.co.za/topic/13587-battery-anomaly-on-synsynk-hybrid-inverter/
-        if (swap(aJKFAllReply->Battery10Millivolt) < swap(aJKFAllReply->BatteryUndervoltageProtection10Millivolt)) {
-            FrameData.ForceChargeRequestII = 1;
-        } else {
-            FrameData.ForceChargeRequestII = 0;
-        }
-        FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
-        FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
+        (void) aJKFAllReply; // To avoid [-Wunused-parameter] warning
+        FrameData.Voltage10Millivolt = JKComputedData.BatteryVoltage10Millivolt;
+        FrameData.Current100Milliampere = JKComputedData.Battery10MilliAmpere / 10;
+        FrameData.Temperature100Millicelsius = JKComputedData.TemperatureMaximum * 10;
     }
 };
 
-struct PylontechCANAliveFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_NETWORK_ALIVE_MSG_FRAME_ID, 8 };
-    struct {
-        uint8_t AlivePacketArray[8] = { 33 };
-    } FrameData;
-};
-
 struct PylontechCANErrorsWarningsFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID, 7 };
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID, 7 }; // 0x359
     struct FrameDataStruct {
         // 0=off 1=on
         // Byte 0
@@ -259,18 +227,79 @@ struct PylontechCANErrorsWarningsFrameStruct {
     }
 };
 
-struct PylontechCANCurrentValuesFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID, 6 };
+/*
+ * ForceChargeRequestI / bit 5 is designed for inverter allows battery to shut down, and able to wake battery up to charge it.
+ * ForceChargeRequestII / bit 4 is designed for inverter doesn`t want battery to shut down, able to charge battery before shut down to avoid low energy.
+ * 2 bytes
+ */
+struct PylontechCANBatteryRequesFrameStruct {
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID, 2 }; // 0x35C
     struct {
-        int16_t Voltage10Millivolt;        // 0 to 32767
-        int16_t Current100Milliampere;      // -2500 to 2500
-        int16_t Temperature100Millicelsius; // -500 to 750
+        bool :3; // unused
+        // 0=off 1=Request
+        /*
+         * From Pylontech manual: Depending on the soc level, there will be a regularly (3 month) fully charge requesting during continuous operation as well.
+         * It will be handled automatically by the communication between BESS and external device.
+         * This is to stop SOC calculations drifting too far from reality when the battery has not had a full charge for n days.
+         */
+        bool FullChargeRequest :1; // sent as always 0
+
+        // Force to charge battery even from the grid.
+        // From Battery-Communications-Integration-Guide-V2.5-1.pdf: Command sent by the BMS telling the inverter to charge the battery from any available power source regardless of inverter settings.
+        bool ForceChargeRequestII :1;
+        bool ForceChargeRequestI :1;
+        bool DischargeEnable :1;
+        bool ChargeEnable :1;
+        uint8_t Filler = 0;
+    } FrameData;
+    void fillFrame(struct JKReplyStruct *aJKFAllReply) {
+        FrameData.FullChargeRequest = 0;
+
+        if (aJKFAllReply->SOCPercent < sSOCThresholdForForceCharge) {
+            // ForceChargeRequestI forces the inverter to charge the battery from any available power source regardless of inverter settings
+            FrameData.ForceChargeRequestI = 1;
+        } else {
+            FrameData.ForceChargeRequestI = 0;
+        }
+        // If battery drops below lower voltage. See https://powerforum.co.za/topic/13587-battery-anomaly-on-synsynk-hybrid-inverter/
+        if (swap(aJKFAllReply->Battery10Millivolt) < swap(aJKFAllReply->BatteryUndervoltageProtection10Millivolt)) {
+            FrameData.ForceChargeRequestII = 1;
+        } else {
+            FrameData.ForceChargeRequestII = 0;
+        }
+        FrameData.DischargeEnable = aJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
+        FrameData.ChargeEnable = aJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
+    }
+};
+
+/*
+ * Character array DIYPYLON is not recognized by Deye, array PYLONDIY is recognized as PYLON
+ */
+struct PylontechCANManufacturerFrameStruct {
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID, 8 }; // 0x35E
+    struct {
+        char ManufacturerName[8] = { 'P', 'Y', 'L', 'O', 'N', ' ', ' ', ' ' };
+    } FrameData;
+};
+
+struct PylontechCANSpecificationsFrameStruct {
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SPECIFICATIONS_FRAME_ID, 8 }; // 0x35F
+    struct {
+        uint16_t CellChemistry;             // 0
+        uint8_t HardwareVersionLowByte;     // "0.9"
+        uint8_t HardwareVersionHighByte;    // "0.9"
+        uint16_t CapacityAmpereHour;        // -2500 to 2500
+        uint8_t SoftwareVersionLowByte;     // "0.9"
+        uint8_t SoftwareVersionHighByte;    // "0.9"
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         (void) aJKFAllReply; // To avoid [-Wunused-parameter] warning
-        FrameData.Voltage10Millivolt = JKComputedData.BatteryVoltage10Millivolt;
-        FrameData.Current100Milliampere = JKComputedData.Battery10MilliAmpere / 10;
-        FrameData.Temperature100Millicelsius = JKComputedData.TemperatureMaximum * 10;
+        FrameData.CellChemistry = 0;
+        FrameData.HardwareVersionLowByte = 0;
+        FrameData.HardwareVersionHighByte = 1;
+        FrameData.SoftwareVersionLowByte = aJKFAllReply->SoftwareVersionNumber[1];
+        FrameData.SoftwareVersionHighByte = aJKFAllReply->SoftwareVersionNumber[0];
+        FrameData.CapacityAmpereHour = JKComputedData.TotalCapacityAmpereHour;
     }
 };
 
