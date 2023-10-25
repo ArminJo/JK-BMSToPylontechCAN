@@ -104,7 +104,7 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
-#if defined(SMA_EXTENSIONS)
+#if defined(SNA_EXTENSIONS)
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSpecificationsFrame));
 #endif
     }
@@ -115,7 +115,7 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
-#if defined(SMA_EXTENSIONS)
+#if defined(SNA_EXTENSIONS)
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSpecificationsFrame));
 #endif
 }
