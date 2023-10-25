@@ -241,8 +241,8 @@ uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
 /*
  * CAN stuff
  */
-#if !defined(NO_SMA_EXTENSIONS) // SMA
-#define SMA_EXTENSIONS // Add frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
+#if !defined(NO_SNA_EXTENSIONS) // SNA
+#define SNA_EXTENSIONS // Add frame 0x379 for total capacity of the battery to be used with SNA5000 extension (from LuxPowerTech), which is no problem for Deye inverters.
 #endif
 #include "Pylontech_CAN.hpp" // Must be before #include "MCP2515_TX.hpp"
 #define CAN_BAUDRATE    500000  // 500 kB
