@@ -53,7 +53,7 @@
 #define PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID   0x359 // Protection & Alarm flags
 #define PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID   0x35C // Battery charge request flags
 #define PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID     0x35E // Manufacturer name ("PYLON")
-#define PYLON_CAN_BATTERY_SPECIFICATIONS_FRAME_ID   0x35F // Chemistry and Capacity for SMA Sunny Island inverters
+#define PYLON_CAN_BATTERY_SPECIFICATIONS_FRAME_ID   0x371 // Capacity for LuxPower (SNA5000) inverters
 
 extern struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
 extern struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
@@ -283,23 +283,15 @@ struct PylontechCANManufacturerFrameStruct {
 };
 
 struct PylontechCANSpecificationsFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SPECIFICATIONS_FRAME_ID, 8 }; // 0x35F
+    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SPECIFICATIONS_FRAME_ID, 2 }; // 0x371
     struct {
-        uint16_t CellChemistry;             // 0
-        uint8_t HardwareVersionLowByte;     // "0.9"
-        uint8_t HardwareVersionHighByte;    // "0.9"
-        uint16_t CapacityAmpereHour;        // -2500 to 2500
-        uint8_t SoftwareVersionLowByte;     // "0.9"
-        uint8_t SoftwareVersionHighByte;    // "0.9"
+        uint16_t CapacityAmpereHourLowByte;
+        uint16_t CapacityAmpereHourHighByte;
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         (void) aJKFAllReply; // To avoid [-Wunused-parameter] warning
-        FrameData.CellChemistry = 0;
-        FrameData.HardwareVersionLowByte = 0;
-        FrameData.HardwareVersionHighByte = 1;
-        FrameData.SoftwareVersionLowByte = aJKFAllReply->SoftwareVersionNumber[1];
-        FrameData.SoftwareVersionHighByte = aJKFAllReply->SoftwareVersionNumber[0];
-        FrameData.CapacityAmpereHour = JKComputedData.TotalCapacityAmpereHour;
+        FrameData.CapacityAmpereHourLowByte = lowByte(JKComputedData.TotalCapacityAmpereHour);
+        FrameData.CapacityAmpereHourHighByte = highByte(JKComputedData.TotalCapacityAmpereHour);
     }
 };
 
