@@ -244,6 +244,9 @@ uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
 #if !defined(NO_SMA_EXTENSIONS) // SMA
 #define SMA_EXTENSIONS // Add frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
 #endif
+#if !defined(NO_LUXPOWER_EXTENSIONS) // SMA
+#define LUXPOWER_EXTENSIONS // Add frame 0x379 for total capacity as Luxpower extension, which is no problem for Deye inverters.
+#endif
 #include "Pylontech_CAN.hpp" // Must be before #include "MCP2515_TX.hpp"
 #define CAN_BAUDRATE    500000  // 500 kB
 #if !defined(MHZ_OF_CRYSTAL_ASSEMBLED_ON_CAN_MODULE)

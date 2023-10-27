@@ -27,6 +27,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 
 # Features
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
+- Supports sending of total capayity for SMA and Luxpower inverters.
 - Display of BMS information, Cell voltages and alarms on a locally attached serial 2004 LCD.
 - Page button for switching 4 LCD display pages.
 - Debug output and extra CAN info page on long press of button.
@@ -191,6 +192,8 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
 | `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus. |
+| `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
+| `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
@@ -239,6 +242,7 @@ This program uses the following libraries, which are already included in this re
 # Revision History
 ### Version 2.3.0
 - Added frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
+- Added frame 0x379 for total capacity as Luxpower extension, which is no problem for Deye inverters.
 
 ### Version 2.2.0
 - Fixed LCD backlight timeout bug introduced in 1.3.0.

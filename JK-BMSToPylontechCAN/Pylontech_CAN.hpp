@@ -46,7 +46,9 @@ struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
 struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
 struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
 struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
-struct PylontechCANSpecificationsFrameStruct PylontechCANSpecificationsFrame;
+struct PylontechCANSMACapacityFrameStruct PylontechCANSMACapacityFrame;
+struct PylontechCANLuxpowerCapacityFrameStruct PylontechCANLuxpowerCapacityFrame;
+
 // Frames with fixed data
 struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
 struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
@@ -57,7 +59,12 @@ void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
     PylontechCANBatteryRequestFrame.fillFrame(aJKFAllReply);
     PylontechCANErrorsWarningsFrame.fillFrame(aJKFAllReply);
     PylontechCANCurrentValuesFrame.fillFrame(aJKFAllReply);
-    PylontechCANSpecificationsFrame.fillFrame(aJKFAllReply);
+#if defined(SMA_EXTENSIONS)
+    PylontechCANSMACapacityFrame.fillFrame(aJKFAllReply);
+#endif
+#if defined(LUXPOWER_EXTENSIONS)
+    PylontechCANLuxpowerCapacityFrame.fillFrame(aJKFAllReply);
+#endif
 }
 
 void sendPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
@@ -105,8 +112,12 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
         printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
 #if defined(SMA_EXTENSIONS)
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSpecificationsFrame));
+        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSMACapacityFrame));
 #endif
+#if defined(LUXPOWER_EXTENSIONS)
+        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+#endif
+
     }
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSohSocFrame));
@@ -116,7 +127,10 @@ void sendPylontechAllCANFrames(bool aDebugModeActive) {
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
     sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
 #if defined(SMA_EXTENSIONS)
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSpecificationsFrame));
+    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSMACapacityFrame));
+#endif
+#if defined(LUXPOWER_EXTENSIONS)
+    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
 #endif
 }
 
