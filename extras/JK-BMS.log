@@ -170,3 +170,20 @@ Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing
 Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, not active
 Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, active
 Charging MosFet enabled, active | Discharging MosFet enabled, active | Balancing enabled, not active
+
+...
+
+Total Runtime Minutes=124506 ->   86D11H50M
+*** CELL INFO ***
+16 Cells, Minimum=3069 mV, Maximum=3077mV, Delta=8 mV, Average=3074 mV
+ 1=3069 mV,  2=3069 mV,  3=3070 mV,  4=3076 mV,  5=3076 mV,  6=3076 mV,  7=3076 mV,  8=3072 mV,
+ 9=3072 mV,  10=3076 mV, 11=3076 mV, 12=3077 mV, 13=3077 mV, 14=3076 mV, 15=3071 mV, 16=3076 mV,
+
+*** CELL STATISTICS ***
+Total balancing time=2008 s ->   0D00H33M28S
+Cell Minimum percentages
+ 1=37 % |  768,  2=37 % |  758,  3=16 % |  328,  4= 0 % |    0,  5= 0 % |    0,  6= 0 % |    0,  7= 0 % |    0,  8= 3 % |   68,
+ 9= 0 % |    0, 10= 0 % |    0, 11= 0 % |    0, 12= 0 % |    0, 13= 0 % |    0, 14= 0 % |    0, 15= 5 % |  107, 16= 0 % |    0,
+Cell Maximum percentages
+ 1= 0 % |    0,  2= 0 % |    0,  3= 0 % |    0,  4= 5 % |  226,  5= 6 % |  263,  6= 7 % |  311,  7= 7 % |  329,  8= 0 % |    0,
+ 9= 0 % |    0, 10= 9 % |  400, 11=12 % |  531, 12=13 % |  572, 13=14 % |  615, 14=10 % |  441, 15= 0 % |    0, 16=14 % |  624,

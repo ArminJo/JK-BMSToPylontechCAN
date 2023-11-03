@@ -6,9 +6,9 @@
  *  Copyright (C) 2023  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
- *  This file is part of ArduinoUtils https://github.com/ArminJo/PVUtils.
+ *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
- *  Arduino-Utils is free software: you can redistribute it and/or modify
+ *  JK-BMSToPylontechCAN is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
@@ -51,7 +51,6 @@ void printJKReplyFrameBuffer();
 #define JK_BMS_RECEIVE_FINISHED     1
 #define JK_BMS_RECEIVE_ERROR        2
 uint8_t readJK_BMSStatusFrameByte();
-void fillJKConvertedCellInfo();
 void fillJKComputedData();
 
 extern const uint8_t sSOCThresholdForForceCharge;
@@ -60,13 +59,16 @@ extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to writ
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern bool sJKBMSFrameHasTimeout; // For sending CAN data
-extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
-extern const char *sErrorStringForLCD;
 extern bool sErrorStatusJustChanged;
 extern bool sErrorStatusIsError;
+
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
+
+#if !defined(USE_NO_LCD)
+extern const char *sErrorStringForLCD;
+#endif
 
 int16_t getJKTemperature(uint16_t aJKRAWTemperature);
 int16_t getCurrent(uint16_t aJKRAWCurrent);
@@ -90,6 +92,60 @@ void computeUpTimeString();
 void printJKStaticInfo();
 void printJKDynamicInfo();
 void handleAndPrintAlarmInfo();
+#if defined(ENABLE_MONITORING)
+void printMonitoringInfo();
+#endif
+
+struct JKCellInfoStruct {
+    uint16_t CellMillivolt;
+#if !defined(USE_NO_LCD)
+    uint8_t VoltageIsMinMaxOrBetween; // One of VOLTAGE_IS_MINIMUM, VOLTAGE_IS_MAXIMUM or VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM
+#endif
+};
+
+struct JKConvertedCellInfoStruct {
+    uint8_t ActualNumberOfCellInfoEntries;
+    JKCellInfoStruct CellInfoStructArray[MAXIMUM_NUMBER_OF_CELLS];
+    uint16_t MinimumCellMillivolt;
+    uint16_t MaximumCellMillivolt;
+    uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
+    uint16_t AverageCellMillivolt;
+};
+extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
+void fillJKConvertedCellInfo();
+
+#if !defined(NO_INTERNAL_STATISTICS)
+#define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
+#define VOLTAGE_IS_MINIMUM                      1
+#define VOLTAGE_IS_MAXIMUM                      2
+#if !defined(USE_NO_LCD)
+#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         4 // LCD_ROWS
+#else
+#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         16
+#endif
+
+/*
+ * Arrays of counters, which count the times, a cell has minimal or maximal voltage
+ * To identify runaway cells
+ */
+extern uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS];
+extern uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
+extern uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+extern uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+#define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
+extern uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
+
+struct JKComputedCapacityStruct {
+    uint8_t StartSOC;
+    uint8_t EndSOC;
+    uint16_t Capacity;
+    uint16_t TotalCapacity;
+};
+
+extern struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY]; // The last 4 values
+void checkAndStoreCapacityComputationValues();
+void printComputedCapacity(uint8_t aCapacityArrayIndex);
+#endif // NO_INTERNAL_STATISTICS
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
 #define JK_BMS_FRAME_TRAILER_LENGTH             9
@@ -115,35 +171,6 @@ struct JKFrameTailStruct {
     uint16_t UnusedChecksum;    // 0x0000
     uint16_t Checksum;          // Including StartFrameToken
 };
-
-#define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
-#define VOLTAGE_IS_MINIMUM                      1
-#define VOLTAGE_IS_MAXIMUM                      2
-
-struct JKCellInfoStruct {
-    uint16_t CellMillivolt;
-    uint8_t VoltageIsMinMaxOrBetween; // One of VOLTAGE_IS_MINIMUM, VOLTAGE_IS_MAXIMUM or VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM
-};
-
-struct JKConvertedCellInfoStruct {
-    uint8_t ActualNumberOfCellInfoEntries;
-    JKCellInfoStruct CellInfoStructArray[MAXIMUM_NUMBER_OF_CELLS];
-    uint16_t MinimumCellMillivolt;
-    uint16_t MaximumCellMillivolt;
-    uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
-    uint16_t AverageCellMillivolt;
-};
-
-/*
- * Arrays of counters, which count the times, a cell has minimal or maximal voltage
- * To identify runaway cells
- */
-uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS];
-uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
-uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
-uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
-#define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
-uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
 
 /*
  * This structure contains all converted and computed data useful for display
@@ -193,7 +220,18 @@ union BMSStatusUnion {
  * Sensor2 temperature sensor is originally named Battery
  * Battery values are often originally named Total
  *
+ * List of values seen in Bluetooth, but not in reply:
+ * ChargeOvercurrentRecoverySeconds (Charge OCPR Time(S))
+ * DischargeOvercurrentRecoverySeconds (Discharge OCPR Time(S))
+ * ShortCircuitProtectionDelay  (SCP Delay(us))
+ * ShortCircuitProtectionRecoverySeconds (SCPR Time(S))
+ * CellPowerOffVoltage (Power Off Vol.(V))
+ *
+ * List of values in reply, but not in Bluetooth:
+ * CellOvervoltageDelaySeconds (0x92)
+ * CellUndervoltageDelaySeconds (0x95)
  */
+
 #define NUMBER_OF_DEFINED_ALARM_BITS    14
 struct JKReplyStruct {
     uint8_t TokenTemperaturePowerMosFet;    // 0x80
@@ -227,7 +265,7 @@ struct JKReplyStruct {
             bool Sensor2OvertemperatureAlarm :1;    // 0x0100
             bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
             bool CellOvervoltageAlarm :1;           // 0x0400
-            bool CellUndervoltageAlarm :1;
+            bool CellUndervoltageAlarm :1; // 0x0800 Discharging undervoltage forces SOC to 0 and a few seconds later switches off discharge mosfet
             bool _309_A_ProtectionAlarm :1;         // 0x1000
             bool _309_B_ProtectionAlarm :1;
             bool Reserved1Alarm :1;                 // Two highest bits are reserved
@@ -243,7 +281,7 @@ struct JKReplyStruct {
              * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
              * Retry is done after "OCPR Time(S)"
              */
-            bool ChargeOvercurrentAlarm :1;  // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
+            bool ChargeOvercurrentAlarm :1; // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
             bool DischargeOvercurrentAlarm :1; // 0x0040 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
             bool CellVoltageDifferenceAlarm :1;     // 0x0080
         } AlarmBits;
@@ -271,13 +309,13 @@ struct JKReplyStruct {
     uint8_t TokenCellOvervoltageRecoveryMillivolt;      // 0x91
     uint16_t CellOvervoltageRecoveryMillivolt;          // 1000 to 4500
     uint8_t TokenCellOvervoltageDelaySeconds;           // 0x92
-    uint16_t CellOvervoltageDelaySeconds;               // 1 to 60
+    uint16_t CellOvervoltageDelaySeconds;               // Cannot be set by App! I received 5
     uint8_t TokenCellUndervoltageProtectionMillivolt;   // 0x93
     uint16_t CellUndervoltageProtectionMillivolt;
     uint8_t TokenCellUndervoltageRecoveryMillivolt;     // 0x94
     uint16_t CellUndervoltageRecoveryMillivolt;
     uint8_t TokenCellUndervoltageDelaySeconds;          // 0x95
-    uint16_t CellUndervoltageDelaySeconds;
+    uint16_t CellUndervoltageDelaySeconds; // Cannot be set by App! I received 5 but the BMS took 100 seconds to signal an undervoltage, see CellUndervoltage.log
 
     uint8_t TokenVoltageDifferenceProtectionMillivolt;  // 0x96
     uint16_t VoltageDifferenceProtectionMillivolt;      // 0 to 100
@@ -285,11 +323,11 @@ struct JKReplyStruct {
     uint8_t TokenDischargeOvercurrentProtectionAmpere;  // 0x97
     uint16_t DischargeOvercurrentProtectionAmpere;      // 1 to 1000
     uint8_t TokenDischargeOvercurrentDelaySeconds;      // 0x98
-    uint16_t DischargeOvercurrentDelaySeconds;          // 1 to 60
+    uint16_t DischargeOvercurrentDelaySeconds;          // DischargeOvercurrentRecoverySeconds can be set by App, but is not contained in reply
     uint8_t TokenChargeOvercurrentProtectionAmpere;     // 0x99
     uint16_t ChargeOvercurrentProtectionAmpere;         // 1 to 1000
     uint8_t TokenChargeOvercurrentDelaySeconds;         // 0x9A
-    uint16_t ChargeOvercurrentDelaySeconds;             // 1 to 60
+    uint16_t ChargeOvercurrentDelaySeconds;             // ChargeOvercurrentRecoverySeconds can be set by App, but is not contained in reply
 
     uint8_t TokenBalancingStartVoltage;                 // 0x9B
     uint16_t BalancingStartMillivolt;                   // 2000 to 4500
@@ -393,6 +431,55 @@ struct JKReplyStruct {
     uint8_t TokenProtocolVersionNumber;         // 0xC0
     uint8_t ProtocolVersionNumber;              // 00, 01 -> Redefine the 0x84 current data as 10 mA,
                                                 // with the highest bit being 0 for discharge and 1 for charge
+};
+
+/*
+ * Contains only values which are compared witch current ones to detect changes
+ */
+struct JKLastReplyStruct {
+    uint8_t SOCPercent;                     // 0-100% 0x85
+    union {                                     // 0x8B
+        uint16_t AlarmsAsWord;
+        struct {
+            // High byte of alarms
+            bool Sensor2OvertemperatureAlarm :1;    // 0x0100
+            bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
+            bool CellOvervoltageAlarm :1;           // 0x0400
+            bool CellUndervoltageAlarm :1;
+            bool _309_A_ProtectionAlarm :1;         // 0x1000
+            bool _309_B_ProtectionAlarm :1;
+            bool Reserved1Alarm :1;                 // Two highest bits are reserved
+            bool Reserved2Alarm :1;
+
+            // Low byte of alarms
+            bool LowCapacityAlarm :1;               // 0x0001
+            bool PowerMosFetOvertemperatureAlarm :1;
+            bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
+            bool DischargeUndervoltageAlarm :1;
+            bool Sensor1Or2OvertemperatureAlarm :1; // 0x0010 - Affects the charging/discharging MosFet state, not the enable flags
+            /*
+             * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
+             * Retry is done after "OCPR Time(S)"
+             */
+            bool ChargeOvercurrentAlarm :1; // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
+            bool DischargeOvercurrentAlarm :1; // 0x0040 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
+            bool CellVoltageDifferenceAlarm :1;     // 0x0080
+        } AlarmBits;
+    } AlarmUnion;
+
+    union {                                         // 0x8C
+        uint16_t StatusAsWord;
+        struct {
+            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
+            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
+            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
+            bool BalancerActive :1;                 // 0x04
+            bool BatteryDown :1;                    // 0x08
+            uint8_t ReservedStatus :4;
+        } StatusBits;
+    } BMSStatus;
+
+    uint32_t SystemWorkingMinutes;              // Minutes 0xB6
 };
 
 #endif // _JK_BMS_H

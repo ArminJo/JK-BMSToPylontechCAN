@@ -7,9 +7,9 @@
  *  Copyright (C) 2023  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
- *  This file is part of ArduinoUtils https://github.com/ArminJo/PVUtils.
+ *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
- *  Arduino-Utils is free software: you can redistribute it and/or modify
+ *  JK-BMSToPylontechCAN is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
@@ -31,7 +31,7 @@
 
 #include "JK-BMS.h"
 
-JKReplyStruct lastJKReply;
+JKLastReplyStruct lastJKReply;
 
 #if defined(DEBUG)
 #define LOCAL_DEBUG
@@ -46,14 +46,13 @@ uint8_t JKRequestStatusFrame[21] = { 0x4E, 0x57 /*4E 57 = StartOfFrame*/, 0x00, 
         0x00/*0=ReadAllData or commandToken*/, 0x00, 0x00, 0x00,
         0x00/*RecordNumber High byte is random code, low 3 bytes is record number*/, JK_FRAME_END_BYTE/*0x68 = EndIdentifier*/,
         0x00, 0x00, 0x01, 0x29 /*Checksum, high 2 bytes for checksum not yet enabled -> 0, low 2 Byte for checksum*/};
-uint8_t JKrequestStatusFrameOld[] = { 0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77 };
+//uint8_t JKrequestStatusFrameOld[] = { 0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77 };
 
 uint16_t sReplyFrameBufferIndex = 0;        // Index of next byte to write to array, except for last byte received. Starting with 0.
 uint16_t sReplyFrameLength;                 // Received length of frame
 uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 bool sJKBMSFrameHasTimeout;                 // If true, timeout message or CAN Info page is displayed.
 
-JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
 JKComputedDataStruct lastJKComputedData;        // For detecting changes
 char sUpTimeString[12];                         // "9999D23H12M" is 11 bytes long
@@ -61,6 +60,38 @@ char sBalancingTimeString[11] = { ' ', ' ', '0', 'D', '0', '0', 'H', '0', '0', '
 bool sUpTimeStringMinuteHasChanged;
 bool sUpTimeStringTenthOfMinuteHasChanged;
 char sLastUpTimeTenthOfMinuteCharacter;     // For detecting changes in string and setting sUpTimeStringTenthOfMinuteHasChanged
+
+JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
+#if !defined(NO_INTERNAL_STATISTICS)
+/*
+ * Arrays of counters, which count the times, a cell has minimal or maximal voltage
+ * To identify runaway cells
+ */
+uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS];
+uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
+uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
+
+/*
+ * The firt entry [0] holds the current computed value if more than 1 Ah are accumulated
+ */
+struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY];
+
+#define CAPACITY_COMPUTATION_MODE_IDLE                  0
+#define CAPACITY_COMPUTATION_MODE_CHARGE                1
+#define CAPACITY_COMPUTATION_MODE_DISCHARGE             2
+#define CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION 4 // If we have 5 wrong directions, we end computation
+/*
+ * 100 is factorfor 10 mA to 1 A
+ * 60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS is number of samples in 1 hour
+ */
+#define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
+uint8_t sCapacityComputationWrongDirectionCount = 0;
+uint8_t sCapacityComputationMode = CAPACITY_COMPUTATION_MODE_IDLE;
+uint32_t sCapacityComputationAccumulator10MilliAmpere = 0;
+uint8_t sLastCapacityComputationDeltaSOC = 0;
+#endif //NO_INTERNAL_STATISTICS
 
 /*
  * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
@@ -228,12 +259,13 @@ uint8_t readJK_BMSStatusFrameByte() {
 }
 
 /*
- * Charge is positive, discharge is negative
+ * Highest bit is set means charge
+ * @return Charge is positive, discharge is negative
  */
 int16_t getCurrent(uint16_t aJKRAWCurrent) {
     uint16_t tCurrent = swap(aJKRAWCurrent);
     if (tCurrent == 0 || (tCurrent & 0x8000) == 0x8000) {
-        // Charge
+        // Charge - NO two's complement!
         return (tCurrent & 0x7FFF);
     }
     // discharge
@@ -357,6 +389,7 @@ void fillJKConvertedCellInfo() {
     JKConvertedCellInfo.DeltaCellMillivolt = tMaximumMillivolt - tMinimumMillivolt;
     JKConvertedCellInfo.AverageCellMillivolt = tMillivoltSum / tNumberOfNonNullCellInfo;
 
+#if !defined(USE_NO_LCD)
     /*
      * Mark and count minimum and maximum cell voltages
      */
@@ -375,7 +408,9 @@ void fillJKConvertedCellInfo() {
             JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM;
         }
     }
+#endif
 
+#if !defined(NO_INTERNAL_STATISTICS)
     /*
      * Process minimum statistics
      */
@@ -446,6 +481,7 @@ void fillJKConvertedCellInfo() {
             CellMaximumArray[i] = CellMaximumArray[i] / 2;
         }
     }
+#endif // NO_INTERNAL_STATISTICS
 
 #if defined(LOCAL_DEBUG)
     Serial.print(tNumberOfCellInfo);
@@ -460,6 +496,43 @@ void fillJKConvertedCellInfo() {
         Serial.println(F(" cells seems to be connected"));
     }
 }
+
+#if !defined(NO_INTERNAL_STATISTICS)
+/*
+ * Print formatted cell info on Serial
+ */
+void printJKCellStatisticsInfo() {
+    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
+
+    /*
+     * Cell statistics
+     */
+    char tStringBuffer[18]; // "12=12 % |  4042, "
+
+    Serial.println(F("Cell Minimum percentages"));
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        if (i != 0 && (i % 8) == 0) {
+            Serial.println();
+        }
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMinimumPercentageArray[i], CellMinimumArray[i]);
+        Serial.print(tStringBuffer);
+    }
+    Serial.println();
+
+    Serial.println(F("Cell Maximum percentages"));
+    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+        if (i != 0 && (i % 8) == 0) {
+            Serial.println();
+        }
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMaximumPercentageArray[i], CellMaximumArray[i]);
+        Serial.print(tStringBuffer);
+    }
+    Serial.println();
+
+    Serial.println();
+}
+
+#endif // NO_INTERNAL_STATISTICS
 
 void fillJKComputedData() {
     JKComputedData.TemperaturePowerMosFet = getJKTemperature(sJKFAllReplyPointer->TemperaturePowerMosFet);
@@ -504,46 +577,152 @@ void fillJKComputedData() {
 
     JKComputedData.BatteryLoadPower = JKComputedData.BatteryVoltageFloat * JKComputedData.BatteryLoadCurrentFloat;
 
+#if !defined(NO_INTERNAL_STATISTICS)
+    /*
+     * Increment sBalancingCount and fill sBalancingTimeString
+     */
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
         sBalancingCount++;
         sprintf_P(sBalancingTimeString, PSTR("%3uD%02uH%02uM"), (uint16_t) (sBalancingCount / (60 * 24 * 30UL)),
                 (uint16_t) ((sBalancingCount / (60 * 30)) % 24), (uint16_t) (sBalancingCount / 30) % 60);
     }
-}
-
-/*
- * Print formatted cell info on Serial
- */
-void printJKCellStatisticsInfo() {
-    uint8_t tNumberOfCellInfo = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
 
     /*
-     * Cell statistics
+     * Compute total capacity based on current and SOC
+     *
+     * If state is idle and current > 1 A: If current direction is from battery, start discharge computation else start charge computation.
+     * If current direction is 5 times wrong, stop computation.
+     * If SOC delta between start and end > 40% store value to array.
      */
-    char tStringBuffer[18]; // "12=12 % |  4042, "
+    auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
+    auto tBattery10MilliAmpere = JKComputedData.Battery10MilliAmpere;
 
-    Serial.println(F("Cell Minimum percentages"));
-    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-        if (i != 0 && (i % 8) == 0) {
-            Serial.println();
+    if (sCapacityComputationMode == CAPACITY_COMPUTATION_MODE_IDLE) {
+        /*
+         * Check for start condition
+         */
+        if (tBattery10MilliAmpere < -100) {
+            sCapacityComputationMode = CAPACITY_COMPUTATION_MODE_DISCHARGE;
+            JKComputedCapacity[0].StartSOC = tCurrentSOCPercent;
+        } else if (tBattery10MilliAmpere > 100) {
+            sCapacityComputationMode = CAPACITY_COMPUTATION_MODE_CHARGE;
+            JKComputedCapacity[0].StartSOC = tCurrentSOCPercent;
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMinimumPercentageArray[i], CellMinimumArray[i]);
-        Serial.print(tStringBuffer);
-    }
-    Serial.println();
-
-    Serial.println(F("Cell Maximum percentages"));
-    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-        if (i != 0 && (i % 8) == 0) {
-            Serial.println();
+#  if defined(LOCAL_DEBUG)
+        Serial.print(F("Start capacity computation at SOC="));
+        Serial.println(tCurrentSOCPercent);
+#  endif
+    } else {
+        /*
+         * Mode CAPACITY_COMPUTATION_MODE_CHARGE and CAPACITY_COMPUTATION_MODE_DISCHARGE here
+         */
+        if (sCapacityComputationMode == CAPACITY_COMPUTATION_MODE_DISCHARGE) {
+            // Convert discharge current
+            tBattery10MilliAmpere = -tBattery10MilliAmpere;
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMaximumPercentageArray[i], CellMaximumArray[i]);
-        Serial.print(tStringBuffer);
-    }
-    Serial.println();
 
-    Serial.println();
+        // Add capacity, even the first value with wrong direction
+        sCapacityComputationAccumulator10MilliAmpere += tBattery10MilliAmpere;
+        /*
+         * Write current data to array. If Capacity < 1, then values are not displayed
+         */
+        uint8_t tDeltaSOC = abs(JKComputedCapacity[0].StartSOC - tCurrentSOCPercent);
+        if (tDeltaSOC > 1) {
+            JKComputedCapacity[0].EndSOC = tCurrentSOCPercent;
+            uint16_t tCapacityComputationAccumulator10MilliAmpereHour = sCapacityComputationAccumulator10MilliAmpere
+                    / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 100);
+            JKComputedCapacity[0].Capacity = tCapacityComputationAccumulator10MilliAmpereHour / 100;
+            JKComputedCapacity[0].TotalCapacity = tCapacityComputationAccumulator10MilliAmpereHour / tDeltaSOC;
+// Direct 32 bit computation. It is 12 bytes longer
+//            JKComputedCapacity[0].Capacity = sCapacityComputationAccumulator10MilliAmpere / CAPACITY_ACCUMULATOR_1_AMPERE_HOUR;
+//            JKComputedCapacity[0].TotalCapacity = sCapacityComputationAccumulator10MilliAmpere
+//                    / ((CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 100) * tDeltaSOC);
+
+            if (sLastCapacityComputationDeltaSOC != tDeltaSOC) {
+                // Delta SOC changed by 1 -> print values
+                sLastCapacityComputationDeltaSOC = tDeltaSOC;
+                printComputedCapacity(0);
+            }
+        }
+
+#  if defined(LOCAL_DEBUG)
+        Serial.print(F("Mode="));
+        Serial.print(sCapacityComputationMode);
+        Serial.print(F(" CapAcc="));
+        Serial.println(sCapacityComputationAccumulator10MilliAmpere);
+#  endif
+        /*
+         * Check for wrong current direction. 0 mA is no direction :-)
+         */
+        if (tBattery10MilliAmpere > 0) {
+            sCapacityComputationWrongDirectionCount = 0;
+        } else if (tBattery10MilliAmpere < 0) {
+            sCapacityComputationWrongDirectionCount++;
+            if (sCapacityComputationWrongDirectionCount > CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION) {
+
+                if (JKComputedCapacity[0].Capacity != 0) {
+                    // process only if we have valid data
+                    Serial.println(
+                            F(
+                                    "More than " STR(CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION) " wrong current directions -> end capacity computation"));
+                    printComputedCapacity(0);
+                    checkAndStoreCapacityComputationValues();
+                }
+
+                /*
+                 * Reset capacity computation mode
+                 */
+                memset(&JKComputedCapacity, 0,
+                        (sizeof(JKComputedCapacity[0].StartSOC) + sizeof(JKComputedCapacity[0].EndSOC)
+                                + sizeof(JKComputedCapacity[0].Capacity) + sizeof(JKComputedCapacity[0].TotalCapacity)));
+//                JKComputedCapacity[0].StartSOC = 0;
+//                JKComputedCapacity[0].EndSOC = 0;
+//                JKComputedCapacity[0].Capacity = 0;
+//                JKComputedCapacity[0].TotalCapacity = 0;
+                sLastCapacityComputationDeltaSOC = 0;
+                sCapacityComputationMode = CAPACITY_COMPUTATION_MODE_IDLE;
+                sCapacityComputationAccumulator10MilliAmpere = 0;
+                sCapacityComputationWrongDirectionCount = 0;
+            }
+        }
+    }
+#endif // NO_INTERNAL_STATISTICS
 }
+
+#if !defined(NO_INTERNAL_STATISTICS)
+/*
+ * Print only valid data, i.e. Capacity != 0
+ */
+void printComputedCapacity(uint8_t aCapacityArrayIndex) {
+    if (JKComputedCapacity[aCapacityArrayIndex].Capacity != 0) {
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%u%% -> %u%% = %uAh => 100%% = %uAh"),
+                JKComputedCapacity[aCapacityArrayIndex].StartSOC, JKComputedCapacity[aCapacityArrayIndex].EndSOC,
+                JKComputedCapacity[aCapacityArrayIndex].Capacity, JKComputedCapacity[aCapacityArrayIndex].TotalCapacity);
+        Serial.println(sStringBuffer);
+    }
+}
+
+void checkAndStoreCapacityComputationValues() {
+    int8_t tDeltaSOC = JKComputedCapacity[0].StartSOC - JKComputedCapacity[0].EndSOC;
+    if (tDeltaSOC <= -40 || 40 <= tDeltaSOC) {
+        Serial.flush(); // TEST!!!!!
+//        JKComputedCapacity[3] = JKComputedCapacity[2];
+//        JKComputedCapacity[2] = JKComputedCapacity[1];
+//        JKComputedCapacity[1] = JKComputedCapacity[0];
+// substituted by memmove, requires 14 bytes more, but is more flexible
+        memmove(&JKComputedCapacity[1], &JKComputedCapacity[0],
+                ((sizeof(JKComputedCapacity[0].StartSOC) + sizeof(JKComputedCapacity[0].EndSOC)
+                        + sizeof(JKComputedCapacity[0].Capacity) + sizeof(JKComputedCapacity[0].TotalCapacity)))
+                        * (SIZE_OF_COMPUTED_CAPACITY_ARRAY - 1));
+
+        Serial.println(F("Store computed capacity"));
+        for (uint8_t i = 2; i < SIZE_OF_COMPUTED_CAPACITY_ARRAY; ++i) {
+            printComputedCapacity(i);
+        }
+    }
+}
+#endif // NO_INTERNAL_STATISTICS
+
 /*
  * Print formatted cell info on Serial
  */
@@ -589,17 +768,22 @@ void printVoltageProtectionInfo() {
     /*
      * Voltage protection
      */
-    myPrint(F("Battery Overvoltage Protection[mV]="), JKComputedData.BatteryFullVoltage10Millivolt * 10);
-    myPrintln(F(", Undervoltage="), swap(tJKFAllReply->BatteryUndervoltageProtection10Millivolt) * 10);
+    myPrint(F("Battery Overvoltage Protection[mV]="), (uint16_t) (JKComputedData.BatteryFullVoltage10Millivolt * 10));
+    myPrintln(F(", Undervoltage="), (uint16_t) (swap(tJKFAllReply->BatteryUndervoltageProtection10Millivolt) * 10));
+
     myPrintSwap(F("Cell Overvoltage Protection[mV]="), tJKFAllReply->CellOvervoltageProtectionMillivolt);
     myPrintSwap(F(", Recovery="), tJKFAllReply->CellOvervoltageRecoveryMillivolt);
     myPrintlnSwap(F(", Delay[s]="), tJKFAllReply->CellOvervoltageDelaySeconds);
+
     myPrintSwap(F("Cell Undervoltage Protection[mV]="), tJKFAllReply->CellUndervoltageProtectionMillivolt);
     myPrintSwap(F(", Recovery="), tJKFAllReply->CellUndervoltageRecoveryMillivolt);
     myPrintlnSwap(F(", Delay[s]="), tJKFAllReply->CellUndervoltageDelaySeconds);
+
     myPrintlnSwap(F("Cell Voltage Difference Protection[mV]="), tJKFAllReply->VoltageDifferenceProtectionMillivolt);
+
     myPrintSwap(F("Discharging Overcurrent Protection[A]="), tJKFAllReply->DischargeOvercurrentProtectionAmpere);
     myPrintlnSwap(F(", Delay[s]="), tJKFAllReply->DischargeOvercurrentDelaySeconds);
+
     myPrintSwap(F("Charging Overcurrent Protection[A]="), tJKFAllReply->ChargeOvercurrentProtectionAmpere);
     myPrintlnSwap(F(", Delay[s]="), tJKFAllReply->ChargeOvercurrentDelaySeconds);
     Serial.println();
@@ -612,13 +796,18 @@ void printTemperatureProtectionInfo() {
      */
     myPrintSwap(F("Power MosFet Temperature Protection="), tJKFAllReply->PowerMosFetTemperatureProtection);
     myPrintlnSwap(F(", Recovery="), tJKFAllReply->PowerMosFetRecoveryTemperature);
+
     myPrintSwap(F("Sensor1 Temperature Protection="), tJKFAllReply->Sensor1TemperatureProtection);
     myPrintlnSwap(F(", Recovery="), tJKFAllReply->Sensor1RecoveryTemperature);
+
     myPrintlnSwap(F("Sensor1 to Sensor2 Temperature Difference Protection="), tJKFAllReply->BatteryDifferenceTemperatureProtection);
+
     myPrintSwap(F("Charge Overtemperature Protection="), tJKFAllReply->ChargeOvertemperatureProtection);
     myPrintlnSwap(F(", Discharge="), tJKFAllReply->DischargeOvertemperatureProtection);
+
     myPrintSwap(F("Charge Undertemperature Protection="), tJKFAllReply->ChargeUndertemperatureProtection);
     myPrintlnSwap(F(", Recovery="), tJKFAllReply->ChargeRecoveryUndertemperature);
+
     myPrintSwap(F("Discharge Undertemperature Protection="), tJKFAllReply->DischargeUndertemperatureProtection);
     myPrintlnSwap(F(", Recovery="), tJKFAllReply->DischargeRecoveryUndertemperature);
     Serial.println();
@@ -634,13 +823,16 @@ void printBatteryInfo() {
     Serial.print(F("Manufacturer Id="));   // First 8 characters of the manufacturer id entered in the app field "User Private Data"
     tJKFAllReply->TokenProtocolVersionNumber = '\0'; // Set end of string token
     Serial.println(tJKFAllReply->ManufacturerId);
+
     Serial.print(F("Device ID String="));           // First 8 characters of ManufacturerId
     tJKFAllReply->TokenManufacturerDate = '\0';     // Set end of string token
     Serial.println(tJKFAllReply->DeviceIdString);
 
     myPrintln(F("Device Address="), tJKFAllReply->BoardAddress);
+
     myPrint(F("Total Battery Capacity[Ah]="), JKComputedData.TotalCapacityAmpereHour); // 0xAA
     myPrintln(F(", Low Capacity Alarm Percent="), tJKFAllReply->LowCapacityAlarmPercent); // 0xB1
+
     myPrintlnSwap(F("Charging Cycles="), tJKFAllReply->Cycles);
     myPrintlnSwap(F("Total Charging Cycle Capacity="), tJKFAllReply->TotalBatteryCycleCapacity);
     myPrintSwap(F("# Battery Cells="), tJKFAllReply->NumberOfBatteryCells); // 0x8A Total number of battery strings
@@ -652,9 +844,11 @@ void printBMSInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
     myPrintln(F("Protocol Version Number="), tJKFAllReply->ProtocolVersionNumber);
+
     Serial.print(F("Software Version Number="));
     tJKFAllReply->TokenStartCurrentCalibration = '\0'; // set end of string token
     Serial.println(tJKFAllReply->SoftwareVersionNumber);
+
     Serial.print(F("Modify Parameter Password="));
     tJKFAllReply->TokenDedicatedChargerSwitchState = '\0'; // set end of string token
     Serial.println(tJKFAllReply->ModifyParameterPassword);
@@ -699,14 +893,13 @@ void handleAndPrintAlarmInfo() {
         if (tJKFAllReply->AlarmUnion.AlarmsAsWord == 0) {
             sErrorStringForLCD = NULL; // reset error string
             sErrorStatusIsError = false;
-            Serial.println(F("All alarms are cleared"));
+            Serial.println(F("All alarms are cleared now"));
         } else {
             uint16_t tAlarms = swap(tJKFAllReply->AlarmUnion.AlarmsAsWord);
             Serial.println(F("*** ALARM FLAGS ***"));
-            Serial.print(F("Alarm bits=0x"));
-            Serial.print(tAlarms, HEX);
-            Serial.print(F(" | 0b"));
-            Serial.println(tAlarms, BIN);
+            Serial.print(sUpTimeString); // print uptime to have a timestamp for the alarm
+            Serial.print(F(": Alarm bits=0x"));
+            Serial.println(tAlarms, HEX);
 
             uint16_t tAlarmMask = 1;
             for (uint_fast8_t i = 0; i < NUMBER_OF_DEFINED_ALARM_BITS; ++i) {
@@ -765,7 +958,7 @@ void computeUpTimeString() {
         uint32_t tSystemWorkingMinutes = swap(sJKFAllReplyPointer->SystemWorkingMinutes);
 // 1 kByte for sprintf  creates string "1234D23H12M"
         sprintf_P(sUpTimeString, PSTR("%4uD%02uH%02uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
-                (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) tSystemWorkingMinutes % 60);
+                (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) (tSystemWorkingMinutes % 60));
         if (sLastUpTimeTenthOfMinuteCharacter != sUpTimeString[8]) {
             sLastUpTimeTenthOfMinuteCharacter = sUpTimeString[8];
             sUpTimeStringTenthOfMinuteHasChanged = true;
@@ -781,9 +974,14 @@ void computeUpTimeString() {
 void printJKDynamicInfo() {
     JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
 
+#if defined(ENABLE_MONITORING)
+    printMonitoringInfo();
+#endif
+
     /*
      * Print it every ten minutes
      */
+//    // Print it every minute
 //    if (sUpTimeStringMinuteHasChanged) {
 //        sUpTimeStringMinuteHasChanged = false;
     if (sUpTimeStringTenthOfMinuteHasChanged) {
@@ -796,7 +994,7 @@ void printJKDynamicInfo() {
 
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
-
+#if !defined(NO_INTERNAL_STATISTICS)
         if (sBalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
             Serial.println(F("*** CELL STATISTICS ***"));
             Serial.print(F("Total balancing time="));
@@ -810,6 +1008,7 @@ void printJKDynamicInfo() {
             Serial.println(tString);
             printJKCellStatisticsInfo();
         }
+#endif
 
 #if !defined(SUPPRESS_LIFEPO4_PLAUSI_WARNING)
         if (swap(tJKFAllReply->CellOvervoltageProtectionMillivolt) > 3450) {
@@ -873,8 +1072,10 @@ void printJKDynamicInfo() {
      * Charge, Discharge and Balancer flags
      */
     if (tJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive != lastJKReply.BMSStatus.StatusBits.ChargeMosFetActive
-            || tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive != lastJKReply.BMSStatus.StatusBits.DischargeMosFetActive
-            || tJKFAllReply->BMSStatus.StatusBits.BalancerActive != lastJKReply.BMSStatus.StatusBits.BalancerActive) {
+            || tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive != lastJKReply.BMSStatus.StatusBits.DischargeMosFetActive) {
+        /*
+         * This happens quite seldom!
+         */
         Serial.print(F("Charging MosFet"));
         printEnabledState(tJKFAllReply->ChargeIsEnabled);
         Serial.print(',');
@@ -883,13 +1084,66 @@ void printJKDynamicInfo() {
         printEnabledState(tJKFAllReply->DischargeIsEnabled);
         Serial.print(',');
         printActiveState(tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive);
-        Serial.print(F(" | Balancing"));
+        Serial.print(F(" | Balancing")); // including balancer state to be complete :-)
         printEnabledState(tJKFAllReply->BalancingIsEnabled);
         Serial.print(',');
         printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
         Serial.println(); // printActiveState does no println()
+    } else if (tJKFAllReply->BMSStatus.StatusBits.BalancerActive != lastJKReply.BMSStatus.StatusBits.BalancerActive) {
+        /*
+         * Only Balancer, since it happens very often
+         */
+        Serial.print(F("Balancing"));
+        printActiveState(tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
+        Serial.println(); // printActiveState does no println()
     }
 }
+
+#if defined(ENABLE_MONITORING)
+/*
+ * Prints all (cell voltages - 3000 mV), voltage, current, SOC in CSV format
+ * E.g. 185;185;186;185;185;206;185;214;183;185;201;186;186;186;185;186;5096;-565;54;1
+ *
+ */
+void setCSVString() {
+    JKReplyStruct *tJKFAllReply = sJKFAllReplyPointer;
+    /*
+     * Individual cell voltages
+     */
+    uint_fast8_t tBufferIndex = 0;
+
+//    for (uint8_t i = 0; i < JKConvertedCellInfo.ActualNumberOfCellInfoEntries; ++i) {
+    if (sizeof(sStringBuffer) > (5 * 16)) {
+        for (uint8_t i = 0; i < 16; ++i) { // only 16 fits into sStringBuffer[90]
+            // check for valid data, otherwise we will get a string buffer overflow
+            if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt > 2500) {
+                tBufferIndex += sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%d;"),
+                        (int16_t) (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt - 3000)); // difference may become negative
+            }
+        }
+    }
+
+    if ((uint_fast8_t) (tBufferIndex + 16) >= sizeof(sStringBuffer)) {
+        Serial.print(F("String buffer overflow, tBufferIndex="));
+        Serial.print(tBufferIndex);
+        Serial.print(F(" sizeof(sStringBuffer)="));
+        Serial.println(sizeof(sStringBuffer));
+        sStringBuffer[0] = '\0';
+    } else {
+        // maximal string 5096;-2000;100;1 -> 16 characters
+        sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%d;%d;%d"), JKComputedData.BatteryVoltage10Millivolt,
+                JKComputedData.Battery10MilliAmpere, tJKFAllReply->SOCPercent, tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
+    }
+}
+
+void printMonitoringInfo() {
+    setCSVString();
+
+    Serial.print(F("CSV: "));
+    Serial.println(sStringBuffer);
+}
+#endif
+
 #if defined(LOCAL_DEBUG)
 #undef LOCAL_DEBUG
 #endif

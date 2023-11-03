@@ -8,9 +8,9 @@
  *  Copyright (C) 2023  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
- *  This file is part of ArduinoUtils https://github.com/ArminJo/PVUtils.
+ *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
- *  Arduino-Utils is free software: you can redistribute it and/or modify
+ *  JK-BMSToPylontechCAN is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
@@ -95,6 +95,10 @@ struct PylontechCANAliveFrameStruct {
     } FrameData;
 };
 
+/*
+ * -Static data-
+ * Limits
+ */
 struct PylontechCANBatteryLimitsFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_LIMITS_FRAME_ID, 8 }; // 0x351
     struct {
@@ -111,6 +115,10 @@ struct PylontechCANBatteryLimitsFrameStruct {
     }
 };
 
+/*
+ * -Dynamic data-
+ * SOC value, SOH is fixed to 100%
+ */
 struct PylontechCANSohSocFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID, 4 }; // 0x355
     struct {
@@ -125,6 +133,9 @@ struct PylontechCANSohSocFrameStruct {
     }
 };
 
+/*
+ * -Dynamic data-
+ */
 struct PylontechCANCurrentValuesFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID, 6 }; // 0x356
     struct {
@@ -140,6 +151,10 @@ struct PylontechCANCurrentValuesFrameStruct {
     }
 };
 
+/*
+ * -Dynamic data-
+ * Errors and warnings
+ */
 struct PylontechCANErrorsWarningsFrameStruct {
     struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID, 7 }; // 0x359
     struct FrameDataStruct {
@@ -230,6 +245,7 @@ struct PylontechCANErrorsWarningsFrameStruct {
 };
 
 /*
+ * -Dynamic data-
  * ForceChargeRequestI / bit 5 is designed for inverter allows battery to shut down, and able to wake battery up to charge it.
  * ForceChargeRequestII / bit 4 is designed for inverter doesn`t want battery to shut down, able to charge battery before shut down to avoid low energy.
  * 2 bytes
@@ -275,6 +291,7 @@ struct PylontechCANBatteryRequesFrameStruct {
 };
 
 /*
+ * -Static data, no fill-
  * Character array DIYPYLON is not recognized by Deye, array PYLONDIY is recognized as PYLON
  */
 struct PylontechCANManufacturerFrameStruct {
@@ -284,7 +301,9 @@ struct PylontechCANManufacturerFrameStruct {
     } FrameData;
 };
 
+/**************** Extensions to the standard Pylontech protocol *************/
 /*
+ * -Static data-
  * Frame for total capacity for SMA - Sunny Island inverters
  * Description was found in: https://github.com/Uksa007/esphome-jk-bms-can/blob/main/docs/SMA%20CAN%20Protocol%20Mapping.pdf
  * and in UserManual9R_SMA.pdf of www.rec-bms.com
@@ -308,6 +327,7 @@ struct PylontechCANSMACapacityFrameStruct {
 };
 
 /*
+ * -Static data-
  * Frame for total capacity for Luxpower - SNA inverters
  * Description was found in: https://github.com/dfch/BydCanProtocol/tree/main
  */
