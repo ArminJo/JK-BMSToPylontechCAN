@@ -54,6 +54,29 @@ struct PylontechCANLuxpowerCapacityFrameStruct PylontechCANLuxpowerCapacityFrame
 struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
 struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
 
+/*
+ * User defined function to modify CAN data sent to inverter.
+ * Currently implemented is a function to reduce max current at high SOC level
+ */
+#if !defined(MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT)
+#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current
+#endif
+#if !defined(MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE)
+#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       10  // Value of current at 100 % SOC. Units are 100 mA!
+#endif
+void modifyCANData() {
+    if (sJKFAllReplyPointer->SOCPercent >= MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT) {
+        /*
+         * Reduce max current linear from 100% at MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD (80%) SOC
+         * to MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE (1A) at 100% SOC
+         */
+        PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere = map(sJKFAllReplyPointer->SOCPercent,
+                MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT, 100,
+                PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere,
+                MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE);
+    }
+}
+
 void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
     PylontechCANBatteryLimitsFrame.fillFrame(aJKFAllReply);
     PylontechCANSohSocFrame.fillFrame(aJKFAllReply);
@@ -65,6 +88,9 @@ void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
 #endif
 #if defined(LUXPOWER_EXTENSIONS)
     PylontechCANLuxpowerCapacityFrame.fillFrame(aJKFAllReply);
+#endif
+#if defined(CAN_DATA_MODIFICATION)
+    modifyCANData();
 #endif
 }
 

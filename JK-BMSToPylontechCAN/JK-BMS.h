@@ -59,7 +59,6 @@ extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to writ
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern bool sJKBMSFrameHasTimeout; // For sending CAN data
-extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 extern bool sErrorStatusJustChanged;
 extern bool sErrorStatusIsError;
 
@@ -191,6 +190,7 @@ struct JKComputedDataStruct {
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
+extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 
 /*
  * Only for documentation
@@ -244,7 +244,7 @@ struct JKReplyStruct {
     uint16_t Battery10Millivolt;
     uint8_t TokenCurrent;                   // 0x84
     // Current values start with 200mA at 240 mA real current -> 410 -> 620 -> 830mA@920mA real -> 1030@1080mA real -> 1.33 => Resolution is 0.21A
-    uint16_t Battery10MilliAmpere;          // Highest bit: 0=Discharge, 1=Charge -> depends on ProtocolVersionNumber
+    uint16_t Battery10MilliAmpere;          // Highest bit: 0=Discharge, 1=Charge -> depends on ProtocolVersionNumber. Maximal current is 327 A
     uint8_t TokenSOCPercent;                // 0x85
     uint8_t SOCPercent;                     // 0-100%
     uint8_t TokenNumberOfTemperatureSensors; // 0x86

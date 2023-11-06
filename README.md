@@ -28,7 +28,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105
 # Features
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Supports sending of total capayity for SMA and Luxpower inverters.
-- Display of BMS information, Cell voltages and alarms on a locally attached serial 2004 LCD.
+- Optional linear reducing maximum current above 80% SOC (values can be adated to your needs).
+- Display of BMS information, Cell voltages, statistics and alarms on a locally attached serial 2004 LCD.
 - Page button for switching 4 LCD display pages.
 - Debug output and extra CAN info page on long press of button.
 - Statistics of minimum and maximum cells during balancing to identify conspicuous cells.
@@ -194,6 +195,11 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
 | `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |
+| `SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or display of additional information on this page. |
+| | | |
+| `CAN_DATA_MODIFICATION` | disabled | If activated, it currently enables the function to reduce max current at high SOC level. |
+| `MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT` | 80 | Start SOC for linear reducing maximum current. |
+| `MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE` | 10 | Value of current at 100 % SOC. Units are 100 mA! |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
@@ -240,6 +246,10 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 2.4.0
+- Added optional user function to reduce max current at high SOC level.
+- Optional 3 digits cell voltage on LCD.
+
 ### Version 2.3.0
 - Added frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
 - Added frame 0x379 for total capacity as Luxpower extension, which is no problem for Deye inverters.

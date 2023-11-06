@@ -102,15 +102,20 @@
 #define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        5
 //#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
 const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
+//#define CAN_DATA_MODIFICATION                                           // Currently enables the function to reduce max current at high SOC level
+//#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current
+//#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       10  // Value of current at 100 % SOC. Units are 100 mA!
 
-#define VERSION_EXAMPLE "2.3.0"
+#define VERSION_EXAMPLE "2.4.0"
 
 //#define USE_NO_LCD                    // The code for the LCD display is deactivated
 #if !defined(USE_NO_LCD)
 //#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity.
 #endif
 
-#define ENABLE_MONITORING             // Write cell and current values CSV data to serial output
+//#define SHOW_SHORT_CELL_VOLTAGES        // Show cell voltage -3.0. This reduces the voltage string length from 4 to 3.
+
+#define ENABLE_MONITORING               // Write cell and current values CSV data to serial output
 #if defined(ENABLE_MONITORING)
 char sStringBuffer[90]; // for cvs lines, "Store computed capacity" line and LCD rows
 #elif !defined(NO_INTERNAL_STATISTICS)
