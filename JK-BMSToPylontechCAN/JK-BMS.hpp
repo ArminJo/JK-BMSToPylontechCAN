@@ -74,9 +74,13 @@ uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
 uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
 
 /*
- * The firt entry [0] holds the current computed value if more than 1 Ah are accumulated
+ * The first entry [0] holds the current computed value if more than 1 Ah are accumulated
  */
+#if defined(STANDALONE_TEST)
+struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY] = {{0,0,20,15,80,100},{10,55,99,10,40,42},{100,5,20,45,120,150}};
+#else
 struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY];
+#endif
 
 #define CAPACITY_COMPUTATION_MODE_IDLE                  0
 #define CAPACITY_COMPUTATION_MODE_CHARGE                1
@@ -603,11 +607,12 @@ void fillJKComputedData() {
          */
         if (tBattery10MilliAmpere < -100) {
             sCapacityComputationMode = CAPACITY_COMPUTATION_MODE_DISCHARGE;
-            JKComputedCapacity[0].StartSOC = tCurrentSOCPercent;
         } else if (tBattery10MilliAmpere > 100) {
             sCapacityComputationMode = CAPACITY_COMPUTATION_MODE_CHARGE;
-            JKComputedCapacity[0].StartSOC = tCurrentSOCPercent;
         }
+        JKComputedCapacity[0].Start100MilliVoltToFull = (JKComputedData.BatteryFullVoltage10Millivolt
+                - JKComputedData.BatteryVoltage10Millivolt) / 10;
+        JKComputedCapacity[0].StartSOC = tCurrentSOCPercent;
 #  if defined(LOCAL_DEBUG)
         Serial.print(F("Start capacity computation at SOC="));
         Serial.println(tCurrentSOCPercent);
@@ -629,6 +634,8 @@ void fillJKComputedData() {
         uint8_t tDeltaSOC = abs(JKComputedCapacity[0].StartSOC - tCurrentSOCPercent);
         if (tDeltaSOC > 1) {
             JKComputedCapacity[0].EndSOC = tCurrentSOCPercent;
+            JKComputedCapacity[0].End100MilliVoltToFull = (JKComputedData.BatteryFullVoltage10Millivolt
+                            - JKComputedData.BatteryVoltage10Millivolt) / 10;
             uint16_t tCapacityComputationAccumulator10MilliAmpereHour = sCapacityComputationAccumulator10MilliAmpere
                     / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 100);
             JKComputedCapacity[0].Capacity = tCapacityComputationAccumulator10MilliAmpereHour / 100;
@@ -672,9 +679,7 @@ void fillJKComputedData() {
                 /*
                  * Reset capacity computation mode
                  */
-                memset(&JKComputedCapacity, 0,
-                        (sizeof(JKComputedCapacity[0].StartSOC) + sizeof(JKComputedCapacity[0].EndSOC)
-                                + sizeof(JKComputedCapacity[0].Capacity) + sizeof(JKComputedCapacity[0].TotalCapacity)));
+                memset(&JKComputedCapacity, 0, sizeof(JKComputedCapacity[0]));
 //                JKComputedCapacity[0].StartSOC = 0;
 //                JKComputedCapacity[0].EndSOC = 0;
 //                JKComputedCapacity[0].Capacity = 0;
@@ -711,9 +716,7 @@ void checkAndStoreCapacityComputationValues() {
 //        JKComputedCapacity[1] = JKComputedCapacity[0];
 // substituted by memmove, requires 14 bytes more, but is more flexible
         memmove(&JKComputedCapacity[1], &JKComputedCapacity[0],
-                ((sizeof(JKComputedCapacity[0].StartSOC) + sizeof(JKComputedCapacity[0].EndSOC)
-                        + sizeof(JKComputedCapacity[0].Capacity) + sizeof(JKComputedCapacity[0].TotalCapacity)))
-                        * (SIZE_OF_COMPUTED_CAPACITY_ARRAY - 1));
+                sizeof(JKComputedCapacity[0]) * (SIZE_OF_COMPUTED_CAPACITY_ARRAY - 1));
 
         Serial.println(F("Store computed capacity"));
         for (uint8_t i = 2; i < SIZE_OF_COMPUTED_CAPACITY_ARRAY; ++i) {
@@ -1123,16 +1126,18 @@ void setCSVString() {
         }
     }
 
-    if ((uint_fast8_t) (tBufferIndex + 16) >= sizeof(sStringBuffer)) {
+    if ((uint_fast8_t) (tBufferIndex + 17) >= sizeof(sStringBuffer)) {
         Serial.print(F("String buffer overflow, tBufferIndex="));
         Serial.print(tBufferIndex);
         Serial.print(F(" sizeof(sStringBuffer)="));
         Serial.println(sizeof(sStringBuffer));
         sStringBuffer[0] = '\0';
     } else {
-        // maximal string 5096;-2000;100;1 -> 16 characters
-        sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%d;%d;%d"), JKComputedData.BatteryVoltage10Millivolt,
-                JKComputedData.Battery10MilliAmpere, tJKFAllReply->SOCPercent, tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
+        // maximal string 5096;-20.00;100;1 -> 17 characters
+        char tCurrentAsFloatString[7];
+        dtostrf(JKComputedData.BatteryLoadCurrentFloat, 4, 2, &tCurrentAsFloatString[0]);
+        tBufferIndex += sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%s;%d;%d"), JKComputedData.BatteryVoltage10Millivolt,
+                tCurrentAsFloatString, tJKFAllReply->SOCPercent, tJKFAllReply->BMSStatus.StatusBits.BalancerActive);
     }
 }
 
@@ -1142,7 +1147,7 @@ void printMonitoringInfo() {
     Serial.print(F("CSV: "));
     Serial.println(sStringBuffer);
 }
-#endif
+#endif // ENABLE_MONITORING
 
 #if defined(LOCAL_DEBUG)
 #undef LOCAL_DEBUG

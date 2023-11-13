@@ -103,8 +103,8 @@
 //#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
 const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
 //#define CAN_DATA_MODIFICATION                                           // Currently enables the function to reduce max current at high SOC level
-//#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current
-//#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       10  // Value of current at 100 % SOC. Units are 100 mA!
+//#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
+//#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
 
 #define VERSION_EXAMPLE "2.4.0"
 
@@ -115,13 +115,16 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 
 //#define SHOW_SHORT_CELL_VOLTAGES        // Show cell voltage -3.0. This reduces the voltage string length from 4 to 3.
 
+#if !defined(DISABLE_MONITORING)
 #define ENABLE_MONITORING               // Write cell and current values CSV data to serial output
+#endif
 #if defined(ENABLE_MONITORING)
 char sStringBuffer[90]; // for cvs lines, "Store computed capacity" line and LCD rows
 #elif !defined(NO_INTERNAL_STATISTICS)
 char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 #endif
-//#define USE_SD_CARD_FOR_MONITORING    // Write cell and current values CSV data to SD card into JK-BMS.CSV
+
+//#define USE_SD_CARD_FOR_MONITORING    // Write cell and current values CSV data to SD card into JK-BMS.CSV. Cannot be implemented on ATmega328 :-(.
 
 /*
  * Pin layout, may be adapted to your requirements
@@ -259,7 +262,7 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
  */
 #if defined(ENABLE_MONITORING)
 const char sCaption[] PROGMEM
-        = "Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing;";
+        = "Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing";
 
 #  if defined(USE_SD_CARD_FOR_MONITORING)
 #define CSV_DATA_8_3_FILENAME           "JK-BMS.CSV" // is anyway converted to uppercase

@@ -196,13 +196,18 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
 | `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |
 | `SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or display of additional information on this page. |
+| `DISABLE_MONITORING` | disabled | If activated, no cell and current values CSV data are written to serial output 
+. |
 | | | |
 | `CAN_DATA_MODIFICATION` | disabled | If activated, it currently enables the function to reduce max current at high SOC level. |
 | `MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT` | 80 | Start SOC for linear reducing maximum current. |
-| `MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE` | 10 | Value of current at 100 % SOC. Units are 100 mA! |
+| `MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE` | 50 | Value of current at 100 % SOC. Units are 100 mA! |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
+The CSV data have the caption:
+`Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing`
+Example data: `CSV: 270;262;271;271;271;269;270;271;266;266;266;266;265;262;265;265;5228;-22.56;71;1`
 <br/>
 
 # Libraries used

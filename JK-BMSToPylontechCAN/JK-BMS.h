@@ -136,7 +136,9 @@ extern uint32_t sBalancingCount;            // Count of active balancing in SECO
 
 struct JKComputedCapacityStruct {
     uint8_t StartSOC;
+    uint8_t Start100MilliVoltToFull; // 250 bytes program memory incl. display
     uint8_t EndSOC;
+    uint8_t End100MilliVoltToFull;
     uint16_t Capacity;
     uint16_t TotalCapacity;
 };

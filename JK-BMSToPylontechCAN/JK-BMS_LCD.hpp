@@ -82,12 +82,14 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #define JK_BMS_PAGE_BIG_INFO            3
 #define JK_BMS_PAGE_CAN_INFO            4 // If debug was pressed
 #define JK_BMS_PAGE_CAPACITY_INFO       5 // If debug was pressed
+#define CELL_CAPACITY_COUNTER_VOLTAGE   0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
+
 #define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
 #define JK_BMS_DEBUG_PAGE_MAX           JK_BMS_PAGE_CAPACITY_INFO
 #define JK_BMS_START_PAGE               JK_BMS_PAGE_BIG_INFO
 //uint8_t sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
 uint8_t sLCDDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
-uint8_t sCellStatisticsDisplayCounter;    // counter for CELL_STATISTICS_COUNTER_MASK, to determine max or min page
+uint8_t sToggleDisplayCounter;            // counter for CELL_STATISTICS_COUNTER_MASK, to determine max or min page
 #if !defined(ENABLE_MONITORING) && defined(NO_INTERNAL_STATISTICS)
 char sStringBuffer[LCD_COLUMNS + 1];      // For rendering a LCD row with sprintf_P()
 #endif
@@ -438,8 +440,8 @@ void printCellInfoOnLCD() {
  */
 void printCellStatisticsOnLCD() {
 // check if minimum or maximum is to be displayed
-    bool tDisplayCellMinimumStatistics = sCellStatisticsDisplayCounter & CELL_STATISTICS_COUNTER_MASK; // 0x04
-    sCellStatisticsDisplayCounter++;
+    bool tDisplayCellMinimumStatistics = sToggleDisplayCounter & CELL_STATISTICS_COUNTER_MASK; // 0x04
+    sToggleDisplayCounter++;
 
     auto tNumberOfCellInfoEntries = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
     uint_fast8_t tRowNumber;
@@ -502,18 +504,28 @@ void printCellStatisticsOnLCD() {
 
 /*
  * Display the last measured capacities
- * Long: "100%->30%=111  130Ah"
+ * Long: "100%->30%  111|130Ah"
  * Short: "99 30 111 "
  */
 void printCapacityInfoOnLCD() {
     if (JKComputedCapacity[0].Capacity == 0 && JKComputedCapacity[1].Capacity == 0) {
         myLCD.print(F("No capacity computed"));
     } else {
+        // check if minimum or maximum is to be displayed
+        bool tDisplayDeltaVoltages = (sToggleDisplayCounter & CELL_CAPACITY_COUNTER_VOLTAGE) == CELL_CAPACITY_COUNTER_VOLTAGE; // 0x06
+        sToggleDisplayCounter++;
         for (uint8_t i = 0; i < LCD_ROWS; ++i) {
             if (JKComputedCapacity[i].Capacity != 0) {
                 myLCD.setCursor(0, i);
-                snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%2d%%->%2d%%=%3u  %3uAh"), JKComputedCapacity[i].StartSOC,
-                        JKComputedCapacity[i].EndSOC, JKComputedCapacity[i].Capacity, JKComputedCapacity[i].TotalCapacity);
+                if (tDisplayDeltaVoltages) {
+                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%1u.%1u->%1u.%1umV %3u|%3uAh"),
+                            JKComputedCapacity[i].Start100MilliVoltToFull / 10, JKComputedCapacity[i].Start100MilliVoltToFull % 10,
+                            JKComputedCapacity[i].End100MilliVoltToFull / 10, JKComputedCapacity[i].End100MilliVoltToFull % 10,
+                            JKComputedCapacity[i].Capacity, JKComputedCapacity[i].TotalCapacity);
+                } else {
+                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%2d%%->%2d%%  %3u|%3uAh"), JKComputedCapacity[i].StartSOC,
+                            JKComputedCapacity[i].EndSOC, JKComputedCapacity[i].Capacity, JKComputedCapacity[i].TotalCapacity);
+                }
                 myLCD.print(sStringBuffer);
             }
         }
@@ -851,10 +863,12 @@ void checkButtonPressForLCD() {
                         bigNumberLCD._createChar(2, bigNumbersBottomBlock);
 
                         // Prepare for statistics page here display max first but for half the regular time
-                        sCellStatisticsDisplayCounter = (CELL_STATISTICS_COUNTER_MASK >> 1) - 1;
+                        sToggleDisplayCounter = (CELL_STATISTICS_COUNTER_MASK >> 1) - 1;
 
                     } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
                         bigNumberLCD.begin(); // Creates custom character used for generating big numbers
+                    } else if (tDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+                        sToggleDisplayCounter = 0;
                     }
                 }
                 setDisplayPage(tDisplayPageNumber);
