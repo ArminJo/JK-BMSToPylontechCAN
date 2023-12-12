@@ -17,7 +17,7 @@ Display of many BMS information and alarms on a locally attached serial 2004 LCD
 <br/>
 
 Based on https://github.com/syssi/esphome-jk-bms and https://github.com/maxx-ukoo/jk-bms2pylontech.<br/>
-The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105200 Bit/s.
+The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115200 Bit/s.
 
 </div>
 
@@ -56,7 +56,7 @@ If CAN communications breaks, the inverter may use different values for controll
 # Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info page  with difference voltage between<br/>actual and 100% voltage and display of<br/>"C"harging "D"ischarging and "B"alancing<br/>active flags | Overview page |
+| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between maximum and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page |
 | :-: | :-: |
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Cell info page with maximum and minimum indicators |  Overview / Error page with start of error message in first line |
@@ -100,21 +100,28 @@ Keep in mind that programming will fail if JK-BMS is connected and switched off.
 The standard **TX** of the Arduino is used for Serial.print() for monitoring and debugging. The short **request to JK-BMS is sent by `SoftwareSerialTX` using pin 4**.<br/>
 If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to **swap the lines for RX and TX (pin 4)** on the Uno / Nano.
 
-Power is taken from the second battery, because reliable buck converters for 55V are hard to find. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.
+**Power** is taken from an USB power supply connected to the Nano. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.<br/>
+Optionally, power can be taken from the second battery, but then you may require an external 5V regulator. My built in regulator broke 2 times (with LCD connected).<br/>
+Or use a reliable buck converters for 55V, but they may be hard to find.
+
 
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `0` or `PYLON`.
 
 ```
-                                            78L05        Schottky diode - From Uno / Nano 5 V
-                                             ___                          to enable powering CAN
- External 6.6 V from Battery #2 >--o--------|___|-------o--|<|-< Uno 5V   module by Nano USB,
-                                   |          |         |                 if battery is not attached
-  __________ Schottky diode    ____|____     ---    ____|____             _________
- |        TX|----|<|-- RX --->|RX Vin   |<-- SPI ->|   5V    |           |         |
- |        RX|<-------- TX ----|4  Uno/  |          | MCP2515 |           |         |
- |  JK-BMS  |                 |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
- |          |<------- GND --->|         |<-- GND-->|         |           |         |
- |__________|                 |_________|          |_________|           |_________|
+ ALTERNATIVE EXTERNAL POWER SUPPLY:
+                                          78L05    Optional Schottky diode - From Uno/Nano 5 V
+                                           ___                         to enable powering CAN
+ Optional 6.6 V from Battery #2 >-o-------|___|-------o-|<|-< Uno 5V   module by Nano USB, if
+                                  |         |         |                battery is not attached
+                                  |        ---        |
+ . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+                                  |                   |
+  __________ Schottky diode   ____|____           ____|____             _________
+ |        TX|>---|<|-- RX -->|RX Vin   |<- SPI ->|   5V    |           |         |
+ |        RX|<-------- TX --<|4  Uno/  |         | MCP2515 |           |         |
+ |  JK-BMS  |                |   Nano  |         |   CAN   |<-- CAN -->|  DEYE   |
+ |          |<------- GND -->|         |<- GND ->|         |           |         |
+ |__________|                |_________|         |_________|           |_________|
 
 
 
