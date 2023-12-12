@@ -46,6 +46,8 @@
  *  Based on https://github.com/syssi/esphome-jk-bms and https://github.com/maxx-ukoo/jk-bms2pylontech
  *  Tested with SUN-5K-SG03LP1-EU
  *
+ *  Available as Wokwi example https://wokwi.com/projects/371657348012321793
+ *
  *  Copyright (C) 2023  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
@@ -68,25 +70,30 @@
  * # Connection schematic
  * A schottky diode is inserted into the RX line to allow programming the AVR with the JK-BMS still connected.
  *
- *                                             ___ 78L05    Schottky diode
- * External 6.6 V from Battery #2 >--o--------|___|-------o----|<|---O From Uno / Nano 5 V to avoid
- *                                   |          |         | 5V         parasitic supply of CAN module
- *  __________ Schottky diode    ____|____     ---    ____|____             _________
- * |        TX|----|<|-- RX --->|RX Vin   |<-- SPI ->|   5V    |           |         |
- * |        RX|<-------- TX ----|4  Uno/  |          | MCP2515 |           |         |
- * |  JK-BMS  |                 |   Nano  |          |   CAN   |<-- CAN -->|  DEYE   |
- * |          |<------- GND --->|         |<-- GND-->|         |           |         |
- * |__________|                 |_________|          |_________|           |_________|
+ * ALTERNATIVE EXTERNAL POWER SUPPLY:
+ *                                          78L05    Optional Schottky diode - From Uno/Nano 5 V
+ *                                           ___                         to enable powering CAN
+ * Optional 6.6 V from Battery #2 >-o-------|___|-------o-|<|-< Uno 5V   module by Nano USB, if
+ *                                  |         |         |                battery is not attached
+ *                                  |        ---        |
+ * . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ *                                  |                   |
+ *  __________ Schottky diode   ____|____           ____|____             _________
+ * |        TX|>---|<|-- RX -->|RX Vin   |<- SPI ->|   5V    |           |         |
+ * |        RX|<-------- TX --<|4  Uno/  |         | MCP2515 |           |         |
+ * |  JK-BMS  |                |   Nano  |         |   CAN   |<-- CAN -->|  DEYE   |
+ * |          |<------- GND -->|         |<- GND ->|         |           |         |
+ * |__________|                |_________|         |_________|           |_________|
  *
- * # UART-TTL socket (4 Pin, JST 1.25mm pitch)
+ * # Connection diagram for JK-BMS GPS / UART-TTL socket (4 Pin, JST 1.25mm pitch)
  *  ___ ________ ___
  * |                |
  * | O   O   O   O  |
  * |GND  RX  TX VBAT|
  * |________________|
  *   |   |   |
- *   |   |   --|>|-- RX of Uno / Nano
- *   |   ----------- D4 (or other)
+ *   |   |   --|<|-- RX of Uno / Nano
+ *   |   ----------- D4 (or other pin, if specified)
  *   --------------- GND
  */
 
@@ -152,7 +159,7 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 //#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
 #endif
 
-//#define STANDALONE_TEST
+//#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 
 //#define TIMING_TEST
 #define TIMING_TEST_PIN             7
