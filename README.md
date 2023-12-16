@@ -17,7 +17,7 @@ Display of many BMS information and alarms on a locally attached serial 2004 LCD
 <br/>
 
 Based on https://github.com/syssi/esphome-jk-bms and https://github.com/maxx-ukoo/jk-bms2pylontech.<br/>
-The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 105200 Bit/s.
+The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115200 Bit/s.
 
 </div>
 
