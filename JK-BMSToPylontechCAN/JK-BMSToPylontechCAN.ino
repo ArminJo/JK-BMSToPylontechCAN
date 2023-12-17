@@ -120,7 +120,7 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 //#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity.
 #endif
 
-//#define SHOW_SHORT_CELL_VOLTAGES        // Show cell voltage -3.0. This reduces the voltage string length from 4 to 3.
+//#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
 
 #if !defined(DISABLE_MONITORING)
 #define ENABLE_MONITORING               // Write cell and current values CSV data to serial output
@@ -138,7 +138,6 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
  */
 #define BUZZER_PIN                 A2 // To signal errors
 #define PAGE_BUTTON_PIN             2 // Just for documentation
-#define DEBUG_PIN                   3 // Just for documentation. If pressed, print additional info and switch to LCD CAN page.
 // The standard RX of the Arduino is used for the JK_BMS connection.
 #define JK_BMS_RX_PIN               0 // We use the Serial RX pin. Not used in program, only for documentation
 #if !defined(JK_BMS_TX_PIN)           // Allow override by global symbol
@@ -158,6 +157,13 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 #define SPI_CS_PIN                  9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
 //#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
 #endif
+
+// BMS and CAN communication status LEDs
+#if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
+#define BMS_COMMUNICATION_STATUS_LED_PIN    6
+#define CAN_COMMUNICATION_STATUS_LED_PIN    7
+#endif
+//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated
 
 //#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 
@@ -360,7 +366,10 @@ void setup() {
 //    pinMode(LED_BUILTIN, OUTPUT);
 //    digitalWrite(LED_BUILTIN, LOW);
 
-    pinMode(DEBUG_PIN, INPUT_PULLUP);
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+    pinMode(BMS_COMMUNICATION_STATUS_LED_PIN, OUTPUT);
+    pinMode(CAN_COMMUNICATION_STATUS_LED_PIN, OUTPUT);
+#endif
 #if defined(TIMING_TEST)
     pinMode(TIMING_TEST_PIN, OUTPUT);
 #endif
@@ -514,6 +523,17 @@ void loop() {
     processReceivedData(); // for statistics
     printBMSDataOnLCD(); // for switching between MAX and MIN display
     delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS); // do it simple :-)
+
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+    digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+    delay(20); // do it simple :-)
+    digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
+    delay(20); // do it simple :-)
+    digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+    delay(20); // do it simple :-)
+    digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
+#endif
+
 #else
     /*
      * Get reply from BMS and check timeout
@@ -527,7 +547,13 @@ void loop() {
                 /*
                  * Frame completely received, now process it
                  */
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+                digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+#endif
                 processJK_BMSStatusFrame(); // Process the complete receiving of the status frame and set the appropriate flags
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+                digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn off status LED
+#endif
             }
 #  if defined(TIMING_TEST)
             digitalWriteFast(TIMING_TEST_PIN, LOW);
@@ -552,11 +578,16 @@ void loop() {
     if (sCANDataIsInitialized && !JKComputedData.BMSIsStarting
             && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
-
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+        digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+#endif
         if (sDebugModeActivated) {
             Serial.println(F("Send CAN"));
         }
         sendPylontechAllCANFrames(sDebugModeActivated);
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+        digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn off status LED
+#endif
     }
 
     /*

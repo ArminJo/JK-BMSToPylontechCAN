@@ -77,7 +77,7 @@ uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BET
  * The first entry [0] holds the current computed value if more than 1 Ah are accumulated
  */
 #if defined(STANDALONE_TEST)
-struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY] = {{0,0,20,15,80,100},{10,55,99,10,40,42},{100,5,20,45,120,150}};
+struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY] = {{0,0,20,15,80,100},{10,55,99,10,40,42},{100,5,20,45,120,150},{20,45,100,5,120,150}};
 #else
 struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY];
 #endif
@@ -87,7 +87,7 @@ struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARR
 #define CAPACITY_COMPUTATION_MODE_DISCHARGE             2
 #define CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION 4 // If we have 5 wrong directions, we end computation
 /*
- * 100 is factorfor 10 mA to 1 A
+ * 100 is factor for 10 mA to 1 A
  * 60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS is number of samples in 1 hour
  */
 #define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000

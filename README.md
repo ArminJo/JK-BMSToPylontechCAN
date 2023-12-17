@@ -23,17 +23,18 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 
 #### If you find this program useful, please give it a star.
 
+&#x1F30E; [Google Translate](https://translate.google.com/translate?sl=en&u=https://github.com/ArminJo/JK-BMSToPylontechCAN)
+
 <br/>
 
 # Features
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Supports sending of total capayity for SMA and Luxpower inverters.
-- Optional linear reducing maximum current above 80% SOC (values can be adated to your needs).
-- Display of BMS information, Cell voltages, statistics and alarms on a locally attached serial 2004 LCD.
-- Page button for switching 4 LCD display pages.
-- Debug output and extra CAN info page on long press of button.
-- Statistics of minimum and maximum cells during balancing to identify conspicuous cells.
-- Realtime monitoring of some CAN data sent by long button press.
+- Optional linear **reducing maximum current above 80% SOC** (values can be adapted to your needs).
+- Display of BMS information, Cell voltages, statistics and alarms on a locally attached **serial 2004 LCD**.
+- Page button for switching **5 LCD display pages**.
+- Debug output and extra **CAN info** and **Capacity info page** on long press of button.
+- Statistics of minimum and maximum cells during balancing to **identify conspicuous cells**.
 - Switch off LCD backlight after timeout (can be disabled).
 - Beep on alarm and connection timeouts with selectable timeout.
 - Serial.print() function is still available for monitoring and debugging.
@@ -102,7 +103,7 @@ If you use the cable from the separate RS485 adapter of the JK-BMS and follow th
 
 **Power** is taken from an USB power supply connected to the Nano. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.<br/>
 Optionally, power can be taken from the second battery, but then you may require an external 5V regulator. My built in regulator broke 2 times (with LCD connected).<br/>
-Or use a reliable buck converters for 55V, but they may be hard to find.
+Or use the complete battery voltage for Nano supply, but a reliable buck converters for around 50 to 60 volt may be hard to find.
 
 
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `0` or `PYLON`.
@@ -261,6 +262,8 @@ This program uses the following libraries, which are already included in this re
 ### Version 2.4.0
 - Added optional user function to reduce max current at high SOC level.
 - Optional 3 digits cell voltage on LCD.
+- Support for communication status LED.
+- Internal capacity computing.
 
 ### Version 2.3.0
 - Added frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.

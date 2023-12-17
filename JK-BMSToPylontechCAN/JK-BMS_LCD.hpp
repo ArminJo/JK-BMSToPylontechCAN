@@ -363,7 +363,7 @@ void printCurrent4CharacterRightAlignedOnLCD() {
 void printCellInfoOnLCD() {
     uint_fast8_t tRowNumber;
     auto tNumberOfCellInfoEntries = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
-    //#define SHOW_SHORT_CELL_VOLTAGES        // Show cell voltage -3.0. This reduces the voltage string length from 4 to 3.
+//#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
 #if defined(SHOW_SHORT_CELL_VOLTAGES)
     if (tNumberOfCellInfoEntries > 15) {
         tRowNumber = 0;
