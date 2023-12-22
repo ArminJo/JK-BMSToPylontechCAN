@@ -66,6 +66,8 @@ If CAN communications breaks, the inverter may use different values for controll
 | ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
 | CAN info page |  |
 | ![CAN info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
+| Capacity Statistics page percentages | Capacity Statistics page voltages |
+| ![Percentage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsPercentagePage.png) | ![Voltage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsVoltagePage.png)  |
 
 
 <br/>
@@ -101,9 +103,9 @@ Keep in mind that programming will fail if JK-BMS is connected and switched off.
 The standard **TX** of the Arduino is used for Serial.print() for monitoring and debugging. The short **request to JK-BMS is sent by `SoftwareSerialTX` using pin 4**.<br/>
 If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to **swap the lines for RX and TX (pin 4)** on the Uno / Nano.
 
-**Power** is taken from an USB power supply connected to the Nano. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.<br/>
+**Power** is taken from an **USB power supply** connected to the Nano. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.<br/>
 Optionally, power can be taken from the second battery, but then you may require an external 5V regulator. My built in regulator broke 2 times (with LCD connected).<br/>
-Or use the complete battery voltage for Nano supply, but a reliable buck converters for around 50 to 60 volt may be hard to find.
+Or use the complete battery voltage for Nano supply and a buck converters for around 48 to 60 volt. But my test converter had an idle current of 6 mA (0.3 W), so I decided to stay with the USB power supply.
 
 
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `0` or `PYLON`.
@@ -200,6 +202,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `DISPLAY_ALWAYS_ON` | disabled | If activated, the display backlight is always on. This disables the value of `DISPLAY_ON_TIME_SECONDS`. |
 | `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
 | `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
+| `USE_NO_COMMUNICATION_STATUS_LEDS` | disabled | If activated, the code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
 | `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |

@@ -512,21 +512,21 @@ void printCellStatisticsOnLCD() {
 
 /*
  * Display the last measured capacities
- * Long: "100%->30%  111|130Ah"
- * Short: "99 30 111 "
+ * Percentage: "100%->30%  101 130Ah"
+ * Voltage: "0.5->4.5mV 101 130Ah"
  */
 void printCapacityInfoOnLCD() {
     if (JKComputedCapacity[0].Capacity == 0 && JKComputedCapacity[1].Capacity == 0) {
         myLCD.print(F("No capacity computed"));
     } else {
-        // check if minimum or maximum is to be displayed
+        // check if percentage or voltage is to be displayed
         bool tDisplayDeltaVoltages = (sToggleDisplayCounter & CELL_CAPACITY_COUNTER_VOLTAGE) == CELL_CAPACITY_COUNTER_VOLTAGE; // 0x06
         sToggleDisplayCounter++;
         for (uint8_t i = 0; i < LCD_ROWS; ++i) {
             if (JKComputedCapacity[i].Capacity != 0) {
                 myLCD.setCursor(0, i);
                 if (tDisplayDeltaVoltages) {
-                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%1u.%1u->%1u.%1umV %3u %3uAh"),
+                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%1u.%1uV->%1u.%1uV %3u %3uAh"),
                             JKComputedCapacity[i].Start100MilliVoltToFull / 10, JKComputedCapacity[i].Start100MilliVoltToFull % 10,
                             JKComputedCapacity[i].End100MilliVoltToFull / 10, JKComputedCapacity[i].End100MilliVoltToFull % 10,
                             JKComputedCapacity[i].Capacity, JKComputedCapacity[i].TotalCapacity);

@@ -163,7 +163,7 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 #define BMS_COMMUNICATION_STATUS_LED_PIN    6
 #define CAN_COMMUNICATION_STATUS_LED_PIN    7
 #endif
-//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated
+//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
 
 //#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 
