@@ -5,7 +5,7 @@
  * TODO The generated output does not correspond to the logs below and
  * published at https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
  *
- *  Copyright (C) 2023  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -54,6 +54,7 @@
 #define PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID   0x35C // Battery charge request flags
 #define PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID     0x35E // Manufacturer name ("PYLON")
 #define PYLON_CAN_BATTERY_SMA_CAPACITY_FRAME_ID     0x35F // Capacity for SMA Sunny Island inverters
+#define BYD_CAN_BATTERY_CELL_LIMITS_FRAME_ID        0x373 // Cell limits info frame from BYD battery
 #define PYLON_CAN_BATTERY_LUXPOWER_CAPACITY_FRAME_ID        0x379 // Capacity for Luxpower SNA inverters
 
 extern struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
@@ -64,32 +65,26 @@ extern struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFra
 extern struct PylontechCANAliveFrameStruct PylontechCANAliveFrameStruct;
 extern struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
 extern struct PylontechCANSMACapacityFrameStruct PylontechCANSMACapacityFrame;
+extern struct BYDCANCellLimitsFrameStruct BYDCANCellLimitsFrame;
 extern struct PylontechCANLuxpowerCapacityFrameStruct PylontechCANLuxpowerCapacityFrame;
 
-void fillPylontechCANBatteryLimitsFrame(struct JKReplyStruct *aJKFAllReply);
-void fillPylontechCANBatterySohSocFrame(struct JKReplyStruct *aJKFAllReply);
-void fillPylontechCANManufactureFrame(struct JKReplyStruct *aJKFAllReply);
-void fillPylontechCANBatteryRequesFrame(struct JKReplyStruct *aJKFAllReply);
-void fillPylontechCANErrors_WarningsFrame(struct JKReplyStruct *aJKFAllReply);
-void fillPylontechCANCurrentValuesFrame(struct JKReplyStruct *aJKFAllReply);
-
 void fillAllCANData(struct JKReplyStruct *aJKFAllReply);
-void sendPylontechAllCANFrames(bool aDebugModeActive);
+void sendAllCANFrames(bool aDebugModeActive);
 void modifyAllCanDataToInactive();
 
-struct PylontechCANFrameInfoStruct {
+struct CANFrameInfoStruct {
     // Both values will be statically initialized in each instance
-    uint16_t CANId;
-    uint8_t FrameLength;
+    const uint16_t CANId;
+    const uint8_t FrameLength;
 };
 
-struct PylontechCANFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo;
+struct CANFrameStruct {
+    struct CANFrameInfoStruct CANFrameInfo;
     LongLongUnion FrameData; // 8 byte
 };
 
 struct PylontechCANAliveFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_NETWORK_ALIVE_MSG_FRAME_ID, 8 }; // 0x305
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_NETWORK_ALIVE_MSG_FRAME_ID, 8 }; // 0x305
     struct {
         uint8_t AlivePacketArray[8] = { 33 };
     } FrameData;
@@ -100,7 +95,7 @@ struct PylontechCANAliveFrameStruct {
  * Limits
  */
 struct PylontechCANBatteryLimitsFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_LIMITS_FRAME_ID, 8 }; // 0x351
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_LIMITS_FRAME_ID, 8 }; // 0x351
     struct {
         int16_t BatteryChargeOvervoltage100Millivolt;       // 0 to 750
         int16_t BatteryChargeCurrentLimit100Milliampere;    // 0 to 5000
@@ -120,7 +115,7 @@ struct PylontechCANBatteryLimitsFrameStruct {
  * SOC value, SOH is fixed to 100%
  */
 struct PylontechCANSohSocFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID, 4 }; // 0x355
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_SOC_SOH_FRAME_ID, 4 }; // 0x355
     struct {
         uint16_t SOCPercent;
         uint16_t SOHPercent = 100; // fixed 100
@@ -137,7 +132,7 @@ struct PylontechCANSohSocFrameStruct {
  * -Dynamic data-
  */
 struct PylontechCANCurrentValuesFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID, 6 }; // 0x356
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_CURRENT_VALUES_U_I_T_FRAME_ID, 6 }; // 0x356
     struct {
         int16_t Voltage10Millivolt;        // 0 to 32767
         int16_t Current100Milliampere;      // -2500 to 2500
@@ -156,7 +151,7 @@ struct PylontechCANCurrentValuesFrameStruct {
  * Errors and warnings
  */
 struct PylontechCANErrorsWarningsFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID, 7 }; // 0x359
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_ERROR_WARNINGS_FRAME_ID, 7 }; // 0x359
     struct FrameDataStruct {
         // 0=off 1=on
         // Byte 0
@@ -251,7 +246,7 @@ struct PylontechCANErrorsWarningsFrameStruct {
  * 2 bytes
  */
 struct PylontechCANBatteryRequesFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID, 2 }; // 0x35C
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_CHARGE_REQUEST_FRAME_ID, 2 }; // 0x35C
     struct {
         bool :3; // unused
         // 0=off 1=Request
@@ -295,7 +290,7 @@ struct PylontechCANBatteryRequesFrameStruct {
  * Character array DIYPYLON is not recognized by Deye, array PYLONDIY is recognized as PYLON
  */
 struct PylontechCANManufacturerFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID, 8 }; // 0x35E
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_MANUFACTURER_FRAME_ID, 8 }; // 0x35E
     struct {
         char ManufacturerName[8] = { 'P', 'Y', 'L', 'O', 'N', ' ', ' ', ' ' };
     } FrameData;
@@ -303,14 +298,14 @@ struct PylontechCANManufacturerFrameStruct {
 
 /**************** Extensions to the standard Pylontech protocol *************/
 /*
- * -Static data-
+ * -Dynamic data-
  * Frame for total capacity for SMA - Sunny Island inverters
  * Description was found in: https://github.com/Uksa007/esphome-jk-bms-can/blob/main/docs/SMA%20CAN%20Protocol%20Mapping.pdf
  * and in UserManual9R_SMA.pdf of www.rec-bms.com
  * All values except CapacityAmpereHour are best guesses
  */
 struct PylontechCANSMACapacityFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_SMA_CAPACITY_FRAME_ID, 8 }; // 0x35F
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_SMA_CAPACITY_FRAME_ID, 8 }; // 0x35F
     struct {
         uint16_t CellChemistry = 0;
         uint8_t HardwareVersionLowByte = '0';
@@ -328,11 +323,35 @@ struct PylontechCANSMACapacityFrameStruct {
 
 /*
  * -Static data-
+ * BYD Cell Limits
+ */
+struct BYDCANCellLimitsFrameStruct {
+    struct CANFrameInfoStruct CANFrameInfo = { BYD_CAN_BATTERY_CELL_LIMITS_FRAME_ID, 8 }; // 0x373
+    struct {
+        uint16_t CellVoltageMinimumMilliVolt;       //
+        uint16_t CellVoltageMaximumMilliVolt;       //
+        uint16_t CellTemperatureMinimumKelvin;      //
+        uint16_t CellTemperatureMaximumKelvin;      //
+    } FrameData;
+    void fillFrame(struct JKReplyStruct *aJKFAllReply) {
+        FrameData.CellVoltageMinimumMilliVolt = swap(aJKFAllReply->CellUndervoltageProtectionMillivolt);
+        FrameData.CellVoltageMaximumMilliVolt = swap(aJKFAllReply->CellOvervoltageProtectionMillivolt);
+        FrameData.CellTemperatureMinimumKelvin =
+                min(swap(aJKFAllReply->ChargeUndertemperatureProtection), swap(aJKFAllReply->DischargeUndertemperatureProtection))
+                        + 273;
+        FrameData.CellTemperatureMaximumKelvin =
+                max(swap(aJKFAllReply->ChargeOvertemperatureProtection), swap(aJKFAllReply->DischargeOvertemperatureProtection))
+                        + 273;
+    }
+};
+
+/*
+ * -Dynamic data-
  * Frame for total capacity for Luxpower - SNA inverters
  * Description was found in: https://github.com/dfch/BydCanProtocol/tree/main
  */
 struct PylontechCANLuxpowerCapacityFrameStruct {
-    struct PylontechCANFrameInfoStruct PylontechCANFrameInfo = { PYLON_CAN_BATTERY_LUXPOWER_CAPACITY_FRAME_ID, 8 }; // 0x379
+    struct CANFrameInfoStruct CANFrameInfo = { PYLON_CAN_BATTERY_LUXPOWER_CAPACITY_FRAME_ID, 8 }; // 0x379
     struct {
         uint16_t CapacityAmpereHour;
         uint16_t Unknown1;

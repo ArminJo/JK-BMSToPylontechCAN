@@ -3,7 +3,7 @@
  *
  *  Contains LCD related variables and functions
  *
- *  Copyright (C) 2023  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -248,10 +248,7 @@ void printShortEnableFlagsOnLCD() {
 void printShortStateOnLCD() {
     if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm
             && !sJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
-        // we can replace C by F here
-        myLCD.print(' ');
-        myLCD.print('F');
-
+        myLCD.print(F(" F")); // Replace "F " by " F"
     } else {
         if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
             myLCD.print('F');
@@ -264,6 +261,7 @@ void printShortStateOnLCD() {
             myLCD.print(' ');
         }
     }
+
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive) {
         myLCD.print('D');
     } else {
@@ -271,6 +269,8 @@ void printShortStateOnLCD() {
     }
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
         myLCD.print('B');
+    } else {
+        myLCD.print(' ');
     }
 }
 
@@ -359,6 +359,11 @@ void printCurrent4CharacterRightAlignedOnLCD() {
 
 /*
  * We can display only up to 16 cell values on the LCD :-(
+ * Print Info in last 3 columns
+ *  SOC
+ *  Current
+ *  " A  " or " A B"
+ *  Voltage difference
  */
 void printCellInfoOnLCD() {
     uint_fast8_t tRowNumber;
@@ -379,17 +384,24 @@ void printCellInfoOnLCD() {
         if ((tNumberOfCellInfoEntries <= 16 && i % 4 == 0) || (tNumberOfCellInfoEntries > 16 && i % 5 == 0)) {
             if (tNumberOfCellInfoEntries <= 16) {
                 /*
-                 * Print current in the last 4 characters
+                 * Print info in last 3 columns
                  */
                 if (i == 4) {
+                    // print SOC
                     sprintf_P(sStringBuffer, PSTR("%3u%%"), sJKFAllReplyPointer->SOCPercent);
                     myLCD.print(sStringBuffer);
                 } else if (i == 8) {
+                    // Print current in the last 4 characters
                     printCurrent4CharacterRightAlignedOnLCD();
                 } else if (i == 12) {
-                    myLCD.print(F("   A"));
+                    // print " A  " or " A B"
+                    myLCD.print(F(" A "));
+                    if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                        myLCD.print('B');
+                    } else {
+                        myLCD.print(' ');
+                    }
                 }
-
             }
             myLCD.setCursor(0, tRowNumber);
             tRowNumber++;
@@ -408,6 +420,7 @@ void printCellInfoOnLCD() {
         myLCD.print(sStringBuffer);
     }
     if (tNumberOfCellInfoEntries <= 16) {
+        // print voltage difference
         myLCD.setCursor(17, 3);
         printVoltageDifference3CharactersOnLCD();
     }
@@ -655,8 +668,8 @@ void printCANInfoOnLCD() {
             myLCD.print(F("No BMS data received"));
         }
     } else {
-        PylontechCANFrameStruct *tCANFrameDataPointer =
-                reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame);
+        CANFrameStruct *tCANFrameDataPointer =
+                reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame);
         if (tCANFrameDataPointer->FrameData.ULong.LowLong == 0) {
             /*
              * Caption in row 1 and "No errors / warnings" in row 2

@@ -7,7 +7,7 @@
  * https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
  * https://www.skpang.co.uk/products/teensy-4-1-triple-can-board-with-240x240-ips-lcd
  *
- *  Copyright (C) 2023  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -49,6 +49,7 @@ struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
 // Extensions to the standard Pylontech protocol
 struct PylontechCANSMACapacityFrameStruct PylontechCANSMACapacityFrame;
 struct PylontechCANLuxpowerCapacityFrameStruct PylontechCANLuxpowerCapacityFrame;
+struct BYDCANCellLimitsFrameStruct BYDCANCellLimitsFrame;
 
 // Frames with fixed data
 struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
@@ -89,13 +90,16 @@ void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
 #if defined(LUXPOWER_EXTENSIONS)
     PylontechCANLuxpowerCapacityFrame.fillFrame(aJKFAllReply);
 #endif
+#if defined(BYD_EXTENSIONS)
+    BYDCANCellLimitsFrame.fillFrame(aJKFAllReply);
+#endif
 #if defined(CAN_DATA_MODIFICATION)
     modifyCANData();
 #endif
 }
 
-void sendPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
-    sendCANMessage(aPylontechCANFrame->PylontechCANFrameInfo.CANId, aPylontechCANFrame->PylontechCANFrameInfo.FrameLength,
+void sendCANFrame(struct CANFrameStruct *aPylontechCANFrame) {
+    sendCANMessage(aPylontechCANFrame->CANFrameInfo.CANId, aPylontechCANFrame->CANFrameInfo.FrameLength,
             aPylontechCANFrame->FrameData.UBytes);
 }
 
@@ -105,17 +109,17 @@ void sendPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
 void modifyAllCanDataToInactive() {
     PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere = 0;
     // Clear all requests in case of timeout / BMS switched off, before sending
-    reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame)->FrameData.UWords[0] = 0;
-    reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame)->FrameData.ULong.LowLong = 0;
+    reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame)->FrameData.UWords[0] = 0;
+    reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame)->FrameData.ULong.LowLong = 0;
 }
 
-void printPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) {
+void printCANFrame(struct CANFrameStruct *aPylontechCANFrame) {
     Serial.print(F("CANId=0x"));
-    Serial.print(aPylontechCANFrame->PylontechCANFrameInfo.CANId, HEX);
+    Serial.print(aPylontechCANFrame->CANFrameInfo.CANId, HEX);
     Serial.print(F(", FrameLength="));
-    Serial.print(aPylontechCANFrame->PylontechCANFrameInfo.FrameLength);
+    Serial.print(aPylontechCANFrame->CANFrameInfo.FrameLength);
     Serial.print(F(", Data=0x"));
-    for (uint_fast8_t i = 0; i < aPylontechCANFrame->PylontechCANFrameInfo.FrameLength; ++i) {
+    for (uint_fast8_t i = 0; i < aPylontechCANFrame->CANFrameInfo.FrameLength; ++i) {
         if (i != 0) {
             Serial.print(F(", 0x"));
         }
@@ -129,35 +133,41 @@ void printPylontechCANFrame(struct PylontechCANFrameStruct *aPylontechCANFrame) 
  * If no CAN receiver is attached, every frame is retransmitted once, because of the NACK error.
  * Or use CAN.writeRegister(REG_CANCTRL, 0x08); // One Shot Mode
  */
-void sendPylontechAllCANFrames(bool aDebugModeActive) {
+void sendAllCANFrames(bool aDebugModeActive) {
     if (aDebugModeActive) {
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSohSocFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANCurrentValuesFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANManufacturerFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSohSocFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANCurrentValuesFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANManufacturerFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANAliveFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
 #if defined(SMA_EXTENSIONS)
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSMACapacityFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSMACapacityFrame));
 #endif
 #if defined(LUXPOWER_EXTENSIONS)
-        printPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+#endif
+#if defined(BYD_EXTENSIONS)
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&BYDCANCellLimitsFrame));
 #endif
 
     }
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSohSocFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANCurrentValuesFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANManufacturerFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANBatteryRequestFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANAliveFrame));
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSohSocFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANCurrentValuesFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANManufacturerFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANAliveFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
 #if defined(SMA_EXTENSIONS)
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANSMACapacityFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSMACapacityFrame));
 #endif
 #if defined(LUXPOWER_EXTENSIONS)
-    sendPylontechCANFrame(reinterpret_cast<struct PylontechCANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+#endif
+#if defined(BYD_EXTENSIONS)
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&BYDCANCellLimitsFrame));
 #endif
 }
 

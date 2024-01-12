@@ -4,7 +4,7 @@
  * Functions to read, convert and print JK-BMS data
  *
  *
- *  Copyright (C) 2023  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -291,6 +291,10 @@ uint8_t swap(uint8_t aByte) {
 }
 
 uint16_t swap(uint16_t aWordToSwapBytes) {
+    return ((aWordToSwapBytes << 8) | (aWordToSwapBytes >> 8));
+}
+
+int16_t swap(int16_t aWordToSwapBytes) {
     return ((aWordToSwapBytes << 8) | (aWordToSwapBytes >> 8));
 }
 

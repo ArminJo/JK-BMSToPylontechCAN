@@ -128,7 +128,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
 
 
 
- # Connection diagram for JK-BMS GPS / UART-TTL socket (4 Pin, JST 1.25mm pitch)
+# Connection diagram for JK-BMS GPS / UART-TTL socket (4 Pin, JST 1.25mm pitch)
   ___ ________ ___
  |                |
  | O   O   O   O  |
@@ -140,18 +140,32 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
    --------------- GND
 
 
-  # Automatic brightness control for 2004 LCD
+# Automatic brightness control for 2004 LCD
    5V O------o------o
              |      |
             .-.     |
-            | |     |
         LDR | |     |
+            | |     |
             '-'     |
              |    |/
              o----|
                   |>
                     |
                     O To anode of LCD backlight
+
+Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
+
+  3.5V to 5V O------o------o Anode of LCD backlight
+             |
+            .-.
+   LDR with | |
+     high R | |     o Kathode of LCD backlight
+            '-'     |
+             |    |/
+             o----|
+                  |>
+                    |
+  GND O-------------o
 
 ```
 
@@ -207,7 +221,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
 | `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |
 | `SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or display of additional information on this page. |
-| `DISABLE_MONITORING` | disabled | If activated, no cell and current values CSV data are written to serial output 
+| `DISABLE_MONITORING` | disabled | If activated, no cell and current values CSV data are written to serial output
 . |
 | | | |
 | `CAN_DATA_MODIFICATION` | disabled | If activated, it currently enables the function to reduce max current at high SOC level. |
@@ -252,8 +266,10 @@ This program uses the following libraries, which are already included in this re
 <br/>
 
 ### Links:
-- https://www.kvaser.com/support/calculators/bit-timing-calculator/
-- https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
+- [CAN Bus Bit Timing Calculator](https://www.kvaser.com/support/calculators/bit-timing-calculator/)
+- [Pylontech US2000 / US3000 CAN reading and CAN replication](https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication)
+- [BYD Battery-Box Premium LVS B019 CAN Protocol](https://github.com/dfch/BydCanProtocol/tree/main)
+- [Ultimate Guide to LiFePO4 Voltage Chart](https://www.jackery.com/blogs/knowledge/ultimate-guide-to-lifepo4-voltage-chart)
 
 <br/>
 
@@ -267,6 +283,7 @@ This program uses the following libraries, which are already included in this re
 - Optional 3 digits cell voltage on LCD.
 - Support for communication status LED.
 - Internal capacity computing.
+- Added frame 0x373 for BYD style Cell limits.
 
 ### Version 2.3.0
 - Added frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
