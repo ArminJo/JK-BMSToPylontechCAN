@@ -103,18 +103,30 @@
  */
 #include <Arduino.h>
 
+#define VERSION_EXAMPLE "2.4.0"
+
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
  */
 #define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        5
 //#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
 const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
-//#define CAN_DATA_MODIFICATION                                           // Currently enables the function to reduce max current at high SOC level
+
+/*
+ * Macros for CAN data modifications
+ */
+//#define CAN_DATA_MODIFICATION         // Currently enables the function to reduce max current at high SOC level
+//#define USE_CCCV_MODIFY_FUNCTION      // Changes modification to CCCV method my Ngoc: https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/31
+//#define USE_OWN_MODIFY_FUNCTION       // Use (currently empty) function which must be filled in at bottom of Pylontech_CAN.hpp
+/*
+ * Values for standard data modification
+ */
 //#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
 //#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
 
-#define VERSION_EXAMPLE "2.4.0"
-
+/*
+ * LCD + statistics
+ */
 //#define USE_NO_LCD                    // The code for the LCD display is deactivated
 #if !defined(USE_NO_LCD)
 //#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity.

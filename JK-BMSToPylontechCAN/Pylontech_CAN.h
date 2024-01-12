@@ -324,6 +324,7 @@ struct PylontechCANSMACapacityFrameStruct {
 /*
  * -Static data-
  * BYD Cell Limits
+ * These data need to be updated every 5 minutes.
  */
 struct BYDCANCellLimitsFrameStruct {
     struct CANFrameInfoStruct CANFrameInfo = { BYD_CAN_BATTERY_CELL_LIMITS_FRAME_ID, 8 }; // 0x373
