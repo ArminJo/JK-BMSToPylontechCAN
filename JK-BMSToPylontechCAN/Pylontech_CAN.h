@@ -106,7 +106,7 @@ struct PylontechCANBatteryLimitsFrameStruct {
         FrameData.BatteryChargeOvervoltage100Millivolt = JKComputedData.BatteryFullVoltage10Millivolt / 10;
         FrameData.BatteryChargeCurrentLimit100Milliampere = swap(aJKFAllReply->ChargeOvercurrentProtectionAmpere) * 10;
         FrameData.BatteryDischargeCurrentLimit100Milliampere = swap(aJKFAllReply->DischargeOvercurrentProtectionAmpere) * 10;
-        FrameData.BatteryDischarge100Millivolt = swap(aJKFAllReply->BatteryUndervoltageProtection10Millivolt) / 10;
+        FrameData.BatteryDischarge100Millivolt = JKComputedData.BatteryEmptyVoltage10Millivolt / 10;
     }
 };
 
@@ -275,7 +275,7 @@ struct PylontechCANBatteryRequesFrameStruct {
             FrameData.ForceChargeRequestI = 0;
         }
         // If battery drops below lower voltage. See https://powerforum.co.za/topic/13587-battery-anomaly-on-synsynk-hybrid-inverter/
-        if (swap(aJKFAllReply->Battery10Millivolt) < swap(aJKFAllReply->BatteryUndervoltageProtection10Millivolt)) {
+        if (swap(aJKFAllReply->Battery10Millivolt) < JKComputedData.BatteryEmptyVoltage10Millivolt) {
             FrameData.ForceChargeRequestII = 1;
         } else {
             FrameData.ForceChargeRequestII = 0;

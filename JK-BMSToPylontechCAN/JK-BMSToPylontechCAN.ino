@@ -104,6 +104,7 @@
 #include <Arduino.h>
 
 #define VERSION_EXAMPLE "2.4.0"
+// For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN#revision-history
 
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
@@ -123,7 +124,6 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
  */
 //#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
 //#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
-
 /*
  * LCD + statistics
  */
@@ -200,7 +200,7 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 /*
  * Error beep behavior
  * Overvoltage error cannot be suppressed by a macro!
- * If no NO_BEEP_ON_ERROR, ONE_BEEP_ON_ERROR or MULTIPLE_BEEPS_WITH_TIMEOUT are activated, we beep forever until error vanishes.
+ * If NO NO_BEEP_ON_ERROR, ONE_BEEP_ON_ERROR or MULTIPLE_BEEPS_WITH_TIMEOUT are activated, we beep forever until error vanishes.
  */
 //#define NO_BEEP_ON_ERROR              // If activated, Do not beep on error or timeout.
 //#define ONE_BEEP_ON_ERROR             // If activated, only beep once if error was detected.
@@ -218,14 +218,14 @@ uint16_t sTimeoutFrameCounter = 0;      // Counts BMS frame timeouts, (every 2 s
  *
  * Button at INT0 / D2 for switching LCD pages
  */
-#define USE_BUTTON_0              // Enable code for 1. button at INT0 / D2
-#define BUTTON_DEBOUNCING_MILLIS 80 // With this you can adapt to the characteristic of your button. Default is 50.
-#define NO_BUTTON_RELEASE_CALLBACK  // Disables the code for release callback. This saves 2 bytes RAM and 64 bytes program memory.
+#define USE_BUTTON_0                 // Enable code for 1. button at INT0 / D2
+#define BUTTON_DEBOUNCING_MILLIS 100 // With this you can adapt to the characteristic of your button. Default is 50.
+#define NO_BUTTON_RELEASE_CALLBACK   // Disables the code for release callback. This saves 2 bytes RAM and 64 bytes program memory.
 #include "EasyButtonAtInt01.hpp"
 
 volatile bool sPageButtonJustPressed = false;
-void handlePageButtonPress(bool aButtonToggleState);     // The button press callback function sets just a flag.
-EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);   // Button is connected to INT0
+void handlePageButtonPress(bool aButtonToggleState);        // The button press callback function sets just a flag.
+EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);  // Button is connected to INT0
 #define LONG_PRESS_BUTTON_DURATION_MILLIS   1000
 bool sDebugModeActivated = false; // Is activated on long press
 void checkButtonPress();
@@ -282,6 +282,7 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
  * Optional LCD stuff
  */
 #if !defined(USE_NO_LCD)
+#define LCD_MESSAGE_PERSIST_TIME_MILLIS 2000
 #include "JK-BMS_LCD.hpp"
 #endif
 
@@ -289,9 +290,6 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
  * Optional SD card stuff
  */
 #if defined(ENABLE_MONITORING)
-const char sCaption[] PROGMEM
-        = "Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing";
-
 #  if defined(USE_SD_CARD_FOR_MONITORING)
 #define CSV_DATA_8_3_FILENAME           "JK-BMS.CSV" // is anyway converted to uppercase
 //#include "SdFat.h"
@@ -358,12 +356,13 @@ const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 
         0x00, 0x03, 0x99, 0x00, 0x05, 0x9A, 0x00, 0x05, 0x9B, 0x0C, 0xE4, 0x9C, 0x00, 0x08, 0x9D, 0x01, 0x9E, 0x00, 0x5A, 0x9F,
         0x00, 0x46, 0xA0, 0x00, 0x64, 0xA1, 0x00, 0x64, 0xA2, 0x00, 0x14, /*ChargeOvertemperature*/0xA3, 0x00, 0x46, /*DischargeOvertemperature*/
         0xA4, 0x00, 0x46, /*ChargeUndertemperature*/0xA5, 0xFF, 0xEC, 0xA6, 0xFF, 0xF6, /*DischargeUndertemperature*/0xA7, 0xFF,
-        0xEC, 0xA8, 0xFF, 0xF6, 0xA9, 0x0E, 0xAA, 0x00, 0x00, 0x01, 0x40, 0xAB, 0x01, 0xAC, 0x01, 0xAD, 0x04, 0x11, 0xAE, 0x01,
-        0xAF, 0x01, 0xB0, 0x00, 0x0A, 0xB1, 0x14, 0xB2, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x00, 0x00, 0x00, 0x00, 0xB3, 0x00,
-        0xB4, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0xB5, 0x32, 0x31, 0x30, 0x31, 0xB6, 0x00, 0x00, 0xE2, 0x00, 0xB7,
-        0x31, 0x31, 0x2E, 0x58, 0x57, 0x5F, 0x53, 0x31, 0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F, 0xB8, 0x00, 0xB9, 0x00, 0x00,
-        0x04, 0x00, 0xBA, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0x65, 0x72, 0x64, 0x61, 0x4A, 0x4B, 0x5F, 0x42, 0x32,
-        0x41, 0x32, 0x30, 0x53, 0x32, 0x30, 0x50, 0xC0, 0x01,
+        0xEC, 0xA8, 0xFF, 0xF6, 0xA9, 0x0E, /*TotalCapacityAmpereHour*/0xAA, 0x00, 0x00, 0x01, 0x40, 0xAB, 0x01, 0xAC, 0x01, 0xAD,
+        0x04, 0x11, 0xAE, 0x01, 0xAF, 0x01, 0xB0, 0x00, 0x0A, 0xB1, 0x14, 0xB2, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x00, 0x00,
+        0x00, 0x00, 0xB3, 0x00, 0xB4, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0xB5, 0x32, 0x31, 0x30, 0x31, 0xB6, 0x00,
+        0x00, 0xE2, 0x00, 0xB7, 0x31, 0x31, 0x2E, 0x58, 0x57, 0x5F, 0x53, 0x31, 0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F, 0xB8,
+        0x00, /*ActualBatteryCapacityAmpereHour*/
+        0xB9, 0x00, 0x00, 0x01, 0x30, 0xBA, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0x65, 0x72, 0x64, 0x61, 0x4A, 0x4B,
+        0x5F, 0x42, 0x32, 0x41, 0x32, 0x30, 0x53, 0x32, 0x30, 0x50, 0xC0, 0x01,
         /*Trailer*/
         0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x51, 0xC2 };
 
@@ -403,6 +402,12 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 #endif
 #if defined(NO_INTERNAL_STATISTICS)
     Serial.println(F("Statistics deactivated"));
+#else
+    findFirstSOCDataPointIndex();
+    Serial.print(F("EEPROM SOC data start index="));
+    Serial.print(SOCDataPointsInfo.ArrayStartIndex);
+    Serial.print(F(" length="));
+    Serial.println(SOCDataPointsInfo.ArrayLength);
 #endif
 
     tone(BUZZER_PIN, 2200, 50);
@@ -417,7 +422,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
      * 115200 baud soft serial to JK-BMS. For serial from BMS we use the hardware Serial RX.
      */
     TxToJKBMS.begin(115200);
-    Serial.println(F("Serial to JK-BMS started with 115200 bit/s!"));
+    Serial.println(F("Serial to JK-BMS started with 115.200 kbit/s!"));
 #if defined(USE_SERIAL_2004_LCD)
     if (sSerialLCDAvailable) {
         myLCD.setCursor(0, 2);
@@ -434,7 +439,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("CAN started"));
-            delay(4000); // To see the info
+            delay( 2 * LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the info
         }
 #endif
     } else {
@@ -444,9 +449,9 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
             myLCD.setCursor(0, 3);
             myLCD.print(F("Starting CAN failed!"));
 #  if defined(STANDALONE_TEST)
-            delay(2000);
+            delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 #  else
-            delay(8000); // To see the info
+            delay(4 * LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the info
 #  endif
         }
 #endif
@@ -504,6 +509,30 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     lastJKReply.AlarmUnion.AlarmsAsWord = sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
     lastJKReply.BMSStatus.StatusAsWord = sJKFAllReplyPointer->BMSStatus.StatusAsWord;
     lastJKReply.SystemWorkingMinutes = sJKFAllReplyPointer->SystemWorkingMinutes;
+
+    if (eeprom_read_byte(&SOCDataPointsEEPROMArray[2].SOCPercent) == 0xFF) {
+        // If EEPROM empty, fill in some values
+        int8_t tIncrement = -1;
+        for (int i = 0; i < 259; ++i) { // 258 will fill up 256 entries
+            sJKFAllReplyPointer->SOCPercent += tIncrement;
+            JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt += tIncrement * 4;
+
+            for (int j = 0; j < (i + 4) * 10; ++j) { // 320 corresponds to 2 Ah
+                writeSOCData();
+            }
+            if (sJKFAllReplyPointer->SOCPercent == 0 || sJKFAllReplyPointer->SOCPercent == 100) {
+                // reverse values at 0
+                JKComputedData.Battery10MilliAmpere = -JKComputedData.Battery10MilliAmpere;
+                tIncrement = -tIncrement;
+            }
+        }
+        findFirstSOCDataPointIndex();
+        Serial.print(F("SOC data start index="));
+        Serial.print(SOCDataPointsInfo.ArrayStartIndex);
+        Serial.print(F(" length="));
+        Serial.println(SOCDataPointsInfo.ArrayLength);
+    }
+
     doStandaloneTest();
 #endif
 }
@@ -834,9 +863,13 @@ void printReceivedData() {
         sStaticInfoWasSent = true;
         printJKStaticInfo();
     }
-    printJKDynamicInfo();
 #if defined(USE_SERIAL_2004_LCD)
+    if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
+        printJKDynamicInfo(); // do not interfere with plotter output
+    }
     printBMSDataOnLCD();
+#else
+    printJKDynamicInfo();
 #endif
 }
 
@@ -876,7 +909,7 @@ void doStandaloneTest() {
 #  if defined(LCD_PAGES_TEST)
     if (sSerialLCDAvailable) {
         testLCDPages();
-        delay(2000);
+        delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 #    if defined(BIG_NUMBER_TEST)
         testBigNumbers();
 #    endif

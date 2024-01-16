@@ -38,10 +38,13 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Switch off LCD backlight after timeout (can be disabled).
 - Beep on alarm and connection timeouts with selectable timeout.
 - Serial.print() function is still available for monitoring and debugging.
+- SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
+
+**If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
-**The MCP2515 / TJA1050 kit for Arduino must be supplied by an extra 5 V regulator, because the Arduino-Nano internal regulator cannot provide more than 100 mA and got defect on my site after a few days.**
+**The MCP2515 / TJA1050 kit for Arduino may be supplied by an extra 5 V regulator. My Arduino-Nano internal regulator cannot provide more than 100 mA and got defect on my site after a few days.**
 
 **By default, the program sends a request to force charge the battery if SOC is below 5 %. This can be adapted by changing the line `#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I 5`.**
 
@@ -54,10 +57,19 @@ If CAN communications breaks, the inverter may use different values for controll
 
 <br/>
 
+# SOC graph for a 16S LiFePO4 battery
+Created by attaching Arduio 1.8 Serial Plotter and then doing a long button press followed by a single one to enter the statistics page.<br/>
+The [log](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCData.log), containing the numerical data for this graph is in folder extras.<br/>
+Here you see the steep voltage graph below around 15 % SOC, which means that this may be too much discharging for the battery.<br/>
+The values of Delta_capacity are always clipped to + 100 and - 30 for printing.
+
+![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCData.png)
+
+
 # Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between maximum and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page |
+| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page |
 | :-: | :-: |
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Cell info page with maximum and minimum indicators |  Overview / Error page with start of error message in first line |
@@ -68,7 +80,6 @@ If CAN communications breaks, the inverter may use different values for controll
 | ![CAN info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
 | Capacity Statistics page percentages | Capacity Statistics page voltages |
 | ![Percentage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsPercentagePage.png) | ![Voltage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsVoltagePage.png)  |
-
 
 <br/>
 
@@ -284,6 +295,7 @@ This program uses the following libraries, which are already included in this re
 - Support for communication status LED.
 - Internal capacity computing.
 - Added frame 0x373 for BYD style Cell limits.
+- SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page.
 
 ### Version 2.3.0
 - Added frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.

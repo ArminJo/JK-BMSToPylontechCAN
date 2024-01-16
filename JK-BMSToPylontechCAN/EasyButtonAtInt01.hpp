@@ -15,7 +15,7 @@
  *  #include "EasyButtonAtInt01.hpp"
  *  EasyButton Button0AtPin2(true);
  *
- *  Copyright (C) 2018-2022  Armin Joachimsmeyer
+ *  Copyright (C) 2018-2024  Armin Joachimsmeyer
  *  armin.joachimsmeyer@gmail.com
  *
  *  This file is part of EasyButtonAtInt01 https://github.com/ArminJo/EasyButtonAtInt01.
@@ -340,7 +340,9 @@ void EasyButton::init(bool aIsButtonAtINT0) {
 }
 
 /*
- * Negative logic for readButtonState() true means button pin is LOW, if button is active low (default)
+ * if NOT defined BUTTON_IS_ACTIVE_HIGH we have negative logic for readButtonState()!
+ * In this case BUTTON_IS_ACTIVE (true) means button pin is LOW
+ * @return BUTTON_IS_ACTIVE (true) or BUTTON_IS_INACTIVE (false)
  */
 bool EasyButton::readButtonState() {
 #if defined(USE_BUTTON_0) && not defined(USE_BUTTON_1)
@@ -384,11 +386,14 @@ bool EasyButton::getButtonStateIsActive() {
 }
 /*
  * Returns stored state if in debouncing period otherwise current state of button
+ * If button is in bouncing period, we do not know button state, so it is only save to return BUTTON_IS_INACTIVE
+ * @return BUTTON_IS_ACTIVE (true) or BUTTON_IS_INACTIVE (false)
  */
 bool EasyButton::readDebouncedButtonState() {
-    // Check for bouncing period
+    // Check if we are in bouncing period
     if (millis() - ButtonLastChangeMillis <= BUTTON_DEBOUNCING_MILLIS) {
-        return ButtonStateIsActive;
+        // If button is in bouncing period, we do not know button state, so it is only save to return BUTTON_IS_INACTIVE
+        return BUTTON_IS_INACTIVE;
     }
     return readButtonState();
 }

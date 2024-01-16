@@ -3,7 +3,7 @@
  *
  * Definitions of the data structures used by JK-BMS and the converter
  *
- *  Copyright (C) 2023  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -85,6 +85,7 @@ void myPrint(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint16_t a16BitValue);
 void myPrintlnSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
+void myPrintIntAsFloatSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue);
 
 void computeUpTimeString();
@@ -117,11 +118,11 @@ void fillJKConvertedCellInfo();
 #define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
 #define VOLTAGE_IS_MINIMUM                      1
 #define VOLTAGE_IS_MAXIMUM                      2
-#if !defined(USE_NO_LCD)
+#  if !defined(USE_NO_LCD)
 #define SIZE_OF_COMPUTED_CAPACITY_ARRAY         4 // LCD_ROWS
-#else
+#  else
 #define SIZE_OF_COMPUTED_CAPACITY_ARRAY         16
-#endif
+#  endif
 
 /*
  * Arrays of counters, which count the times, a cell has minimal or maximal voltage
@@ -135,17 +136,64 @@ extern uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
 extern uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
 
 struct JKComputedCapacityStruct {
-    uint8_t StartSOC;
-    uint8_t Start100MilliVoltToFull; // 250 bytes program memory incl. display
-    uint8_t EndSOC;
-    uint8_t End100MilliVoltToFull;
+    uint8_t StartSOCPercent;
+    uint8_t Start100MilliVoltToEmpty; // 250 bytes program memory incl. display
+    uint8_t EndSOCPercent;
+    uint8_t End100MilliVoltToEmpty;
     uint16_t Capacity;
     uint16_t TotalCapacity;
 };
 
+#define CAPACITY_COMPUTATION_MODE_IDLE                  0
+#define CAPACITY_COMPUTATION_MODE_CHARGE                1
+#define CAPACITY_COMPUTATION_MODE_DISCHARGE             2
+#define CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION 4 // If we have 5 wrong directions, we end computation
+/*
+ * 60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS is number of samples in 1 hour, -> 1800 at 1 sample / 2 seconds
+ * 100 is factor for 10 mA to 1 A
+ */
+#define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
+
+struct CapacityComputationInfoStruct {
+    uint8_t WrongDirectionCount = 0;
+    uint8_t Mode = CAPACITY_COMPUTATION_MODE_IDLE;
+    uint32_t Accumulator10Milliampere = 0;
+    uint8_t LastDeltaSOC = 0;
+};
+extern CapacityComputationInfoStruct sCapacityComputationInfo;
+
 extern struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY]; // The last 4 values
 void checkAndStoreCapacityComputationValues();
 void printComputedCapacity(uint8_t aCapacityArrayIndex);
+
+struct SOCDataPointStruct {
+    uint8_t SOCPercent;
+    uint16_t VoltageDifferenceToEmpty40Millivolt;
+    int16_t Capacity100MilliampereHour; // -12 to 12 Ah per 1% SOC
+};
+
+struct SOCDataPointDeltaStruct {
+    uint8_t SOCPercent;
+    uint8_t VoltageDifferenceToEmpty40Millivolt; // 1 = 40 mV, 255 = 10.200 V
+    int8_t Delta100MilliampereHour; // -12 to 12 Ah per 1% SOC
+    uint8_t DeltaTimeTenSeconds; // For future use. Up to 42 minutes per 1% SOC
+};
+#define NUMBER_OF_SOC_DATA_POINTS   ((E2END + 1) / sizeof(SOCDataPointDeltaStruct)) // 0x100
+
+struct SOCDataPointsInfoStruct {
+    uint8_t ArrayStartIndex; // Index of first entry in SOCDataPointsEEPROMArray
+    uint16_t ArrayLength; // Maximum is NUMBER_OF_SOC_DATA_POINTS
+    long MillisOfLastValidEntry;
+    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points
+
+};
+extern SOCDataPointsInfoStruct SOCDataPointsInfo;
+
+void updateEEPROMTo_FF();
+void FillCapacityStatistics();
+void writeSOCData();
+void findFirstSOCDataPointIndex();
+void readAndPrintSOCData();
 #endif // NO_INTERNAL_STATISTICS
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
@@ -184,8 +232,11 @@ struct JKComputedDataStruct {
 
     uint16_t TotalCapacityAmpereHour;
     uint16_t RemainingCapacityAmpereHour; // Computed value
-    uint16_t BatteryFullVoltage10Millivolt; // Computed by BMS. ActualNumberOfCellInfoEntries *  CellOvervoltageProtectionMillivolt
+    uint16_t BatteryFullVoltage10Millivolt; // Computed by BMS! Is ActualNumberOfCellInfoEntries *  CellOvervoltageProtectionMillivolt
+    uint16_t BatteryEmptyVoltage10Millivolt;
     uint16_t BatteryVoltage10Millivolt;
+//    uint16_t BatteryVoltageDifferenceToFull10Millivolt; // saves 60 bytes program memory :-)
+    uint16_t BatteryVoltageDifferenceToEmpty10Millivolt;
     float BatteryVoltageFloat;          // Volt
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
@@ -246,7 +297,7 @@ struct JKReplyStruct {
     uint16_t Battery10Millivolt;
     uint8_t TokenCurrent;                   // 0x84
     // Current values start with 200mA at 240 mA real current -> 410 -> 620 -> 830mA@920mA real -> 1030@1080mA real -> 1.33 => Resolution is 0.21A
-    uint16_t Battery10MilliAmpere;          // Highest bit: 0=Discharge, 1=Charge -> depends on ProtocolVersionNumber. Maximal current is 327 A
+    uint16_t Battery10MilliAmpere; // Highest bit: 0=Discharge, 1=Charge -> depends on ProtocolVersionNumber. Maximal current is 327 A
     uint8_t TokenSOCPercent;                // 0x85
     uint8_t SOCPercent;                     // 0-100%
     uint8_t TokenNumberOfTemperatureSensors; // 0x86
@@ -303,9 +354,9 @@ struct JKReplyStruct {
     } BMSStatus;
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
-    uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000 = # of cells * CellOvervoltageProtectionMillivolt
+    uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000 BMS computed: # of cells * CellOvervoltageProtectionMillivolt
     uint8_t TokenBatteryUndervoltageProtection10Millivolt; // 0x8F
-    uint16_t BatteryUndervoltageProtection10Millivolt;  // 1000 to 15000
+    uint16_t BatteryUndervoltageProtection10Millivolt;  // 1000 to 15000 BMS computed: # of cells * CellUndervoltageProtectionMillivolt
     uint8_t TokenCellOvervoltageProtectionMillivolt;    // 0x90
     uint16_t CellOvervoltageProtectionMillivolt;        // 1000 to 4500
     uint8_t TokenCellOvervoltageRecoveryMillivolt;      // 0x91
@@ -325,11 +376,11 @@ struct JKReplyStruct {
     uint8_t TokenDischargeOvercurrentProtectionAmpere;  // 0x97
     uint16_t DischargeOvercurrentProtectionAmpere;      // 1 to 1000
     uint8_t TokenDischargeOvercurrentDelaySeconds;      // 0x98
-    uint16_t DischargeOvercurrentDelaySeconds;          // DischargeOvercurrentRecoverySeconds can be set by App, but is not contained in reply
+    uint16_t DischargeOvercurrentDelaySeconds; // DischargeOvercurrentRecoverySeconds can be set by App, but is not contained in reply
     uint8_t TokenChargeOvercurrentProtectionAmpere;     // 0x99
     uint16_t ChargeOvercurrentProtectionAmpere;         // 1 to 1000
     uint8_t TokenChargeOvercurrentDelaySeconds;         // 0x9A
-    uint16_t ChargeOvercurrentDelaySeconds;             // ChargeOvercurrentRecoverySeconds can be set by App, but is not contained in reply
+    uint16_t ChargeOvercurrentDelaySeconds;     // ChargeOvercurrentRecoverySeconds can be set by App, but is not contained in reply
 
     uint8_t TokenBalancingStartVoltage;                 // 0x9B
     uint16_t BalancingStartMillivolt;                   // 2000 to 4500

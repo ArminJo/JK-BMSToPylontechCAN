@@ -80,8 +80,8 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #define JK_BMS_PAGE_CELL_STATISTICS     2
 #define CELL_STATISTICS_COUNTER_MASK 0x04 // must be a multiple of 2 and determines how often one page (min or max) is displayed.
 #define JK_BMS_PAGE_BIG_INFO            3
-#define JK_BMS_PAGE_CAN_INFO            4 // If debug was pressed
-#define JK_BMS_PAGE_CAPACITY_INFO       5 // If debug was pressed
+#define JK_BMS_PAGE_CAN_INFO            4 // Enter on long press
+#define JK_BMS_PAGE_CAPACITY_INFO       5
 #define CELL_CAPACITY_COUNTER_VOLTAGE   0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
 
 #define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
@@ -153,7 +153,7 @@ void printDebugInfoOnLCD() {
 #  endif
         myLCD.setCursor(0, 3);
         myLCD.print(F("Send CAN every " SECONDS_BETWEEN_CAN_FRAME_SEND " s  "));
-        delay(2000); // To see the messages
+        delay (LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the messages
         myLCD.clear();
     }
 }
@@ -323,14 +323,13 @@ void printCurrent5CharacterRightAlignedOnLCD() {
  * Print 3 characters 2.4 or .45
  */
 void printVoltageDifference3CharactersOnLCD() {
-    uint16_t tBatteryToFullDifference10Millivolt = JKComputedData.BatteryFullVoltage10Millivolt
-            - JKComputedData.BatteryVoltage10Millivolt;
-    if (tBatteryToFullDifference10Millivolt < 100) {
+    uint16_t tBatteryToEmptyDifference10Millivolt = JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
+    if (tBatteryToEmptyDifference10Millivolt < 100) {
         // Print small values as ".43" instead of "0.4"
-        sprintf_P(sStringBuffer, PSTR(".%02d"), tBatteryToFullDifference10Millivolt);
+        sprintf_P(sStringBuffer, PSTR(".%02d"), tBatteryToEmptyDifference10Millivolt);
         myLCD.print(sStringBuffer);
     } else {
-        myLCD.print(((float) (tBatteryToFullDifference10Millivolt)) / 100.0, 1);
+        myLCD.print(tBatteryToEmptyDifference10Millivolt / 100.0, 1);
     }
 }
 
@@ -529,6 +528,7 @@ void printCellStatisticsOnLCD() {
  * Voltage: "0.5->4.5mV 101 130Ah"
  */
 void printCapacityInfoOnLCD() {
+    myLCD.setCursor(0, 0);
     if (JKComputedCapacity[0].Capacity == 0 && JKComputedCapacity[1].Capacity == 0) {
         myLCD.print(F("No capacity computed"));
     } else {
@@ -540,12 +540,13 @@ void printCapacityInfoOnLCD() {
                 myLCD.setCursor(0, i);
                 if (tDisplayDeltaVoltages) {
                     snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%1u.%1uV->%1u.%1uV %3u %3uAh"),
-                            JKComputedCapacity[i].Start100MilliVoltToFull / 10, JKComputedCapacity[i].Start100MilliVoltToFull % 10,
-                            JKComputedCapacity[i].End100MilliVoltToFull / 10, JKComputedCapacity[i].End100MilliVoltToFull % 10,
-                            JKComputedCapacity[i].Capacity, JKComputedCapacity[i].TotalCapacity);
+                            JKComputedCapacity[i].Start100MilliVoltToEmpty / 10,
+                            JKComputedCapacity[i].Start100MilliVoltToEmpty % 10, JKComputedCapacity[i].End100MilliVoltToEmpty / 10,
+                            JKComputedCapacity[i].End100MilliVoltToEmpty % 10, JKComputedCapacity[i].Capacity,
+                            JKComputedCapacity[i].TotalCapacity);
                 } else {
-                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%2d%%->%2d%% "), JKComputedCapacity[i].StartSOC,
-                            JKComputedCapacity[i].EndSOC);
+                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%2d%%->%2d%% "), JKComputedCapacity[i].StartSOCPercent,
+                            JKComputedCapacity[i].EndSOCPercent);
                     myLCD.print(sStringBuffer);
                     // If we have 100% as SOC value, we end up one column later, so we start at fixed position here
                     myLCD.setCursor(9, i);
@@ -648,7 +649,7 @@ void printBigInfoOnLCD() {
     printCurrent5CharacterRightAlignedOnLCD();
 
     myLCD.setCursor(11, 3);
-    myLCD.print(((float) (JKComputedData.BatteryFullVoltage10Millivolt - JKComputedData.BatteryVoltage10Millivolt)) / 100.0, 2);
+    myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
     myLCD.print('V');
 
     myLCD.setCursor(16, 3);
@@ -668,8 +669,7 @@ void printCANInfoOnLCD() {
             myLCD.print(F("No BMS data received"));
         }
     } else {
-        CANFrameStruct *tCANFrameDataPointer =
-                reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame);
+        CANFrameStruct *tCANFrameDataPointer = reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame);
         if (tCANFrameDataPointer->FrameData.ULong.LowLong == 0) {
             /*
              * Caption in row 1 and "No errors / warnings" in row 2
@@ -832,7 +832,7 @@ void printBMSDataOnLCD() {
 #  if !defined(DISPLAY_ALWAYS_ON)
             && !sSerialLCDIsSwitchedOff
 #  endif
-    ) {
+            ) {
         myLCD.clear();
         myLCD.setCursor(0, 0);
 
@@ -862,8 +862,11 @@ void checkButtonPressForLCD() {
         /*
          * Handle Page button
          */
-        uint8_t tDisplayPageNumber = sLCDDisplayPageNumber;
+        uint8_t tLCDDisplayPageNumber = sLCDDisplayPageNumber;
         if (sPageButtonJustPressed) {
+            /*
+             * New press here
+             */
             sPageButtonJustPressed = false;
 #  if !defined(DISPLAY_ALWAYS_ON)
             /*
@@ -876,16 +879,17 @@ void checkButtonPressForLCD() {
 #  endif
             {
 
-                if (sJKBMSFrameHasTimeout || tDisplayPageNumber == JK_BMS_PAGE_MAX || tDisplayPageNumber == JK_BMS_DEBUG_PAGE_MAX) {
+                if (sJKBMSFrameHasTimeout || tLCDDisplayPageNumber == JK_BMS_PAGE_MAX
+                        || tLCDDisplayPageNumber == JK_BMS_DEBUG_PAGE_MAX) {
                     // Receive timeout or wrap around here
-                    tDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
+                    tLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
 
                 } else {
                     /*
                      * Switch display pages to next page
                      */
-                    tDisplayPageNumber++;
-                    if (tDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+                    tLCDDisplayPageNumber++;
+                    if (tLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
                         // Create symbols character for maximum and minimum
                         bigNumberLCD._createChar(1, bigNumbersTopBlock);
                         bigNumberLCD._createChar(2, bigNumbersBottomBlock);
@@ -893,26 +897,58 @@ void checkButtonPressForLCD() {
                         // Prepare for statistics page here display max first but for half the regular time
                         sToggleDisplayCounter = (CELL_STATISTICS_COUNTER_MASK >> 1) - 1;
 
-                    } else if (tDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+                    } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
                         bigNumberLCD.begin(); // Creates custom character used for generating big numbers
-                    } else if (tDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+                    } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
                         sToggleDisplayCounter = 0;
                     }
                 }
-                setDisplayPage(tDisplayPageNumber);
+                setDisplayPage(tLCDDisplayPageNumber);
             }
 
-        } else if (PageSwitchButtonAtPin2.readDebouncedButtonState()) {
+        } else if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE
+                && PageSwitchButtonAtPin2.checkForLongPress(LONG_PRESS_BUTTON_DURATION_MILLIS) == EASY_BUTTON_LONG_PRESS_DETECTED) {
             /*
-             * Here button was not pressed in the loop before. Check if button is still active.
+             * Here long press detected i.e. button was not pressed in the loop before and button is still active for longer than LONG_PRESS_BUTTON_DURATION_MILLIS.
              */
-            if (tDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
+            if (tLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
                 // Button is still pressed on CAN Info page -> enable serial debug output as long as button is pressed
                 sDebugModeActivated = true; // Is set to false in loop
-            } else if (PageSwitchButtonAtPin2.checkForLongPress(LONG_PRESS_BUTTON_DURATION_MILLIS)
-                    == EASY_BUTTON_LONG_PRESS_DETECTED) {
+
+            } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+                if (SOCDataPointsInfo.ArrayLength > 1) {
+                    // EEPROM data not already cleared here
+                    myLCD.setCursor(0, 0);
+                    myLCD.print(F("Clear EEPROM data in"));
+                    myLCD.setCursor(0, 1);
+                    myLCD.print(F("2 seconds           "));
+                    delay(1000);
+                    if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
+                        myLCD.setCursor(0, 1);
+                        myLCD.print('1');
+                        delay(1000); // To wait for eventual button release
+                        if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
+                            myLCD.setCursor(0, 1);
+                            myLCD.print(F("now      ")); // is visible for the time EEPROM needs for erasing (+200 ms)
+                            delay(200); // To wait for eventual button release
+                        }
+                    }
+                    myLCD.setCursor(0, 0);
+                    if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
+                        updateEEPROMTo_FF(); // Clear EEPROM
+                        Serial.println(F("Long press detected -> clear EEPROM"));
+                        myLCD.print(F("EEPROM data cleared "));
+                    } else {
+                        myLCD.print(F("Clear EEPROM aborted"));
+                    }
+                    myLCD.setCursor(0, 1);
+                    LCDPrintSpaces(9); // overwrite 2. line containing 2 seconds
+
+                    delay (LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the messages
+                }
+            } else {
                 /*
-                 * Long press detected -> switch to CAN Info page
+                 * Not page JK_BMS_PAGE_CAN_INFO or JK_BMS_PAGE_CAPACITY_INFO -> switch to CAN Info page
                  */
                 sDebugModeActivated = true; // Is set to false in loop
                 if (sSerialLCDAvailable) {
@@ -938,6 +974,11 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
          */
         printBMSDataOnLCD();
     }
+
+    if (aDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+        printCapacityInfoOnLCD(); // First update LCD before printing the plotter data
+        readAndPrintSOCData(); // this takes a while...
+    }
 }
 
 #if defined(STANDALONE_TEST)
@@ -949,11 +990,11 @@ void testLCDPages() {
 // Create symbols character for maximum and minimum
     bigNumberLCD._createChar(1, bigNumbersTopBlock);
     bigNumberLCD._createChar(2, bigNumbersBottomBlock);
-    delay(2000);
+    delay (LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_CAN_INFO;
-    delay(2000);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 
     /*
@@ -966,12 +1007,12 @@ void testLCDPages() {
     JKComputedData.TemperatureSensor1 = 100;
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-    delay(2000);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
     bigNumberLCD.begin();
-    delay(2000);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 
     /*
@@ -987,11 +1028,11 @@ void testLCDPages() {
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-    delay(2000);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
-    delay(2000);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 
     lastJKReply.AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true; // to enable reset of LCD alarm string
@@ -1003,7 +1044,7 @@ void testLCDPages() {
     JKComputedData.BatteryLoadCurrentFloat = -100;
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-    delay(2000);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
 }
 
@@ -1020,7 +1061,7 @@ void testBigNumbers() {
         JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
 
         for (int i = 0; i < 5; ++i) {
-            delay(4000);
+            delay(2 * LCD_MESSAGE_PERSIST_TIME_MILLIS);
             printBMSDataOnLCD();
             JKComputedData.BatteryLoadPower /= 10; // 1234 -> 12
             JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
@@ -1032,7 +1073,7 @@ void testBigNumbers() {
         JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
 
         for (int i = 0; i < 5; ++i) {
-            delay(4000);
+            delay(2 * LCD_MESSAGE_PERSIST_TIME_MILLIS);
             printBMSDataOnLCD();
             JKComputedData.BatteryLoadPower /= 10; // 1234 -> 12
             JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
