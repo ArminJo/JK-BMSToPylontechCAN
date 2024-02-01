@@ -174,7 +174,7 @@ bool checkAndTurnLCDOn() {
          */
         myLCD.backlight();
         sSerialLCDIsSwitchedOff = false;
-        Serial.print(F("Switch on LCD display, triggered by ")); // to be continued by caller
+        JK_INFO_PRINT(F("Switch on LCD display, triggered by ")); // to be continued by caller
         return true;
     }
     return false;
@@ -191,7 +191,7 @@ void doLCDBacklightTimeoutHandling() {
     if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
         myLCD.noBacklight(); // switch off backlight after 5 minutes
         sSerialLCDIsSwitchedOff = true;
-        Serial.println(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
+        JK_INFO_PRINTLN(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
     }
 }
 #  endif
@@ -936,7 +936,7 @@ void checkButtonPressForLCD() {
                     myLCD.setCursor(0, 0);
                     if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
                         updateEEPROMTo_FF(); // Clear EEPROM
-                        Serial.println(F("Long press detected -> clear EEPROM"));
+                        JK_INFO_PRINTLN(F("Long press detected -> clear EEPROM"));
                         myLCD.print(F("EEPROM data cleared "));
                     } else {
                         myLCD.print(F("Clear EEPROM aborted"));
@@ -952,8 +952,8 @@ void checkButtonPressForLCD() {
                  */
                 sDebugModeActivated = true; // Is set to false in loop
                 if (sSerialLCDAvailable) {
-                    Serial.println();
-                    Serial.println(F("Long press detected -> switch to CAN page and activate one time debug print"));
+                    JK_INFO_PRINTLN();
+                    JK_INFO_PRINTLN(F("Long press detected -> switch to CAN page and activate one time debug print"));
                     setDisplayPage(JK_BMS_PAGE_CAN_INFO);
                 }
             }
@@ -964,8 +964,8 @@ void checkButtonPressForLCD() {
 void setDisplayPage(uint8_t aDisplayPageNumber) {
     sLCDDisplayPageNumber = aDisplayPageNumber;
     tone(BUZZER_PIN, 2200, 30);
-    Serial.print(F("Set LCD display page to: "));
-    Serial.println(aDisplayPageNumber);
+    JK_INFO_PRINT(F("Set LCD display page to: "));
+    JK_INFO_PRINTLN(aDisplayPageNumber);
 
 // If BMS communication timeout, only timeout message or CAN Info page can be displayed.
     if (!sJKBMSFrameHasTimeout || aDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
@@ -976,6 +976,7 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
     }
 
     if (aDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+        sDebugModeActivated = false; // Disable every debug output after entering this page
         printCapacityInfoOnLCD(); // First update LCD before printing the plotter data
         readAndPrintSOCData(); // this takes a while...
     }

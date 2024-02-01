@@ -450,14 +450,15 @@ uint16_t EasyButton::updateButtonPressDuration() {
  */
 uint8_t EasyButton::checkForLongPress(uint16_t aLongPressThresholdMillis) {
     uint8_t tRetvale = EASY_BUTTON_LONG_PRESS_ABORT;
-    if (readDebouncedButtonState()) {
+    // noInterrupts() is required, since otherwise we may get wrong results if interrupted during processing by button ISR
+    noInterrupts();
+    if (readDebouncedButtonState() != BUTTON_IS_INACTIVE) {
         // Button still active -> update current ButtonPressDurationMillis
-        // noInterrupts() is required, since otherwise we may get wrong results if interrupted during load of long value by button ISR
-        noInterrupts();
+
         ButtonPressDurationMillis = millis() - ButtonLastChangeMillis;
-        interrupts();
         tRetvale = EASY_BUTTON_LONG_PRESS_STILL_POSSIBLE; // if not detected, you may try again
     }
+    interrupts();
     if (ButtonPressDurationMillis >= aLongPressThresholdMillis) {
         // long press detected
         return EASY_BUTTON_LONG_PRESS_DETECTED;

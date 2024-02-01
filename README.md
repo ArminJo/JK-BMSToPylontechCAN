@@ -40,7 +40,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Serial.print() function is still available for monitoring and debugging.
 - SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
 
-**If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**
+**If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**<br/>
+Enabling the macro `NO_SERIAL_INFO_PRINT` saves program space.
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
@@ -215,7 +216,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 
 | Name | Default value | Description |
 |-|-|-|
-| `MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS` | 2000 | % |
+| `MILLISECONDS_BETWEEN_JK_DATA_FRAME_`<br/>`REQUESTS` | 2000 | % |
 | `MILLISECONDS_BETWEEN_CAN_FRAME_SEND` | 2000 | % |
 | `NO_BEEP_ON_ERROR` | disabled | . |
 | `ONE_BEEP_ON_ERROR` | disabled | If activated, only beep once if error was detected. |
@@ -236,8 +237,8 @@ Modify them by enabling / disabling them, or change the values if applicable.
 . |
 | | | |
 | `CAN_DATA_MODIFICATION` | disabled | If activated, it currently enables the function to reduce max current at high SOC level. |
-| `MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT` | 80 | Start SOC for linear reducing maximum current. |
-| `MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE` | 50 | Value of current at 100 % SOC. Units are 100 mA! |
+| `MAX_CURRENT_MODIFICATION_LOWER_SOC_`<br/>`THRESHOLD_PERCENT` | 80 | Start SOC for linear reducing maximum current. |
+| `MAX_CURRENT_MODIFICATION_MIN_CURRENT_`<br/>`TENTHS_OF_AMPERE` | 50 | Value of current at 100 % SOC. Units are 100 mA! |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 

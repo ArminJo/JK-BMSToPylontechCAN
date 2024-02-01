@@ -126,16 +126,18 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 //#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
 /*
  * LCD + statistics
+ * Timings for LCD timeout etc. are defined in JK-BMS_LCD.hpp
  */
 //#define USE_NO_LCD                    // The code for the LCD display is deactivated
 #if !defined(USE_NO_LCD)
-//#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity.
+//#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity, no SOC graph.
 #endif
 
 //#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
 
+//#define DISABLE_MONITORING              // activating this macro saves 528 bytes program space
 #if !defined(DISABLE_MONITORING)
-#define ENABLE_MONITORING               // Write cell and current values CSV data to serial output
+//#define ENABLE_MONITORING               // Write cell and current values CSV data to serial output - currently disabled to save program space.
 #endif
 #if defined(ENABLE_MONITORING)
 char sStringBuffer[90]; // for cvs lines, "Store computed capacity" line and LCD rows
@@ -233,6 +235,18 @@ void checkButtonPress();
 bool readJK_BMSStatusFrame();
 void processJK_BMSStatusFrame();
 void handleFrameReceiveTimeout();
+
+//#define NO_SERIAL_INFO_PRINT  // activating this macro saves 308 bytes program space
+#if !defined(NO_SERIAL_INFO_PRINT)
+#define SERIAL_INFO_PRINT
+#endif
+#if defined(SERIAL_INFO_PRINT)
+#define JK_INFO_PRINT(...)      Serial.print(__VA_ARGS__);
+#define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#else
+#define JK_INFO_PRINT(...)      void();
+#define JK_INFO_PRINTLN(...)    void();
+#endif
 
 /*
  * Software serial for JK-BMS stuff
@@ -377,6 +391,8 @@ void testBigNumbers();
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
+const char StringStartingCANFailed[] PROGMEM = "Starting CAN failed!";
+
 void setup() {
 // LED_BUILTIN pin is used as SPI Clock !!!
 //    pinMode(LED_BUILTIN, OUTPUT);
@@ -404,10 +420,10 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     Serial.println(F("Statistics deactivated"));
 #else
     findFirstSOCDataPointIndex();
-    Serial.print(F("EEPROM SOC data start index="));
-    Serial.print(SOCDataPointsInfo.ArrayStartIndex);
-    Serial.print(F(" length="));
-    Serial.println(SOCDataPointsInfo.ArrayLength);
+    JK_INFO_PRINT(F("EEPROM SOC data start index="));
+    JK_INFO_PRINT(SOCDataPointsInfo.ArrayStartIndex);
+    JK_INFO_PRINT(F(" length="));
+    JK_INFO_PRINTLN(SOCDataPointsInfo.ArrayLength);
 #endif
 
     tone(BUZZER_PIN, 2200, 50);
@@ -443,11 +459,11 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         }
 #endif
     } else {
-        Serial.println(F("Starting CAN failed!"));
+        Serial.println(reinterpret_cast<const __FlashStringHelper *>(StringStartingCANFailed));
 #if defined(USE_SERIAL_2004_LCD)
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
-            myLCD.print(F("Starting CAN failed!"));
+            myLCD.print(reinterpret_cast<const __FlashStringHelper *>(StringStartingCANFailed));
 #  if defined(STANDALONE_TEST)
             delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 #  else
@@ -616,12 +632,13 @@ void loop() {
 #endif // !defined(STANDALONE_TEST)
 
     /*
-     * Send CAN frame independently of the period of JK-BMS data requests
+     * Send CAN frame independently of the period of JK-BMS data requests,
+     * but do not send, if frame is currently requested and not completely received and processed.
      * 0.5 MB/s
      * Inverter reply every second: 0x305: 00-00-00-00-00-00-00-00
      * Do not send, if BMS is starting up, the 0% SOC during this time will trigger a deye error beep.
      */
-    if (sCANDataIsInitialized && !JKComputedData.BMSIsStarting
+    if (sCANDataIsInitialized && !JKComputedData.BMSIsStarting && !sFrameIsRequested
             && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
@@ -699,7 +716,7 @@ void loop() {
 #  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
             sBeepTimeoutCounter++;
             if (sBeepTimeoutCounter == (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                Serial.println(F("Timeout reached, suppress consecutive error beeps"));
+                JK_INFO_PRINTLN(F("Timeout reached, suppress consecutive error beeps"));
             } else if (sBeepTimeoutCounter > (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
                 sBeepTimeoutCounter--; // To avoid overflow
             } else
@@ -751,7 +768,7 @@ void processJK_BMSStatusFrame() {
         sTimeoutFrameCounter = 0;
 #if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)
         if (checkAndTurnLCDOn()) {
-            Serial.println(F("successfully receiving first BMS status frame after BMS communication timeout")); // Switch on LCD display, triggered by successfully receiving first BMS status frame
+            JK_INFO_PRINTLN(F("successfully receiving first BMS status frame after BMS communication timeout")); // Switch on LCD display, triggered by successfully receiving first BMS status frame
         }
 #endif
     }
@@ -808,7 +825,7 @@ void handleFrameReceiveTimeout() {
     if (sReplyFrameBufferIndex != 0 || sTimeoutFrameCounter == 0) {
         /*
          * No byte received here -BMS may be off or disconnected
-         * Do it only once if we receive 0 bytes
+         * Do it only once if we receive only 0 bytes
          */
         Serial.print(F("Receive timeout at ReplyFrameBufferIndex="));
         Serial.println(sReplyFrameBufferIndex);

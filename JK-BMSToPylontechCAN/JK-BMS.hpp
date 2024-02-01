@@ -48,9 +48,12 @@ uint8_t JKRequestStatusFrame[21] = { 0x4E, 0x57 /*4E 57 = StartOfFrame*/, 0x00, 
         0x00, 0x00, 0x01, 0x29 /*Checksum, high 2 bytes for checksum not yet enabled -> 0, low 2 Byte for checksum*/};
 //uint8_t JKrequestStatusFrameOld[] = { 0xDD, 0xA5, 0x03, 0x00, 0xFF, 0xFD, 0x77 };
 
+/*
+ * Size of reply is 291 bytes for 16 cells. sizeof(JKReplyStruct) is 221.
+ */
 uint16_t sReplyFrameBufferIndex = 0;        // Index of next byte to write to array, except for last byte received. Starting with 0.
 uint16_t sReplyFrameLength;                 // Received length of frame
-uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
+uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS.
 bool sJKBMSFrameHasTimeout;                 // If true, timeout message or CAN Info page is displayed.
 
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
@@ -1209,7 +1212,7 @@ void printJKDynamicInfo() {
     printMonitoringInfo();
         if (sUpTimeStringMinuteHasChanged) {
             sUpTimeStringMinuteHasChanged = false;
-            Serial.print(sCSVCaption);
+            Serial.print(reinterpret_cast<const __FlashStringHelper *>(sCSVCaption));
         }
 #endif
 

@@ -262,6 +262,7 @@ union BMSStatusUnion {
 
 /*
  * Structure representing the semantic of the JK reply, except cell voltage info.
+ * 221 bytes.
  *
  * All 16 and 32 bit values in this structure are filled with big endian by the JK protocol i.e. the higher byte is located at the lower memory address.
  * AVR and others are using little endian i.e. the lower byte is located at the lower memory address.
