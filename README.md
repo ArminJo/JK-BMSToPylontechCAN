@@ -232,7 +232,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
 | `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |
-| `SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or display of additional information on this page. |
+| `DO_NOT_SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, do not print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Disables display of up to 20 voltages or display of additional information on this page. |
 | `DISABLE_MONITORING` | disabled | If activated, no cell and current values CSV data are written to serial output
 . |
 | | | |
@@ -242,8 +242,8 @@ Modify them by enabling / disabling them, or change the values if applicable.
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
-The CSV data have the caption:
-`Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing`
+The CSV data has the caption:
+`Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing`<br/>
 Example data: `CSV: 270;262;271;271;271;269;270;271;266;266;266;266;265;262;265;265;5228;-22.56;71;1`
 <br/>
 

@@ -133,7 +133,9 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 //#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity, no SOC graph.
 #endif
 
-//#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
+#if !defined(DO_NOT_SHOW_SHORT_CELL_VOLTAGES)
+#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
+#endif
 
 //#define DISABLE_MONITORING              // activating this macro saves 528 bytes program space
 #if !defined(DISABLE_MONITORING)

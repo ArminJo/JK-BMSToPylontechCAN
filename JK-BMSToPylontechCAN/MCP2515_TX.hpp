@@ -4,7 +4,7 @@
  * Functions to control send only functions for MCP2515 CAN controller
  *
  *
- *  Copyright (C) 2023  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -84,6 +84,8 @@ void writeMCP2515Register(uint8_t address, uint8_t value) {
     SPI.endTransaction();
 }
 
+const char StringAccessFailed[] PROGMEM = " access to MCP2515 config mode register failed";
+
 /*
  * return true if error happens
  */
@@ -98,7 +100,8 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { //
     writeMCP2515Register(MCP_CANCTRL, MODE_CONFIG);
     if (readMCP2515Register(MCP_CANCTRL) != MODE_CONFIG) {
         if(aSerial != NULL) {
-            aSerial->println(F("First access to MCP2515 config mode register failed"));
+            aSerial->print(F("First"));
+            aSerial->println(reinterpret_cast<const __FlashStringHelper *>(StringAccessFailed));
         }
         return true;
     }
@@ -144,7 +147,8 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { //
     writeMCP2515Register(MCP_CANCTRL, MCP2515_CAN_CONTROL_REGISTER_CONTENT);
     if (readMCP2515Register(MCP_CANCTRL) != MCP2515_CAN_CONTROL_REGISTER_CONTENT) {
         if(aSerial != NULL) {
-            aSerial->println(F("Last access to MCP2515 config mode register failed"));
+            aSerial->println(F("Last"));
+            aSerial->println(reinterpret_cast<const __FlashStringHelper *>(StringAccessFailed));
         }
         return true;
     }
