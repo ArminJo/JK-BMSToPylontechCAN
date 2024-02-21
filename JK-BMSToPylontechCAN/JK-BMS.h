@@ -92,7 +92,7 @@ void computeUpTimeString();
 void printJKStaticInfo();
 void printJKDynamicInfo();
 void handleAndPrintAlarmInfo();
-#if defined(ENABLE_MONITORING)
+#if !defined(DISABLE_MONITORING)
 void printMonitoringInfo();
 #endif
 
@@ -114,16 +114,11 @@ struct JKConvertedCellInfoStruct {
 extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 void fillJKConvertedCellInfo();
 
-#if !defined(NO_INTERNAL_STATISTICS)
 #define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
 #define VOLTAGE_IS_MINIMUM                      1
 #define VOLTAGE_IS_MAXIMUM                      2
-#  if !defined(USE_NO_LCD)
-#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         4 // LCD_ROWS
-#  else
-#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         16
-#  endif
 
+#if !defined(NO_CELL_STATISTICS)
 /*
  * Arrays of counters, which count the times, a cell has minimal or maximal voltage
  * To identify runaway cells
@@ -134,70 +129,11 @@ extern uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
 extern uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
 #define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
 extern uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
-
-struct JKComputedCapacityStruct {
-    uint8_t StartSOCPercent;
-    uint8_t Start100MilliVoltToEmpty; // 250 bytes program memory incl. display
-    uint8_t EndSOCPercent;
-    uint8_t End100MilliVoltToEmpty;
-    uint16_t Capacity;
-    uint16_t TotalCapacity;
-};
-
-#define CAPACITY_COMPUTATION_MODE_IDLE                  0
-#define CAPACITY_COMPUTATION_MODE_CHARGE                1
-#define CAPACITY_COMPUTATION_MODE_DISCHARGE             2
-#define CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION 4 // If we have 5 wrong directions, we end computation
-/*
- * 60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS is number of samples in 1 hour, -> 1800 at 1 sample / 2 seconds
- * 100 is factor for 10 mA to 1 A
- */
-#define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
-
-struct CapacityComputationInfoStruct {
-    uint8_t WrongDirectionCount = 0;
-    uint8_t Mode = CAPACITY_COMPUTATION_MODE_IDLE;
-    uint32_t Accumulator10Milliampere = 0;
-    uint8_t LastDeltaSOC = 0;
-};
-extern CapacityComputationInfoStruct sCapacityComputationInfo;
-
-extern struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY]; // The last 4 values
-void checkAndStoreCapacityComputationValues();
-void printComputedCapacity(uint8_t aCapacityArrayIndex);
-
-struct SOCDataPointStruct {
-    uint8_t SOCPercent;
-    uint16_t VoltageDifferenceToEmpty40Millivolt;
-    int16_t Capacity100MilliampereHour; // -12 to 12 Ah per 1% SOC
-};
-
-struct SOCDataPointDeltaStruct {
-    uint8_t SOCPercent;
-    uint8_t VoltageDifferenceToEmpty40Millivolt; // 1 = 40 mV, 255 = 10.200 V
-    int8_t Delta100MilliampereHour; // -12 to 12 Ah per 1% SOC
-    uint8_t DeltaTimeTenSeconds; // For future use. Up to 42 minutes per 1% SOC
-};
-#define NUMBER_OF_SOC_DATA_POINTS   ((E2END + 1) / sizeof(SOCDataPointDeltaStruct)) // 0x100
-
-struct SOCDataPointsInfoStruct {
-    uint8_t ArrayStartIndex; // Index of first entry in SOCDataPointsEEPROMArray
-    uint16_t ArrayLength; // Maximum is NUMBER_OF_SOC_DATA_POINTS
-    long MillisOfLastValidEntry;
-    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points
-
-};
-extern SOCDataPointsInfoStruct SOCDataPointsInfo;
-
-void updateEEPROMTo_FF();
-void FillCapacityStatistics();
-void writeSOCData();
-void findFirstSOCDataPointIndex();
-void readAndPrintSOCData();
-#endif // NO_INTERNAL_STATISTICS
+#endif // NO_CELL_STATISTICS
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
 #define JK_BMS_FRAME_TRAILER_LENGTH             9
+#define JK_BMS_FRAME_CELL_INFO_LENGTH           2 // 1 byte +1 for token 0x79
 #define JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH  (JK_BMS_FRAME_HEADER_LENGTH + 1) // +1 for token 0x79
 #define MINIMAL_JK_BMS_FRAME_LENGTH             19
 

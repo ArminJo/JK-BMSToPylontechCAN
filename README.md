@@ -59,18 +59,20 @@ If CAN communications breaks, the inverter may use different values for controll
 <br/>
 
 # SOC graph for a 16S LiFePO4 battery
-Created by attaching Arduio 1.8 Serial Plotter and then doing a long button press followed by a single one to enter the statistics page.<br/>
-The [log](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCData.log), containing the numerical data for this graph is in folder extras.<br/>
-Here you see the steep voltage graph below around 15 % SOC, which means that this may be too much discharging for the battery.<br/>
+Created by attaching Arduio 1.8 Serial Plotter and then doing a long button press followed by a single one to enter the capacity info page.<br/>
 The values of Delta_capacity are always clipped to + 100 and - 30 for printing.
 
+Here you see the steep voltage graph below around 15 % SOC, which means that this may be too much discharging for the battery.<br/>
 ![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCData.png)
+
+The new graph layout with additional current value:
+![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCDataNew.png)
 
 
 # Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page |
+| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page - 2.3.0 version |
 | :-: | :-: |
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Cell info page with maximum and minimum indicators |  Overview / Error page with start of error message in first line |
@@ -210,6 +212,11 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 Download and extract the repository. In the Arduino IDE open the sketch with File -> Open... and select the JK-BMSToPylontechCAN folder.<br/>
 All libraries, especially the modified ones, are included in this project.
 
+It is always recommended to burn the Uno bootloader on a Nano board, and trating your Nano board as an an Uno board for Arduino compiles.
+This will give you 1.5 kB more program space, without any disadvantages. Even A6 and A7 are available :-). 
+
+<br/>
+
 # Compile options / macros for this software
 To customize the software to different requirements, there are some compile options / macros available.<br/>
 Modify them by enabling / disabling them, or change the values if applicable.
@@ -224,11 +231,15 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `MULTIPLE_BEEPS_WITH_TIMEOUT` | enabled | If error was detected, beep for 60 s. |
 | `SUPPRESS_LIFEPO4_PLAUSI_WARNING` | disabled | Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V. |
 | `MAXIMUM_NUMBER_OF_CELLS` | 24 | Maximum number of cell info which can be converted. Saves RAM. |
-| `USE_NO_LCD` | disabled | If activated, the code for the LCD display is deactivated. Saves 25% program space on a Nano. |
+| `USE_NO_LCD` | disabled | Disables the code for the LCD display. Saves 25% program space on a Nano. |
 | `DISPLAY_ALWAYS_ON` | disabled | If activated, the display backlight is always on. This disables the value of `DISPLAY_ON_TIME_SECONDS`. |
 | `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
 | `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
 | `USE_NO_COMMUNICATION_STATUS_LEDS` | disabled | If activated, the code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output. |
+| `NO_SERIAL_INFO_PRINT` | enabled | Disables writing some info to serial output. Saves 974 bytes program space. |
+| `DISABLE_MONITORING` | enabled | Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. |
+| `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 16558 bytes program space. |
+| `NO_ANALYTICS` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
 | `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |

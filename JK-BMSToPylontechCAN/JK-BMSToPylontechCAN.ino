@@ -120,34 +120,56 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 //#define USE_CCCV_MODIFY_FUNCTION      // Changes modification to CCCV method my Ngoc: https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/31
 //#define USE_OWN_MODIFY_FUNCTION       // Use (currently empty) function which must be filled in at bottom of Pylontech_CAN.hpp
 /*
- * Values for standard data modification
+ * Values for standard CAN data modification
  */
 //#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
 //#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
-/*
- * LCD + statistics
- * Timings for LCD timeout etc. are defined in JK-BMS_LCD.hpp
- */
-//#define USE_NO_LCD                    // The code for the LCD display is deactivated
-#if !defined(USE_NO_LCD)
-//#define NO_INTERNAL_STATISTICS        // No cell values, cell minimum, maximum and percentages. No capacity, no SOC graph.
-#endif
-
 #if !defined(DO_NOT_SHOW_SHORT_CELL_VOLTAGES)
 #define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
 #endif
 
-//#define DISABLE_MONITORING              // activating this macro saves 528 bytes program space
-#if !defined(DISABLE_MONITORING)
-//#define ENABLE_MONITORING               // Write cell and current values CSV data to serial output - currently disabled to save program space.
+/*
+ * Options to reduce program size
+ */
+#if !defined(ENABLE_MONITORING)
+#define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. - currently activated to save program space.
 #endif
-#if defined(ENABLE_MONITORING)
-char sStringBuffer[90]; // for cvs lines, "Store computed capacity" line and LCD rows
-#elif !defined(NO_INTERNAL_STATISTICS)
-char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
+#if !defined(SERIAL_INFO_PRINT)
+#define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space. - currently activated to save program space.
+#endif
+//#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 16558 bytes program space.
+//#define NO_ANALYTICS          // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space.
+//#define USE_NO_LCD            // Disables the code for the LCD display. Saves 25% program space on a Nano.
+
+//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
+
+//#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
+#if defined(STANDALONE_TEST) && defined(USE_NO_LCD)
+#undef USE_NO_LCD // LCD is activated for standalone test
 #endif
 
-//#define USE_SD_CARD_FOR_MONITORING    // Write cell and current values CSV data to SD card into JK-BMS.CSV. Cannot be implemented on ATmega328 :-(.
+#if defined(ARDUINO_AVR_NANO)
+/*
+ * On a unmodified nano, the fuse settings reserve 2 kB program space, to be backwards compatible.
+ * Only 0,5 kB is required for the new bootloader.
+ * You can change this by using the Arduino IDE, selecting the Uno as board connect your Nano
+ * And then run Burn Bootloader. This will not only leave the 0.5 kB new bootloader
+ * but additionally this sets the right fuse settings which reserve only 0.5 kB program space.
+ * I regularly do this for all Nano boards I have!
+ *
+ * With the new fuse settings you can disable the DISABLE_MONITORING macro below,
+ * or just compile and upload the source for an Uno board even if you have connected the Nano board.
+ */
+#define DISABLE_MONITORING              // activating this macro saves 528 bytes program space
+#define NO_CELL_STATISTICS          // No cell values, cell minimum, maximum and percentages.
+#endif
+
+// sStringBuffer is defined in JK-BMS_LCD.hpp if DISABLE_MONITORING and NO_ANALYTICS are defined
+#if !defined(DISABLE_MONITORING)
+char sStringBuffer[90];                 // For cvs lines, "Store computed capacity" line and LCD rows
+#elif !defined(NO_ANALYTICS)
+char sStringBuffer[40];                 // for "Store computed capacity" line, printComputedCapacity() and LCD rows
+#endif
 
 /*
  * Pin layout, may be adapted to your requirements
@@ -159,6 +181,8 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 #if !defined(JK_BMS_TX_PIN)           // Allow override by global symbol
 #define JK_BMS_TX_PIN               4
 #endif
+
+//#define USE_SD_CARD_FOR_MONITORING    // Write cell and current values CSV data to SD card into JK-BMS.CSV. Cannot be implemented on ATmega328 :-(.
 #if defined(USE_SD_CARD_FOR_MONITORING)
 #define SD_CS_PIN                   8
 #endif
@@ -174,14 +198,13 @@ char sStringBuffer[40]; // for "Store computed capacity" line and LCD rows
 //#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
 #endif
 
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
 // BMS and CAN communication status LEDs
-#if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
+#  if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
 #define BMS_COMMUNICATION_STATUS_LED_PIN    6
 #define CAN_COMMUNICATION_STATUS_LED_PIN    7
+#  endif
 #endif
-//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
-
-//#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 
 //#define TIMING_TEST
 #define TIMING_TEST_PIN             7
@@ -238,17 +261,15 @@ bool readJK_BMSStatusFrame();
 void processJK_BMSStatusFrame();
 void handleFrameReceiveTimeout();
 
-//#define NO_SERIAL_INFO_PRINT  // activating this macro saves 308 bytes program space
-#if !defined(NO_SERIAL_INFO_PRINT)
-#define SERIAL_INFO_PRINT
-#endif
-#if defined(SERIAL_INFO_PRINT)
-#define JK_INFO_PRINT(...)      Serial.print(__VA_ARGS__);
-#define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
-#else
+#if defined(NO_SERIAL_INFO_PRINT)
 #define JK_INFO_PRINT(...)      void();
 #define JK_INFO_PRINTLN(...)    void();
+#else
+#define JK_INFO_PRINT(...)      Serial.print(__VA_ARGS__);
+#define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
 #endif
+
+#include "HexDump.hpp"
 
 /*
  * Software serial for JK-BMS stuff
@@ -295,6 +316,13 @@ bool sCANDataIsInitialized = false;         // One time flag, it is never set to
 uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 
 /*
+ * Optional analytics stuff
+ */
+#if !defined(NO_ANALYTICS)
+#include "JK-BMS_Analytics.hpp"
+#endif
+
+/*
  * Optional LCD stuff
  */
 #if !defined(USE_NO_LCD)
@@ -305,7 +333,7 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 /*
  * Optional SD card stuff
  */
-#if defined(ENABLE_MONITORING)
+#if !defined(DISABLE_MONITORING)
 #  if defined(USE_SD_CARD_FOR_MONITORING)
 #define CSV_DATA_8_3_FILENAME           "JK-BMS.CSV" // is anyway converted to uppercase
 //#include "SdFat.h"
@@ -383,8 +411,6 @@ const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 
         0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x51, 0xC2 };
 
 void doStandaloneTest();
-void testLCDPages();
-void testBigNumbers();
 #endif
 
 /*
@@ -415,11 +441,18 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     // Just to know which program is running on my Arduino
     Serial.println(F("START " __FILE__ "\r\nVersion " VERSION_EXAMPLE " from " __DATE__));
 
-#if defined(ENABLE_MONITORING)
-    Serial.println(F("Monitoring enabled"));
+#if defined(DISABLE_MONITORING)
+    JK_INFO_PRINTLN(F("Monitoring disabled"));
+#else
+    JK_INFO_PRINTLN(F("Monitoring enabled"));
 #endif
-#if defined(NO_INTERNAL_STATISTICS)
-    Serial.println(F("Statistics deactivated"));
+#if defined(NO_CELL_STATISTICS)
+    JK_INFO_PRINTLN(F("Cell statistics deactivated"));
+#else
+    JK_INFO_PRINTLN(F("Cell statistics activated"));
+#endif
+#if defined(NO_ANALYTICS)
+    JK_INFO_PRINTLN(F("Analytics deactivated"));
 #else
     findFirstSOCDataPointIndex();
     JK_INFO_PRINT(F("EEPROM SOC data start index="));
@@ -433,7 +466,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 #if defined(USE_SERIAL_2004_LCD)
     setupLCD();
 #else
-    Serial.println(F("LCD code deactivated"));
+    JK_INFO_PRINTLN(F("LCD code deactivated"));
 #endif
 
     /*
@@ -457,15 +490,15 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
             myLCD.print(F("CAN started"));
-            delay( 2 * LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the info
+            delay(2 * LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the info
         }
 #endif
     } else {
-        Serial.println(reinterpret_cast<const __FlashStringHelper *>(StringStartingCANFailed));
+        Serial.println(reinterpret_cast<const __FlashStringHelper*>(StringStartingCANFailed));
 #if defined(USE_SERIAL_2004_LCD)
         if (sSerialLCDAvailable) {
             myLCD.setCursor(0, 3);
-            myLCD.print(reinterpret_cast<const __FlashStringHelper *>(StringStartingCANFailed));
+            myLCD.print(reinterpret_cast<const __FlashStringHelper*>(StringStartingCANFailed));
 #  if defined(STANDALONE_TEST)
             delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 #  else
@@ -869,6 +902,11 @@ void processReceivedData() {
 
     fillJKConvertedCellInfo();
     fillJKComputedData();
+
+#if !defined(NO_ANALYTICS)
+    computeCapacity();
+    writeSOCData();
+#endif
 
     handleAndPrintAlarmInfo();
     computeUpTimeString();

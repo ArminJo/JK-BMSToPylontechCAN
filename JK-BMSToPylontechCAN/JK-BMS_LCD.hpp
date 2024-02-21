@@ -36,6 +36,9 @@
 #define LCD_I2C_ADDRESS 0x27     // Default LCD address is 0x27 for a 20 chars and 4 line / 2004 display
 bool sSerialLCDAvailable;
 
+#if defined(DISABLE_MONITORING) && defined(NO_ANALYTICS)
+char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with sprintf_P()
+#endif
 /*
  * Display timeouts, may be adapted to your requirements
  */
@@ -77,11 +80,17 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
  */
 #define JK_BMS_PAGE_OVERVIEW            0 // is displayed in case of BMS error message
 #define JK_BMS_PAGE_CELL_INFO           1
+#if defined(NO_CELL_STATISTICS)
+#define JK_BMS_PAGE_BIG_INFO            2
+#define JK_BMS_PAGE_CAN_INFO            3 // Enter on long press
+#define JK_BMS_PAGE_CAPACITY_INFO       4
+#else
 #define JK_BMS_PAGE_CELL_STATISTICS     2
 #define CELL_STATISTICS_COUNTER_MASK 0x04 // must be a multiple of 2 and determines how often one page (min or max) is displayed.
 #define JK_BMS_PAGE_BIG_INFO            3
 #define JK_BMS_PAGE_CAN_INFO            4 // Enter on long press
 #define JK_BMS_PAGE_CAPACITY_INFO       5
+#endif
 #define CELL_CAPACITY_COUNTER_VOLTAGE   0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
 
 #define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
@@ -89,10 +98,8 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #define JK_BMS_START_PAGE               JK_BMS_PAGE_BIG_INFO
 //uint8_t sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
 uint8_t sLCDDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
-uint8_t sToggleDisplayCounter;            // counter for CELL_STATISTICS_COUNTER_MASK, to determine max or min page
-#if !defined(ENABLE_MONITORING) && defined(NO_INTERNAL_STATISTICS)
-char sStringBuffer[LCD_COLUMNS + 1];      // For rendering a LCD row with sprintf_P()
-#endif
+uint8_t sToggleDisplayCounter;            // counter for cell statistics page to determine max or min page and for capacity page
+
 void setDisplayPage(uint8_t aDisplayPageNumber);
 
 void printBMSDataOnLCD();
@@ -454,6 +461,7 @@ void printCellInfoOnLCD() {
 #endif
 }
 
+#if !defined(NO_CELL_STATISTICS)
 /*
  * Switch between display of minimum and maximum at each 4. call
  * The sum of percentages may not give 100% because of rounding errors
@@ -521,7 +529,9 @@ void printCellStatisticsOnLCD() {
         }
     }
 }
+#endif // !defined(NO_CELL_STATISTICS)
 
+#if !defined(NO_ANALYTICS)
 /*
  * Display the last measured capacities
  * Percentage: "100%->30%  101 130Ah"
@@ -558,6 +568,7 @@ void printCapacityInfoOnLCD() {
         }
     }
 }
+#endif
 
 void printBigInfoOnLCD() {
     bigNumberLCD.setBigNumberCursor(0, 0);
@@ -811,16 +822,36 @@ void printOverwiewInfoOnLCD() {
     }
     myLCD.print('W');
     /*
-     * Row 4 - 3 Temperatures and 3 enable states
+     * Row 4 - Voltage difference MOS temperature, maximum temperature of 2 external sensors and 3 enable states
+     * Row 4 - MOS temperature, temperature of 2 external sensors and 3 enable states
      */
     myLCD.setCursor(0, 3);
-// 3 temperatures
+    /*
+     * If one of the temperatures is negative or they difference is more than 25% show all 3 temperatures
+     */
+    bool tShowBothExternalTemperatures = true;
+    if (JKComputedData.TemperatureSensor1 > 0 && JKComputedData.TemperatureSensor2 > 0
+            && abs(JKComputedData.TemperatureSensor1 - JKComputedData.TemperatureSensor2)
+                    < (min(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor1) / 4)) {
+        tShowBothExternalTemperatures = false;
+        myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
+        myLCD.print(F("V "));
+    }
+
     myLCD.print(JKComputedData.TemperaturePowerMosFet);
     myLCD.print(F("\xDF" "C "));
-    myLCD.print(JKComputedData.TemperatureSensor1);
-    myLCD.print(F("\xDF" "C "));
-    myLCD.print(JKComputedData.TemperatureSensor2);
-    myLCD.print(F("\xDF" "C "));
+    if (tShowBothExternalTemperatures) {
+        // show both external sensors
+        myLCD.print(JKComputedData.TemperatureSensor1);
+        myLCD.print(F("\xDF" "C "));
+        myLCD.print(JKComputedData.TemperatureSensor2);
+        myLCD.print(F("\xDF" "C "));
+    } else {
+        // show maximum of the 2 external sensors
+        myLCD.print(max(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor2));
+        myLCD.print(F("\xDF" "C "));
+    }
+
 // Last 4 characters are the actual states
     myLCD.setCursor(16, 3);
     printShortStateOnLCD();
@@ -842,17 +873,20 @@ void printBMSDataOnLCD() {
         } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
             printCellInfoOnLCD();
 
+#if !defined(NO_CELL_STATISTICS)
         } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
             printCellStatisticsOnLCD();
-
+#endif
         } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
             printBigInfoOnLCD();
 
-        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
-            printCANInfoOnLCD();
-
-        } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO
+#if !defined(NO_ANALYTICS)
+        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
             printCapacityInfoOnLCD();
+#endif
+
+        } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
+            printCANInfoOnLCD();
         }
     }
 }
@@ -894,13 +928,16 @@ void checkButtonPressForLCD() {
                         bigNumberLCD._createChar(1, bigNumbersTopBlock);
                         bigNumberLCD._createChar(2, bigNumbersBottomBlock);
 
+#if !defined(NO_CELL_STATISTICS)
                         // Prepare for statistics page here display max first but for half the regular time
                         sToggleDisplayCounter = (CELL_STATISTICS_COUNTER_MASK >> 1) - 1;
 
-                    } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
-                        bigNumberLCD.begin(); // Creates custom character used for generating big numbers
                     } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
                         sToggleDisplayCounter = 0;
+#endif
+
+                    } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+                        bigNumberLCD.begin(); // Creates custom character used for generating big numbers
                     }
                 }
                 setDisplayPage(tLCDDisplayPageNumber);
@@ -915,6 +952,7 @@ void checkButtonPressForLCD() {
                 // Button is still pressed on CAN Info page -> enable serial debug output as long as button is pressed
                 sDebugModeActivated = true; // Is set to false in loop
 
+#if !defined(NO_ANALYTICS)
             } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
                 if (SOCDataPointsInfo.ArrayLength > 1) {
                     // EEPROM data not already cleared here
@@ -946,6 +984,7 @@ void checkButtonPressForLCD() {
 
                     delay (LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the messages
                 }
+#endif
             } else {
                 /*
                  * Not page JK_BMS_PAGE_CAN_INFO or JK_BMS_PAGE_CAPACITY_INFO -> switch to CAN Info page
@@ -975,11 +1014,13 @@ void setDisplayPage(uint8_t aDisplayPageNumber) {
         printBMSDataOnLCD();
     }
 
+#if !defined(NO_ANALYTICS)
     if (aDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
         sDebugModeActivated = false; // Disable every debug output after entering this page
         printCapacityInfoOnLCD(); // First update LCD before printing the plotter data
         readAndPrintSOCData(); // this takes a while...
     }
+#endif
 }
 
 #if defined(STANDALONE_TEST)

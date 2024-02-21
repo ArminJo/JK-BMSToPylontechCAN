@@ -19,12 +19,13 @@ on:
     - '**TestCompile.yml'
 jobs:
   build:
-    name: Test compiling examples for Uno
+    name: Test compiling examples for Nano / Uno
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         arduino-boards-fqbn:
+          - arduino:avr:nano
           - arduino:avr:uno
           - arduino:avr:uno|STANDALONE_TEST
           - arduino:avr:uno|LOCAL_DEBUG
