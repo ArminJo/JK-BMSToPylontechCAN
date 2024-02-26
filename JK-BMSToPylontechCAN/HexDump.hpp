@@ -39,6 +39,7 @@
 #define HEX_DUMP_FORMAT_8_BIT_ADDRESS           0x04 // Bit 2: else 16 bit Address
 #define HEX_DUMP_FORMAT_ASCII_VALUES            0x08 // default
 
+void printBufferHex(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint);
 void printBufferHexDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint);
 void printBufferHexAndASCIIDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint);
 void printMemoryHexDump(uint8_t *aMemory, uint16_t aSizeOfMemoryToPrint, uint8_t aBytesPerLine = _16_BYTES_PER_LINE,

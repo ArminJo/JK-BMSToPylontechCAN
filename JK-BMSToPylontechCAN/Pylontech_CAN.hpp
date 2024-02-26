@@ -41,36 +41,36 @@
 #include "MCP2515_TX.h" // my reduced driver
 #include "Pylontech_CAN.h"
 
-struct PylontechCANBatteryLimitsFrameStruct PylontechCANBatteryLimitsFrame;
-struct PylontechCANSohSocFrameStruct PylontechCANSohSocFrame;
-struct PylontechCANCurrentValuesFrameStruct PylontechCANCurrentValuesFrame;
-struct PylontechCANBatteryRequesFrameStruct PylontechCANBatteryRequestFrame;
-struct PylontechCANErrorsWarningsFrameStruct PylontechCANErrorsWarningsFrame;
+struct PylontechCANBatteryLimitsFrame351Struct PylontechCANBatteryLimitsFrame351;
+struct PylontechCANSohSocFrame355Struct PylontechCANSohSocFrame355;
+struct PylontechCANCurrentValuesFrame356Struct PylontechCANCurrentValuesFrame356;
+struct PylontechCANBatteryRequesFrame35CStruct PylontechCANBatteryRequestFrame35C;
+struct PylontechCANErrorsWarningsFrame359Struct PylontechCANErrorsWarningsFrame359;
 // Extensions to the standard Pylontech protocol
-struct PylontechCANSMACapacityFrameStruct PylontechCANSMACapacityFrame;
-struct PylontechCANLuxpowerCapacityFrameStruct PylontechCANLuxpowerCapacityFrame;
-struct BYDCANCellLimitsFrameStruct BYDCANCellLimitsFrame;
+struct PylontechCANSMACapacityFrame35FStruct PylontechCANSMACapacityFrame35F;
+struct PylontechCANLuxpowerCapacityFrame379Struct PylontechCANLuxpowerCapacityFrame379;
+struct BYDCANCellLimitsFrame373Struct BYDCANCellLimitsFrame373;
 
 // Frames with fixed data
-struct PylontechCANManufacturerFrameStruct PylontechCANManufacturerFrame;
-struct PylontechCANAliveFrameStruct PylontechCANAliveFrame;
+struct PylontechCANManufacturerFrameStruct35E PylontechCANManufacturerFrame35E;
+struct PylontechCANAliveFrame305Struct PylontechCANAliveFrame305;
 
 void modifyCANData(); // user function, which currently enables the function to reduce max current at high SOC level
 
 void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
-    PylontechCANBatteryLimitsFrame.fillFrame(aJKFAllReply);
-    PylontechCANSohSocFrame.fillFrame(aJKFAllReply);
-    PylontechCANBatteryRequestFrame.fillFrame(aJKFAllReply);
-    PylontechCANErrorsWarningsFrame.fillFrame(aJKFAllReply);
-    PylontechCANCurrentValuesFrame.fillFrame(aJKFAllReply);
-#if defined(SMA_EXTENSIONS)
-    PylontechCANSMACapacityFrame.fillFrame(aJKFAllReply);
+    PylontechCANBatteryLimitsFrame351.fillFrame(aJKFAllReply);
+    PylontechCANSohSocFrame355.fillFrame(aJKFAllReply);
+    PylontechCANBatteryRequestFrame35C.fillFrame(aJKFAllReply);
+    PylontechCANErrorsWarningsFrame359.fillFrame(aJKFAllReply);
+    PylontechCANCurrentValuesFrame356.fillFrame(aJKFAllReply);
+#if defined(CAPACITY_35F_EXTENSIONS)
+    PylontechCANSMACapacityFrame35F.fillFrame(aJKFAllReply);
 #endif
-#if defined(LUXPOWER_EXTENSIONS)
-    PylontechCANLuxpowerCapacityFrame.fillFrame(aJKFAllReply);
+#if defined(CAPACITY_379_EXTENSIONS)
+    PylontechCANLuxpowerCapacityFrame379.fillFrame(aJKFAllReply);
 #endif
-#if defined(BYD_EXTENSIONS)
-    BYDCANCellLimitsFrame.fillFrame(aJKFAllReply);
+#if defined(BYD_LIMITS_373_EXTENSIONS)
+    BYDCANCellLimitsFrame373.fillFrame(aJKFAllReply);
 #endif
 #if defined(CAN_DATA_MODIFICATION)
     modifyCANData();
@@ -86,10 +86,10 @@ void sendCANFrame(struct CANFrameStruct *aPylontechCANFrame) {
  * Called in case of BMS communication timeout
  */
 void modifyAllCanDataToInactive() {
-    PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere = 0;
+    PylontechCANCurrentValuesFrame356.FrameData.Current100Milliampere = 0;
     // Clear all requests in case of timeout / BMS switched off, before sending
-    reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame)->FrameData.UWords[0] = 0;
-    reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame)->FrameData.ULong.LowLong = 0;
+    reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame35C)->FrameData.UWords[0] = 0;
+    reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame359)->FrameData.ULong.LowLong = 0;
 }
 
 void printCANFrame(struct CANFrameStruct *aPylontechCANFrame) {
@@ -114,39 +114,39 @@ void printCANFrame(struct CANFrameStruct *aPylontechCANFrame) {
  */
 void sendAllCANFrames(bool aDebugModeActive) {
     if (aDebugModeActive) {
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSohSocFrame));
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANCurrentValuesFrame));
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANManufacturerFrame));
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame));
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANAliveFrame));
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
-#if defined(SMA_EXTENSIONS)
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSMACapacityFrame));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryLimitsFrame351));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSohSocFrame355));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANCurrentValuesFrame356));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANManufacturerFrame35E));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame35C));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANAliveFrame305));
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame359));
+#if defined(CAPACITY_35F_EXTENSIONS)
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSMACapacityFrame35F));
 #endif
-#if defined(LUXPOWER_EXTENSIONS)
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+#if defined(CAPACITY_379_EXTENSIONS)
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame379));
 #endif
-#if defined(BYD_EXTENSIONS)
-        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&BYDCANCellLimitsFrame));
+#if defined(BYD_LIMITS_373_EXTENSIONS)
+        printCANFrame(reinterpret_cast<struct CANFrameStruct*>(&BYDCANCellLimitsFrame373));
 #endif
 
     }
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryLimitsFrame));
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSohSocFrame));
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANCurrentValuesFrame));
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANManufacturerFrame));
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame));
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANAliveFrame));
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame));
-#if defined(SMA_EXTENSIONS)
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSMACapacityFrame));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryLimitsFrame351));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSohSocFrame355));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANCurrentValuesFrame356));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANManufacturerFrame35E));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANBatteryRequestFrame35C));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANAliveFrame305));
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame359));
+#if defined(CAPACITY_35F_EXTENSIONS)
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANSMACapacityFrame35F));
 #endif
-#if defined(LUXPOWER_EXTENSIONS)
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame));
+#if defined(CAPACITY_379_EXTENSIONS)
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&PylontechCANLuxpowerCapacityFrame379));
 #endif
-#if defined(BYD_EXTENSIONS)
-    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&BYDCANCellLimitsFrame));
+#if defined(BYD_LIMITS_373_EXTENSIONS)
+    sendCANFrame(reinterpret_cast<struct CANFrameStruct*>(&BYDCANCellLimitsFrame373));
 #endif
 }
 
@@ -168,9 +168,9 @@ void modifyCANData() {
          * Reduce max current linear from 100% at MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD (80%) SOC
          * to MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE (1A) at 100% SOC
          */
-        PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere = map(sJKFAllReplyPointer->SOCPercent,
+        PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = map(sJKFAllReplyPointer->SOCPercent,
         MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT, 100,
-                PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere,
+                PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere,
                 MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE);
     }
 }
@@ -212,11 +212,11 @@ void modifyCANData() {
             if (ChargeStatusRef >= 1 && ChargeTryEffort > 2) {
                 // Too much for now, request charging off
                 ChargeTryEffort++;
-                PylontechCANBatteryRequestFrame.FrameData.ChargeEnable = 0;
+                PylontechCANBatteryRequestFrame35C.FrameData.ChargeEnable = 0;
                 Serial.println(F("Setting charge to OFF:"));
                 return;
             } else {
-                PylontechCANBatteryRequestFrame.FrameData.ChargeEnable =
+                PylontechCANBatteryRequestFrame35C.FrameData.ChargeEnable =
                         sJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive;
             }
             StartChargeTime = millis(); // Store starting time for charge
@@ -272,12 +272,12 @@ void modifyCANData() {
         Charge_Current_100_milliAmp =
                 (Local_Charge_Current_100_milliAmp > Computed_Current_limits_100mA) ?
                         Computed_Current_limits_100mA : Local_Charge_Current_100_milliAmp;
-        PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere = Charge_Current_100_milliAmp;
+        PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = Charge_Current_100_milliAmp;
         MinuteCount++;
         Serial.print(F("Charging phase 1: minute count::"));
         Serial.println(MinuteCount);
         Serial.print(F("Applied charged current::"));
-        Serial.print(PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere);
+        Serial.print(PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere);
         Serial.print(F("/"));
         Serial.println(Computed_Current_limits_100mA);
 
@@ -299,9 +299,9 @@ void modifyCANData() {
         MinuteCount++;
         if (ChargeStatusRef != 2)
             Charge_Current_100_milliAmp = map(MinuteCount, 1, CHARGE_PHASE_3, Computed_Current_limits_100mA, 0);
-        PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere = Charge_Current_100_milliAmp;
+        PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = Charge_Current_100_milliAmp;
         Serial.print(F("Applied charged current::"));
-        Serial.print(PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere);
+        Serial.print(PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere);
         Serial.print(F("/"));
         Serial.println(Computed_Current_limits_100mA);
 
@@ -325,9 +325,9 @@ void resetCharge() {
     ChargePhase = 0;
     ChargeTryEffort = 0;
     // recover the charging limits
-    if (PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere
+    if (PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere
             != swap(sJKFAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10) {
-        PylontechCANBatteryLimitsFrame.FrameData.BatteryChargeCurrentLimit100Milliampere = swap(
+        PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = swap(
                 sJKFAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10;
     }
 }

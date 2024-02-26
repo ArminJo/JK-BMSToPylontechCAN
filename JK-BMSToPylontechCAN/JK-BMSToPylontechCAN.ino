@@ -137,6 +137,9 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 #if !defined(SERIAL_INFO_PRINT)
 #define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space. - currently activated to save program space.
 #endif
+//#define NO_CAPACITY_35F_EXTENSIONS // Disables generating of frame 0x35F for total capacity. This additional frame is no problem for Deye inverters.
+//#define NO_CAPACITY_379_EXTENSIONS // Disables generating of frame 0x379 for total capacity. This additional frame is no problem for Deye inverters.
+//#define NO_BYD_LIMITS_373_EXTENSIONS // Disables generating of frame 0x373 for cell limits as sent by BYD battery. See https://github.com/dfch/BydCanProtocol/tree/main. This additional frame is no problem for Deye inverters.
 //#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 16558 bytes program space.
 //#define NO_ANALYTICS          // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space.
 //#define USE_NO_LCD            // Disables the code for the LCD display. Saves 25% program space on a Nano.
@@ -295,14 +298,14 @@ uint32_t sMillisOfLastReceivedByte = 0;     // For timeout
 /*
  * CAN stuff
  */
-#if !defined(NO_SMA_EXTENSIONS) // SMA
-#define SMA_EXTENSIONS // Add frame 0x35F for total capacity as SMA extension, which is no problem for Deye inverters.
+#if !defined(NO_CAPACITY_35F_EXTENSIONS) // SMA Sunny Island inverters
+#define CAPACITY_35F_EXTENSIONS // Add frame 0x35F for total capacity for SMA Sunny Island inverters, which is no problem for Deye inverters.
 #endif
-#if !defined(NO_LUXPOWER_EXTENSIONS) // SMA
-#define LUXPOWER_EXTENSIONS // Add frame 0x379 for total capacity as Luxpower extension, which is no problem for Deye inverters.
+#if !defined(NO_CAPACITY_379_EXTENSIONS) // Luxpower SNA inverters
+#define CAPACITY_379_EXTENSIONS // Add frame 0x379 for total capacity for Luxpower SNA inverters, which is no problem for Deye inverters.
 #endif
-#if !defined(NO_BYD_EXTENSIONS) // BYD
-#define BYD_EXTENSIONS // Add frame 0x371 for cell limits as sent by BYD battery
+#if !defined(NO_BYD_LIMITS_373_EXTENSIONS) // BYD
+#define BYD_LIMITS_373_EXTENSIONS // Add frame 0x373 for cell limits as sent by BYD battery, which is no problem for Deye inverters.
 #endif
 #include "Pylontech_CAN.hpp" // Must be before #include "MCP2515_TX.hpp"
 #define CAN_BAUDRATE    500000  // 500 kB

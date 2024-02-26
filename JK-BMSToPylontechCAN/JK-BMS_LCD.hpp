@@ -680,17 +680,17 @@ void printCANInfoOnLCD() {
             myLCD.print(F("No BMS data received"));
         }
     } else {
-        CANFrameStruct *tCANFrameDataPointer = reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame);
+        CANFrameStruct *tCANFrameDataPointer = reinterpret_cast<struct CANFrameStruct*>(&PylontechCANErrorsWarningsFrame359);
         if (tCANFrameDataPointer->FrameData.ULong.LowLong == 0) {
             /*
              * Caption in row 1 and "No errors / warnings" in row 2
              */
             myLCD.print(F(" -CAN INFO- "));
-            if (PylontechCANSohSocFrame.FrameData.SOCPercent < 100) {
+            if (PylontechCANSohSocFrame355.FrameData.SOCPercent < 100) {
                 myLCD.print(' ');
             }
             myLCD.print(F("SOC="));
-            myLCD.print(PylontechCANSohSocFrame.FrameData.SOCPercent);
+            myLCD.print(PylontechCANSohSocFrame355.FrameData.SOCPercent);
             myLCD.print('%');
             myLCD.setCursor(0, 1);
             myLCD.print(F("No errors / warnings"));
@@ -713,12 +713,12 @@ void printCANInfoOnLCD() {
          */
         myLCD.setCursor(0, 2);
         // Voltage
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Voltage10Millivolt / 100);
+        myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt / 100);
         myLCD.print('.');
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Voltage10Millivolt % 100);
+        myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt % 100);
         myLCD.print(F("V "));
         // Current
-        int16_t tCurrent100Milliampere = PylontechCANCurrentValuesFrame.FrameData.Current100Milliampere;
+        int16_t tCurrent100Milliampere = PylontechCANCurrentValuesFrame356.FrameData.Current100Milliampere;
         myLCD.print(tCurrent100Milliampere / 10);
         if (tCurrent100Milliampere < 0) {
             // avoid negative numbers after decimal point
@@ -732,11 +732,11 @@ void printCANInfoOnLCD() {
         myLCD.print(F("A "));
         // Temperature
         myLCD.setCursor(14, 2);
-        myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius / 10);
-        if (PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius < 100) {
+        myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Temperature100Millicelsius / 10);
+        if (PylontechCANCurrentValuesFrame356.FrameData.Temperature100Millicelsius < 100) {
             // Print fraction if value < 100
             myLCD.print('.');
-            myLCD.print(PylontechCANCurrentValuesFrame.FrameData.Temperature100Millicelsius % 10);
+            myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Temperature100Millicelsius % 10);
         }
         myLCD.print(F("\xDF" "C "));
 
@@ -745,26 +745,26 @@ void printCANInfoOnLCD() {
          */
         myLCD.setCursor(0, 3);
         // Charge enable
-        if (PylontechCANBatteryRequestFrame.FrameData.ChargeEnable) {
+        if (PylontechCANBatteryRequestFrame35C.FrameData.ChargeEnable) {
             myLCD.print(F("CH "));
         } else {
             myLCD.print(F("   "));
         }
-        if (PylontechCANBatteryRequestFrame.FrameData.DischargeEnable) {
+        if (PylontechCANBatteryRequestFrame35C.FrameData.DischargeEnable) {
             myLCD.print(F("DC"));
         }
         myLCD.setCursor(6, 3);
-        if (PylontechCANBatteryRequestFrame.FrameData.ForceChargeRequestI) {
+        if (PylontechCANBatteryRequestFrame35C.FrameData.ForceChargeRequestI) {
             myLCD.print(F("FORCEI"));
         }
         myLCD.setCursor(13, 3);
-        if (PylontechCANBatteryRequestFrame.FrameData.ForceChargeRequestII) {
+        if (PylontechCANBatteryRequestFrame35C.FrameData.ForceChargeRequestII) {
             myLCD.print(F("FORCEII"));
         }
 
         // Currently constant 0
 //    myLCD.setCursor(10, 3);
-//    if (PylontechCANBatteryRequestFrame.FrameData.FullChargeRequest) {
+//    if (PylontechCANBatteryRequestFrame35C.FrameData.FullChargeRequest) {
 //        myLCD.print(F("FULL"));
 //    }
     }

@@ -241,8 +241,9 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 16558 bytes program space. |
 | `NO_ANALYTICS` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
-| `NO_SMA_EXTENSIONS` | disabled | If activated, supress sending of SMA extension frame over CAN. |
-| `NO_LUXPOWER_EXTENSIONS` | disabled | If activated, supress sending of Luxpower extension frame over CAN. |
+| `NO_CAPACITY_35F_EXTENSIONS` | disabled | If activated, supress sending of frame 0x35F for total capacity for SMA Sunny Island inverters over CAN. |
+| `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. |
+| `NO_BYD_LIMITS_373_EXTENSIONS` | disabled | If activated, supress sending of frame 0x373 for cell limits as sent by BYD battery over CAN. |
 | `DO_NOT_SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, do not print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Disables display of up to 20 voltages or display of additional information on this page. |
 | `DISABLE_MONITORING` | disabled | If activated, no cell and current values CSV data are written to serial output
 . |

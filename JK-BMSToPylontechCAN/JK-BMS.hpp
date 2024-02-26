@@ -147,8 +147,11 @@ void printJKReplyFrameBuffer() {
     Serial.println();
 
     tBufferAddress += tCellInfoLength;
-    uint16_t tRemainingDataLength = (sReplyFrameBufferIndex + 1)
+    int16_t tRemainingDataLength = ((int16_t) sReplyFrameBufferIndex + 1)
             - (JK_BMS_FRAME_HEADER_LENGTH + JK_BMS_FRAME_CELL_INFO_LENGTH + JK_BMS_FRAME_TRAILER_LENGTH + tCellInfoLength);
+    if (tRemainingDataLength <= 0) {
+        return;
+    }
     printBufferHex(tBufferAddress, tRemainingDataLength);
 
     tBufferAddress += tRemainingDataLength;
@@ -825,7 +828,7 @@ void computeUpTimeString() {
 }
 
 const char sCSVCaption[] PROGMEM
-        = "Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing";
+        = "Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage;Current;SOC;Balancing";
 
 /*
  * Print received data
@@ -839,7 +842,7 @@ void printJKDynamicInfo() {
     printMonitoringInfo();
     if (sUpTimeStringMinuteHasChanged) {
         sUpTimeStringMinuteHasChanged = false;
-        Serial.print(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
+        Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
     }
 #endif
 

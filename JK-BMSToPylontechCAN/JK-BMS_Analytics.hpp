@@ -54,13 +54,12 @@ SOCDataPointsInfoStruct SOCDataPointsInfo;
 
 /*
  * Just clear the complete EEPROM
- * Not used yet
  */
 void updateEEPROMTo_FF() {
 //    if (!sOnlyPlotterOutput) {
 //        Serial.println(F("Clear EEPROM"));
 //    }
-    for (int i = 0; i < E2END; ++i) {
+    for (int i = 0; i <= E2END; ++i) {
         eeprom_update_byte((uint8_t*) i, 0xFF);
     }
 }
