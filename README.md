@@ -75,7 +75,7 @@ The new graph layout with additional current value:
 | Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page - 2.3.0 version |
 | :-: | :-: |
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
-| Cell info page with maximum and minimum indicators |  Overview / Error page with start of error message in first line |
+| Cell info page with maximum and minimum indicators. |  Overview / Error page with start of error message in first line.<br/>Error message is cleared by switching page. |
 | ![Cell info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Error page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |
 | Maximum Cell Statistics page with total Time of Balancing | Maximum Cell Statistics page |
 | ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |

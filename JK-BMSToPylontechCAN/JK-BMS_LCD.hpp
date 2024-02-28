@@ -100,7 +100,7 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 uint8_t sLCDDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
 uint8_t sToggleDisplayCounter;            // counter for cell statistics page to determine max or min page and for capacity page
 
-void setDisplayPage(uint8_t aDisplayPageNumber);
+void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber);
 
 void printBMSDataOnLCD();
 void printCANInfoOnLCD();
@@ -198,7 +198,9 @@ void doLCDBacklightTimeoutHandling() {
     if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
         myLCD.noBacklight(); // switch off backlight after 5 minutes
         sSerialLCDIsSwitchedOff = true;
-        JK_INFO_PRINTLN(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
+        if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
+            JK_INFO_PRINTLN(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
+        }
     }
 }
 #  endif
@@ -940,7 +942,7 @@ void checkButtonPressForLCD() {
                         bigNumberLCD.begin(); // Creates custom character used for generating big numbers
                     }
                 }
-                setDisplayPage(tLCDDisplayPageNumber);
+                setLCDDisplayPage(tLCDDisplayPageNumber);
             }
 
         } else if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE
@@ -993,29 +995,33 @@ void checkButtonPressForLCD() {
                 if (sSerialLCDAvailable) {
                     JK_INFO_PRINTLN();
                     JK_INFO_PRINTLN(F("Long press detected -> switch to CAN page and activate one time debug print"));
-                    setDisplayPage(JK_BMS_PAGE_CAN_INFO);
+                    setLCDDisplayPage(JK_BMS_PAGE_CAN_INFO);
                 }
             }
         } // PageSwitchButtonAtPin2.ButtonStateHasJustChanged
     }
 }
 
-void setDisplayPage(uint8_t aDisplayPageNumber) {
-    sLCDDisplayPageNumber = aDisplayPageNumber;
+void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
+    sLCDDisplayPageNumber = aLCDDisplayPageNumber;
     tone(BUZZER_PIN, 2200, 30);
     JK_INFO_PRINT(F("Set LCD display page to: "));
-    JK_INFO_PRINTLN(aDisplayPageNumber);
+    JK_INFO_PRINTLN(aLCDDisplayPageNumber);
 
 // If BMS communication timeout, only timeout message or CAN Info page can be displayed.
-    if (!sJKBMSFrameHasTimeout || aDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
+    if (!sJKBMSFrameHasTimeout || aLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
         /*
          * Show new page
          */
         printBMSDataOnLCD();
+        if(aLCDDisplayPageNumber != JK_BMS_PAGE_OVERVIEW){
+            // Reset displayed error string
+            sErrorStringForLCD = sCurrentErrorString;
+        }
     }
 
 #if !defined(NO_ANALYTICS)
-    if (aDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+    if (aLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
         sDebugModeActivated = false; // Disable every debug output after entering this page
         printCapacityInfoOnLCD(); // First update LCD before printing the plotter data
         readAndPrintSOCData(); // this takes a while...

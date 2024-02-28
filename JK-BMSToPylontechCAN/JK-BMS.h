@@ -59,7 +59,7 @@ extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to writ
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern bool sJKBMSFrameHasTimeout; // For sending CAN data
-extern bool sErrorStatusJustChanged;
+extern bool sSwitchPageToShowError;
 extern bool sErrorStatusIsError;
 
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long

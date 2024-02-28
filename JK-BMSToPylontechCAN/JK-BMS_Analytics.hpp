@@ -49,6 +49,9 @@ struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARR
 
 CapacityComputationInfoStruct sCapacityComputationInfo;
 
+/*
+ * Cyclic buffer start is SOCDataPointsInfo.ArrayStartIndex and length (required if not fully written) SOCDataPointsInfo.ArrayLength
+ */
 EEMEM SOCDataPointDeltaStruct SOCDataPointsEEPROMArray[NUMBER_OF_SOC_DATA_POINTS]; // 256 for 1 kB EEPROM
 SOCDataPointsInfoStruct SOCDataPointsInfo;
 
@@ -56,25 +59,26 @@ SOCDataPointsInfoStruct SOCDataPointsInfo;
  * Just clear the complete EEPROM
  */
 void updateEEPROMTo_FF() {
-//    if (!sOnlyPlotterOutput) {
-//        Serial.println(F("Clear EEPROM"));
-//    }
     for (int i = 0; i <= E2END; ++i) {
         eeprom_update_byte((uint8_t*) i, 0xFF);
     }
+    SOCDataPointsInfo.ArrayStartIndex = 0;
+    SOCDataPointsInfo.ArrayLength = 0;
+
+    Serial.println(F("Cleared EEPROM"));
 }
 
 /*
- * Looks for first 0xFF entry or for a SOC jump >
+ * Looks for first 0xFF entry or for a change in the SOC_EVEN_EEPROM_PAGE_INDICATION_BIT stored in SOC value.
  * Sets SOCDataPointsInfo.ArrayStartIndex and SOCDataPointsInfo.ArrayLength
  */
 void findFirstSOCDataPointIndex() {
 
-// Default values
-    uint8_t tSOCDataPointsArrayStartIndex = 0;
-    uint16_t tSOCDataPointsArrayLength = NUMBER_OF_SOC_DATA_POINTS;
+    // Default values
+    uint8_t tSOCDataPointsArrayStartIndex = 0; // value if buffer was not fully written
+    uint16_t tSOCDataPointsArrayLength = NUMBER_OF_SOC_DATA_POINTS; // value if SOC jump was found
 
-    uint8_t tOldSOCPercent;
+    bool tStartPageIsEvenFlag;
     for (uint_fast8_t i = 0; i < NUMBER_OF_SOC_DATA_POINTS - 1; ++i) {
         uint8_t tSOCPercent = eeprom_read_byte(&SOCDataPointsEEPROMArray[i].SOCPercent);
         if (tSOCPercent == 0xFF) {
@@ -83,14 +87,25 @@ void findFirstSOCDataPointIndex() {
             break;
         }
 
-        // TODO handle a second jump in data set, i.e. second set written from index 200 to 20
-        if (i > 0 && abs(tOldSOCPercent - tSOCPercent) > 1) {
-            // If SOC values make a jump > 1 we have the first entry not overwritten by new data
+        bool tPageIsEvenFlag = tSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
+        if (i == 0) {
+            tStartPageIsEvenFlag = tPageIsEvenFlag; // Flag at begin of check
+            SOCDataPointsInfo.currentlyWritingOnAnEvenPage = tPageIsEvenFlag;
+        } else if (tStartPageIsEvenFlag ^ tPageIsEvenFlag) {
+            // Here data page changes from even to odd or vice versa
+#if defined(LOCAL_DEBUG)
+            Serial.print(F("Found even/odd toggling at index="));
+            Serial.print(i);
+#endif
             tSOCDataPointsArrayStartIndex = i;
             break;
         }
-        tOldSOCPercent = tSOCPercent;
     }
+
+#if defined(LOCAL_DEBUG)
+    Serial.print(F(" even="));
+    Serial.println(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+#endif
     SOCDataPointsInfo.ArrayStartIndex = tSOCDataPointsArrayStartIndex;
     SOCDataPointsInfo.ArrayLength = tSOCDataPointsArrayLength;
 }
@@ -108,12 +123,13 @@ void readAndPrintSOCData() {
     SOCDataPointStruct tMinimumSOCData;
     SOCDataPointStruct tMaximumSOCData;
 
-    // Read first block
+// Read first block
     auto tSOCDataPointsArrayIndex = SOCDataPointsInfo.ArrayStartIndex;
     eeprom_read_block(&tCurrentSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayIndex], sizeof(tCurrentSOCDataPoint));
-//    tSOCDataMinimum = tCurrentSOCDataPoint;
+    tCurrentSOCDataPoint.SOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT; // remove indication bit
     int16_t tCurrentCapacity100MilliampereHour = (tCurrentSOCDataPoint.SOCPercent * JKComputedData.TotalCapacityAmpereHour) / 10;
 
+    uint8_t tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
     tMinimumSOCData.SOCPercent = tCurrentSOCDataPoint.SOCPercent;
     tMaximumSOCData.SOCPercent = tCurrentSOCDataPoint.SOCPercent;
     tMinimumSOCData.VoltageDifferenceToEmpty40Millivolt = tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt;
@@ -132,6 +148,16 @@ void readAndPrintSOCData() {
     uint_fast8_t i;
     for (i = 0; i < SOCDataPointsInfo.ArrayLength - 1; ++i) {
         /*
+         * Check for transition from 1 to 2 in order to reset capacity to value expected at 2 %.
+         * Use 2 times the delta value from 1 % to 2 %.
+         */
+        if (tLastSOCPercent == 1 && tCurrentSOCDataPoint.SOCPercent == 2) {
+            tCurrentCapacity100MilliampereHour = tCurrentSOCDataPoint.Delta100MilliampereHour;
+            tMinimumSOCData.Capacity100MilliampereHour = 0;
+        }
+        tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
+
+        /*
          * Compute minimum and maximum values for caption below
          */
         if (tMinimumSOCData.SOCPercent > tCurrentSOCDataPoint.SOCPercent) {
@@ -139,6 +165,7 @@ void readAndPrintSOCData() {
         } else if (tMaximumSOCData.SOCPercent < tCurrentSOCDataPoint.SOCPercent) {
             tMaximumSOCData.SOCPercent = tCurrentSOCDataPoint.SOCPercent;
         }
+
         tCurrentCapacity100MilliampereHour += tCurrentSOCDataPoint.Delta100MilliampereHour;
         if (tMinimumSOCData.Capacity100MilliampereHour > tCurrentCapacity100MilliampereHour) {
             tMinimumSOCData.Capacity100MilliampereHour = tCurrentCapacity100MilliampereHour;
@@ -156,28 +183,25 @@ void readAndPrintSOCData() {
             tMaximumSOCData.VoltageDifferenceToEmpty40Millivolt = tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt;
         }
 
-//        if (tCurrentSOCDataPoint.AverageAmpere != 0) {
-//            tDeltaTimeMinutes = (tCurrentSOCDataPoint.Delta100MilliampereHour * 6.0) / tCurrentSOCDataPoint.AverageAmpere;
-//        }
-
         for (uint_fast8_t j = 0; j < 2; ++j) {
             Serial.print(tCurrentSOCDataPoint.SOCPercent);
             Serial.print(' ');
+            Serial.print(tCurrentCapacity100MilliampereHour / 10); // print Ah
+            Serial.print(' ');
             Serial.print((tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4) / 10);
             Serial.print(' ');
+#if defined(SHOW_DELTA_CAPACITY)
             Serial.print(constrain(tCurrentSOCDataPoint.Delta100MilliampereHour, -30, 90)); // clip display to -30 and 90
             Serial.print(' ');
+#endif
             Serial.print(tCurrentSOCDataPoint.AverageAmpere); // print ampere
-            Serial.print(' ');
-            Serial.print(tCurrentCapacity100MilliampereHour / 10); // print Ah
-//            Serial.print(' ');
-//            Serial.print(tDeltaTimeMinutes, 1);
             Serial.println(F(" 0 0 0 0 0")); // to clear unwanted entries from former prints
         }
 
-        // Read next block
+        // Read next block of cyclic buffer
         tSOCDataPointsArrayIndex = (tSOCDataPointsArrayIndex + 1) % NUMBER_OF_SOC_DATA_POINTS;
         eeprom_read_block(&tCurrentSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayIndex], sizeof(tCurrentSOCDataPoint));
+        tCurrentSOCDataPoint.SOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT; // remove indication bit
     }
 
 // print last entry with caption
@@ -188,20 +212,6 @@ void readAndPrintSOCData() {
         Serial.print(tMaximumSOCData.SOCPercent);
         Serial.print(F("%:"));
         Serial.print(tCurrentSOCDataPoint.SOCPercent);
-        Serial.print(F(" VoltToEmpty_"));
-        Serial.print((tMinimumSOCData.VoltageDifferenceToEmpty40Millivolt * 4) / 100.0, 2);
-        Serial.print(F("V->"));
-        Serial.print((tMaximumSOCData.VoltageDifferenceToEmpty40Millivolt * 4) / 100.0, 2);
-        Serial.print(F("V_[0.1V]:"));
-        Serial.print((tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4) / 10);
-        Serial.print(F(" Delta_capacity[0.1Ah]:"));
-        Serial.print(constrain(tCurrentSOCDataPoint.Delta100MilliampereHour, -30, 90)); // clip display to -30 and 90
-        Serial.print(F(" Current_"));
-        Serial.print(tMinimumSOCData.AverageAmpere);
-        Serial.print(F("A->"));
-        Serial.print(tMaximumSOCData.AverageAmpere);
-        Serial.print(F("A:"));
-        Serial.print(tCurrentSOCDataPoint.AverageAmpere);
         Serial.print(F(" Capacity_"));
         uint16_t tTotalCapacity = ((tMaximumSOCData.Capacity100MilliampereHour - tMinimumSOCData.Capacity100MilliampereHour) * 10)
                 / (tMaximumSOCData.SOCPercent - tMinimumSOCData.SOCPercent);
@@ -214,15 +224,29 @@ void readAndPrintSOCData() {
         Serial.print((tMaximumSOCData.Capacity100MilliampereHour - tMinimumSOCData.Capacity100MilliampereHour) / 10); // Delta Ah
         Serial.print(F("Ah:"));
         Serial.print(tCurrentCapacity100MilliampereHour / 10); // print Ah
-//        Serial.print(F(" Delta_time[min]:"));
-//        Serial.print(tDeltaTimeMinutes, 1);
+        Serial.print(F(" VoltToEmpty_"));
+        Serial.print((tMinimumSOCData.VoltageDifferenceToEmpty40Millivolt * 4) / 100.0, 2);
+        Serial.print(F("V->"));
+        Serial.print((tMaximumSOCData.VoltageDifferenceToEmpty40Millivolt * 4) / 100.0, 2);
+        Serial.print(F("V_[0.1V]:"));
+        Serial.print((tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4) / 10);
+#if defined(SHOW_DELTA_CAPACITY)
+        Serial.print(F(" Delta_capacity[0.1Ah]:"));
+        Serial.print(constrain(tCurrentSOCDataPoint.Delta100MilliampereHour, -30, 90)); // clip display to -30 and 90
+#endif
+        Serial.print(F(" Current_"));
+        Serial.print(tMinimumSOCData.AverageAmpere);
+        Serial.print(F("A->"));
+        Serial.print(tMaximumSOCData.AverageAmpere);
+        Serial.print(F("A:"));
+        Serial.print(tCurrentSOCDataPoint.AverageAmpere);
         Serial.print(F(" Empty_voltage_"));
         Serial.print(JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 1);
         Serial.print('_');
         Serial.print(swap(sJKFAllReplyPointer->CellUndervoltageProtectionMillivolt) / 1000.0, 2);
         Serial.println(F("V:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0"));
     }
-    // If not enough data points, padding to 500 data points to guarantee, that old data is shifted out
+// If not enough data points, padding to 500 data points to guarantee, that old data is shifted out
     for (; i < 249; ++i) {
         Serial.println(F(" 0 0 0 0 0 0 0 0 0"));
         Serial.println(F(" 0 0 0 0 0 0 0 0 0"));
@@ -232,28 +256,54 @@ void readAndPrintSOCData() {
 /*
  * Compute delta values and write them to EEPROM if SOC changed
  * Is called for every new dataset
- * Values are taken at the lower edge of SOC, e.g. at SOC = 10.001
+ * Values are taken at the lower edge of SOC.
+ * E.g. values for SOC 10 are written for rising SOC at SOC = 10.001 for falling SOC at 9.990
+ * => we can not write values for SOC 0!
  */
 void writeSOCData() {
     auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
     SOCDataPointDeltaStruct tSOCDataPoint;
 
     /*
-     * For SOC graph
-     * Values are taken at the lower edge of SOC, e.g. at SOC = 10.001
+     * Accumulate values at each call
      */
     SOCDataPointsInfo.DeltaAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
     SOCDataPointsInfo.Accumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
-    SOCDataPointsInfo.NumberOfSamples++;
+    SOCDataPointsInfo.NumberOfSamples++; // For one sample each 2 seconds, we can store up to 36.4 hours here.
 #if defined(LOCAL_DEBUG)
     Serial.print(F("NumberOfSamples="));
     Serial.print(SOCDataPointsInfo.DeltaAccumulator10Milliampere);
     Serial.print(F(", DeltaAccumulator10Milliampere="));
     Serial.println(SOCDataPointsInfo.DeltaAccumulator10Milliampere);
 #endif
+    /*
+     * Check for transition from 0 to 1, where we do not write values, but reset all accumulators
+     */
+    if (SOCDataPointsInfo.lastSOCPercent == 0 && tCurrentSOCPercent == 1) {
+        Serial.println(F("SOC 0 -> 1 -> reset SOC data values"));
+        SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0;
+        SOCDataPointsInfo.Accumulator10Milliampere = 0;
+        SOCDataPointsInfo.NumberOfSamples = 0;
+        SOCDataPointsInfo.MillisOfLastValidEntry = millis();
+        SOCDataPointsInfo.lastSOCPercent = 1;
+        return;
+    }
+    SOCDataPointsInfo.lastSOCPercent = tCurrentSOCPercent;
+
     uint8_t tSOCDataPointsArrayLastWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength - 1)
             % NUMBER_OF_SOC_DATA_POINTS;
     auto tLastWrittenSOCPercent = eeprom_read_byte(&SOCDataPointsEEPROMArray[tSOCDataPointsArrayLastWriteIndex].SOCPercent);
+    /*
+     * check for buffer wrap around and toggle currentlyWritingOnAnEvenPage flag
+     */
+    if (tSOCDataPointsArrayLastWriteIndex == (NUMBER_OF_SOC_DATA_POINTS - 1)) {
+        // Here we write next entry at index 0, i.e. we start at next page, so we must switch even / odd indicator
+        SOCDataPointsInfo.currentlyWritingOnAnEvenPage = !(tLastWrittenSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT);
+        JK_INFO_PRINT(F("Buffer wrap around detected, even="));
+        JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+    }
+
+    tLastWrittenSOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
     if (tCurrentSOCPercent > tLastWrittenSOCPercent || tCurrentSOCPercent < (tLastWrittenSOCPercent - 1)) {
         /*
          * Insert new entry
@@ -268,15 +318,20 @@ void writeSOCData() {
 
         // Compute new SOC to be written
         if (tCurrentSOCPercent > tLastWrittenSOCPercent) {
-            // Here we SOC was just incremented
+            // Here SOC was just incremented
             tSOCDataPoint.SOCPercent = tCurrentSOCPercent;
         } else {
             /*
              * Here tCurrentSOCPercent < (SOCDataPointsEEPROMArray[tSOCDataPointsArrayIndex].SOCPercent - 1
-             * SOC is decreasing, so we take values at the point just below the lower edge of the value below for the SOC just above this edge
+             * SOC is decreasing, so we take values at the point just below the lower edge of the SOC, i.e. at upper edge of SOC - 1.
+             * We take this as values for the SOC just above this edge :-).
              */
             tSOCDataPoint.SOCPercent = tCurrentSOCPercent + 1;
         }
+        if (SOCDataPointsInfo.currentlyWritingOnAnEvenPage) {
+            tSOCDataPoint.SOCPercent |= SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
+        }
+
         tSOCDataPoint.VoltageDifferenceToEmpty40Millivolt = JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 4;
 
         // Compute current value and adjust accumulator
@@ -297,18 +352,27 @@ void writeSOCData() {
 
         JK_INFO_PRINT(F("SOC data write at index "));
         JK_INFO_PRINT(tSOCDataPointsArrayNextWriteIndex);
-        JK_INFO_PRINT(F(", current length="));
-        JK_INFO_PRINT(SOCDataPointsInfo.ArrayLength);
+        if (SOCDataPointsInfo.ArrayLength != NUMBER_OF_SOC_DATA_POINTS) {
+            JK_INFO_PRINT(F(", current length="));
+            JK_INFO_PRINT(SOCDataPointsInfo.ArrayLength);
+        }
         JK_INFO_PRINT(F(", NumberOfSamples="));
         JK_INFO_PRINT(SOCDataPointsInfo.NumberOfSamples);
+        JK_INFO_PRINT(F(", even="));
+        JK_INFO_PRINT(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
         JK_INFO_PRINT(F(", SOCPercent="));
-        JK_INFO_PRINT(tSOCDataPoint.SOCPercent);
+        JK_INFO_PRINT(tSOCDataPoint.SOCPercent & (~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
         JK_INFO_PRINT(F(", VoltageDifferenceToEmpty40Millivolt="));
         JK_INFO_PRINT(tSOCDataPoint.VoltageDifferenceToEmpty40Millivolt);
         JK_INFO_PRINT(F(", AverageAmpere="));
         JK_INFO_PRINT(tSOCDataPoint.AverageAmpere);
         JK_INFO_PRINT(F(", Delta100MilliampereHour="));
         JK_INFO_PRINTLN(tSOCDataPoint.Delta100MilliampereHour);
+
+        /*
+         * Write to eeprom
+         */
+        eeprom_write_block(&tSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayNextWriteIndex], sizeof(tSOCDataPoint));
 
         SOCDataPointsInfo.Accumulator10Milliampere = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;

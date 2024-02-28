@@ -461,7 +461,9 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_INFO_PRINT(F("EEPROM SOC data start index="));
     JK_INFO_PRINT(SOCDataPointsInfo.ArrayStartIndex);
     JK_INFO_PRINT(F(" length="));
-    JK_INFO_PRINTLN(SOCDataPointsInfo.ArrayLength);
+    JK_INFO_PRINT(SOCDataPointsInfo.ArrayLength);
+    JK_INFO_PRINT(F(", even="));
+    JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
 #endif
 
     tone(BUZZER_PIN, 2200, 50);
@@ -571,6 +573,12 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
             sJKFAllReplyPointer->SOCPercent += tIncrement;
             JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt += tIncrement * 4;
 
+            Serial.println();
+            Serial.println();
+            Serial.println(F("Now write initial data to EEPROM"));
+            Serial.println();
+            delay(2000);
+
             for (int j = 0; j < (i + 4) * 10; ++j) { // 320 corresponds to 2 Ah
                 writeSOCData();
             }
@@ -581,10 +589,12 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
             }
         }
         findFirstSOCDataPointIndex();
-        Serial.print(F("SOC data start index="));
+        Serial.print(F("EEPROM SOC data start index="));
         Serial.print(SOCDataPointsInfo.ArrayStartIndex);
         Serial.print(F(" length="));
-        Serial.println(SOCDataPointsInfo.ArrayLength);
+        Serial.print(SOCDataPointsInfo.ArrayLength);
+        Serial.print(F(", even="));
+        Serial.println(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
     }
 
     doStandaloneTest();
@@ -709,14 +719,14 @@ void loop() {
          */
         if (sErrorStringForLCD != NULL && sErrorStatusIsError) {
             sDoErrorBeep = true;
-            if (sErrorStatusJustChanged) {
+            if (sSwitchPageToShowError) {
                 /*
                  * Switch to overview page once, to show the error
                  * Not required for non errors
                  */
-                sErrorStatusJustChanged = false;
+                sSwitchPageToShowError = false;
 #if defined(USE_SERIAL_2004_LCD)
-                setDisplayPage(JK_BMS_PAGE_OVERVIEW);
+                setLCDDisplayPage(JK_BMS_PAGE_OVERVIEW);
 #  if !defined(DISPLAY_ALWAYS_ON)
                 if (checkAndTurnLCDOn()) {
                     Serial.println(F("error status changing")); // Switch on LCD display, triggered by error status changing

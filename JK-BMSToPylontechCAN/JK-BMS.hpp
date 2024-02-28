@@ -101,9 +101,10 @@ const char *const JK_BMSErrorStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
         chargingOvervoltage, dischargingUndervoltage, Sensor2Overtemperature, chargingOvercurrent, dischargingOvercurrent,
         CellVoltageDifference, Sensor1Overtemperature, Sensor2LowLemperature, CellOvervoltage, CellUndervoltage, _309AProtection,
         _309BProtection };
-const char *sErrorStringForLCD; // store of the error string of the highest error bit, NULL otherwise
-bool sErrorStatusJustChanged = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if error flags changed, and reset on switching to overview page.
-bool sErrorStatusIsError = false; // True if status is error and beep should be started. False e.g. for "Battery full".
+const char *sCurrentErrorString;     // Pointer to the error string of the highest error bit, NULL otherwise
+const char *sErrorStringForLCD;      // Pointer to the error string for display on LCD. Is reset at page switch.
+bool sSwitchPageToShowError = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if error flags changed, and reset on switching to overview page.
+bool sErrorStatusIsError = false;    // True if status is error and beep should be started. False e.g. for "warning" like "Battery full".
 
 /*
  * Helper macro for getting a macro definition as string
@@ -747,12 +748,12 @@ void handleAndPrintAlarmInfo() {
     if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
         // ChargeOvervoltageAlarm is displayed separately
         if (!tJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
-            sErrorStatusJustChanged = true; // This forces a switch to Overview page
+            sSwitchPageToShowError = true; // This forces a switch to Overview page
             sErrorStatusIsError = true; //  This forces the beep
         }
 
         if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == 0) {
-            sErrorStringForLCD = NULL; // reset error string
+            sCurrentErrorString = NULL; // reset error string
             sErrorStatusIsError = false;
             Serial.println(F("All alarms are cleared now"));
         } else {
@@ -768,9 +769,9 @@ void handleAndPrintAlarmInfo() {
                     Serial.print(F("Alarm bit=0b"));
                     Serial.print(tAlarmMask, BIN);
                     Serial.print(F(" -> "));
-                    const char *tErrorStringPtr = (char*) (pgm_read_word(&JK_BMSErrorStringsArray[i]));
-                    sErrorStringForLCD = tErrorStringPtr;
-                    Serial.println(reinterpret_cast<const __FlashStringHelper*>(tErrorStringPtr));
+                    sCurrentErrorString = (char*) (pgm_read_word(&JK_BMSErrorStringsArray[i]));
+                    sErrorStringForLCD = sCurrentErrorString;
+                    Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCurrentErrorString));
                 }
                 tAlarmMask <<= 1;
             }

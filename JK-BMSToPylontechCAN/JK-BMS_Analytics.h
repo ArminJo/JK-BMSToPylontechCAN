@@ -69,6 +69,10 @@ struct SOCDataPointStruct {
     int8_t AverageAmpere;
 };
 
+/*
+ * This structure is stored to EEPROM
+ */
+#define SOC_EVEN_EEPROM_PAGE_INDICATION_BIT 0x80 // Set in SOCPercent if we currently write on an even page. Required to find the end of current data in cyclic buffer.
 struct SOCDataPointDeltaStruct {
     uint8_t SOCPercent;
     uint8_t VoltageDifferenceToEmpty40Millivolt; // 1 = 40 mV, 255 = 10.200 V
@@ -78,13 +82,14 @@ struct SOCDataPointDeltaStruct {
 #define NUMBER_OF_SOC_DATA_POINTS   ((E2END + 1) / sizeof(SOCDataPointDeltaStruct)) // 0x100
 
 struct SOCDataPointsInfoStruct {
-    uint8_t ArrayStartIndex; // Index of first entry in SOCDataPointsEEPROMArray
-    uint16_t ArrayLength; // Maximum is NUMBER_OF_SOC_DATA_POINTS
+    uint8_t ArrayStartIndex;   // Index of first entry in cyclic SOCDataPointsEEPROMArray, index of next value to be written.
+    uint16_t ArrayLength;      // Length of valid data in Array. Required if not fully written. Maximum is NUMBER_OF_SOC_DATA_POINTS
+    bool currentlyWritingOnAnEvenPage; // If true SOC_EVEN_EEPROM_PAGE_INDICATION_BIT is set in SOCPercent.
+    uint8_t lastSOCPercent;     // for detecting transition from 0 to 1.
     long MillisOfLastValidEntry;
-    uint16_t NumberOfSamples = 0;
+    uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
     long Accumulator10Milliampere = 0; // Serves as accumulator for AverageAmpere
     long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. We can have a residual of up to 18000 after write.
-
 };
 extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 
