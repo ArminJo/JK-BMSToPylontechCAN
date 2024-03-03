@@ -970,7 +970,6 @@ void checkButtonPress() {
         sDebugModeActivated = true; // Is set to false in loop
     }
 #endif // defined(USE_SERIAL_2004_LCD)
-
 }
 
 #if defined(STANDALONE_TEST)

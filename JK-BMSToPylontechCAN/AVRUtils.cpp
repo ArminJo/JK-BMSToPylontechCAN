@@ -86,7 +86,7 @@ uint16_t getStackUnusedAndUsedBytes(uint16_t *aStackUsedBytesPointer) {
         tHeapPtr++;
         tStackUnused++;
     }
-    *aStackUsedBytesPointer = (RAMEND - (uint16_t) tHeapPtr) + 1;
+    *aStackUsedBytesPointer = ((RAMEND + 1) - (uint16_t) tHeapPtr);
 
     return tStackUnused;
 }
@@ -95,8 +95,9 @@ uint16_t getStackUnusedAndUsedBytes(uint16_t *aStackUsedBytesPointer) {
  * Returns the amount of stack/heap touched since the last call to initStackFreeMeasurement()
  * by check for first non touched pattern on the stack/heap, starting the DOWNWARD search at current stack pointer.
  *
- * This returns too big value, if the end of former malloced and written memory was higher than current stackpointer,
- * which nevertheless looks like a potential programming problem.
+ * If the end of former malloced and written memory was higher than current stackpointer,
+ * the memory area is taken as overwritten stack. Therefore we may return values, which are too big.
+ * But nevertheless, this constellation is likely a potential programming problem!
  */
 uint16_t getStackUsedBytes() {
     uint8_t tDummyVariableOnStack;
@@ -108,7 +109,7 @@ uint16_t getStackUsedBytes() {
         tSearchPtr--;
     }
 
-    return (RAMEND + 1) - (uint16_t)tSearchPtr;
+    return (RAMEND + 1) - (uint16_t) tSearchPtr;
 }
 
 /*
@@ -217,7 +218,9 @@ void printStackUnusedAndUsedBytesIfChanged(Print *aSerial) {
  */
 void printRAMInfo(Print *aSerial) {
     uint16_t tHeapStart = (uint16_t) getHeapStart();
-    aSerial->print(F("Size of Data + BSS, Heap start, Stack end="));
+    aSerial->print(F("Size of Data + BSS, Heap start, Stack end=0x"));
+    aSerial->print(tHeapStart - RAMSTART, HEX);
+    aSerial->print(F(" | "));
     aSerial->println(tHeapStart - RAMSTART);
 
     printStackUsedBytes(aSerial);

@@ -113,6 +113,7 @@ void findFirstSOCDataPointIndex() {
 /*
  * Read and print SOC EEPROM data for Arduino Plotter
  */
+//#define SHOW_DELTA_CAPACITY
 void readAndPrintSOCData() {
     if (SOCDataPointsInfo.ArrayLength == 0) {
         return;
@@ -153,7 +154,7 @@ void readAndPrintSOCData() {
          */
         if (tLastSOCPercent == 1 && tCurrentSOCDataPoint.SOCPercent == 2) {
             tCurrentCapacity100MilliampereHour = tCurrentSOCDataPoint.Delta100MilliampereHour;
-            tMinimumSOCData.Capacity100MilliampereHour = 0;
+            tMinimumSOCData.Capacity100MilliampereHour = 0; // Set minimum to 0
         }
         tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
 
@@ -261,7 +262,6 @@ void readAndPrintSOCData() {
  * => we can not write values for SOC 0!
  */
 void writeSOCData() {
-    auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
     SOCDataPointDeltaStruct tSOCDataPoint;
 
     /*
@@ -279,6 +279,7 @@ void writeSOCData() {
     /*
      * Check for transition from 0 to 1, where we do not write values, but reset all accumulators
      */
+    auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
     if (SOCDataPointsInfo.lastSOCPercent == 0 && tCurrentSOCPercent == 1) {
         Serial.println(F("SOC 0 -> 1 -> reset SOC data values"));
         SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0;

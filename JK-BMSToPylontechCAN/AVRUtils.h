@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <avr/sleep.h>
 #include <avr/wdt.h>
+#include "avr/boot.h"
 
 /*
  * storage for millis value to enable compensation for interrupt disable at signal acquisition etc.
