@@ -107,7 +107,9 @@ struct JKConvertedCellInfoStruct {
     uint8_t ActualNumberOfCellInfoEntries;
     JKCellInfoStruct CellInfoStructArray[MAXIMUM_NUMBER_OF_CELLS];
     uint16_t MinimumCellMillivolt;
+    uint8_t IndexOfMinimumCellMillivolt;
     uint16_t MaximumCellMillivolt;
+    uint8_t IndexOfMaximumCellMillivolt;
     uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
     uint16_t AverageCellMillivolt;
 };
@@ -180,6 +182,16 @@ struct JKComputedDataStruct {
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
+
+struct JKLastPrintedDataStruct {
+    int16_t TemperaturePowerMosFet;     // Degree Celsius
+    int16_t TemperatureSensor1;
+    int16_t TemperatureSensor2;
+    uint16_t RemainingCapacityAmpereHour; // Computed value
+    float BatteryVoltageFloat;          // Volt
+    int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
+};
+extern struct JKLastPrintedDataStruct JKLastPrintedData;
 
 /*
  * Only for documentation
@@ -424,10 +436,10 @@ struct JKReplyStruct {
 };
 
 /*
- * Contains only values which are compared witch current ones to detect changes
+ * Contains only 4 unconverted values (not in JKComputedDataStruct) which are compared witch current ones to detect changes
  */
 struct JKLastReplyStruct {
-    uint8_t SOCPercent;                     // 0-100% 0x85
+    uint8_t SOCPercent;                         // 0-100% 0x85
     union {                                     // 0x8B
         uint16_t AlarmsAsWord;
         struct {

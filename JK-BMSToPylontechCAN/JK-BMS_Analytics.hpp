@@ -121,8 +121,8 @@ void readAndPrintSOCData() {
 
     SOCDataPointDeltaStruct tCurrentSOCDataPoint;
 
-    SOCDataPointStruct tMinimumSOCData;
-    SOCDataPointStruct tMaximumSOCData;
+    SOCDataPointMinMaxStruct tMinimumSOCData;
+    SOCDataPointMinMaxStruct tMaximumSOCData;
 
 // Read first block
     auto tSOCDataPointsArrayIndex = SOCDataPointsInfo.ArrayStartIndex;
@@ -268,7 +268,7 @@ void writeSOCData() {
      * Accumulate values at each call
      */
     SOCDataPointsInfo.DeltaAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
-    SOCDataPointsInfo.Accumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
+    SOCDataPointsInfo.AverageAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
     SOCDataPointsInfo.NumberOfSamples++; // For one sample each 2 seconds, we can store up to 36.4 hours here.
 #if defined(LOCAL_DEBUG)
     Serial.print(F("NumberOfSamples="));
@@ -280,16 +280,14 @@ void writeSOCData() {
      * Check for transition from 0 to 1, where we do not write values, but reset all accumulators
      */
     auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
-    if (SOCDataPointsInfo.lastSOCPercent == 0 && tCurrentSOCPercent == 1) {
+    if (lastJKReply.SOCPercent == 0 && tCurrentSOCPercent == 1) {
         Serial.println(F("SOC 0 -> 1 -> reset SOC data values"));
         SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0;
-        SOCDataPointsInfo.Accumulator10Milliampere = 0;
+        SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.MillisOfLastValidEntry = millis();
-        SOCDataPointsInfo.lastSOCPercent = 1;
         return;
     }
-    SOCDataPointsInfo.lastSOCPercent = tCurrentSOCPercent;
 
     uint8_t tSOCDataPointsArrayLastWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength - 1)
             % NUMBER_OF_SOC_DATA_POINTS;
@@ -342,7 +340,7 @@ void writeSOCData() {
                 * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10); // We can have a residual of up to 18000 after write
         // compute rounded average ampere
         // TODO handle overflow
-        tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.Accumulator10Milliampere + (SOCDataPointsInfo.NumberOfSamples * 50))
+        tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.AverageAccumulator10Milliampere + (SOCDataPointsInfo.NumberOfSamples * 50))
                 / (SOCDataPointsInfo.NumberOfSamples * 100);
 
         /*
@@ -368,14 +366,16 @@ void writeSOCData() {
         JK_INFO_PRINT(F(", AverageAmpere="));
         JK_INFO_PRINT(tSOCDataPoint.AverageAmpere);
         JK_INFO_PRINT(F(", Delta100MilliampereHour="));
-        JK_INFO_PRINTLN(tSOCDataPoint.Delta100MilliampereHour);
+        JK_INFO_PRINT(tSOCDataPoint.Delta100MilliampereHour);
+        JK_INFO_PRINT(F(", Left100MilliampereHour="));
+        JK_INFO_PRINTLN(SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10.0),2);
 
         /*
          * Write to eeprom
          */
         eeprom_write_block(&tSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayNextWriteIndex], sizeof(tSOCDataPoint));
 
-        SOCDataPointsInfo.Accumulator10Milliampere = 0;
+        SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.MillisOfLastValidEntry = millis();
     }
@@ -425,12 +425,12 @@ void computeCapacity() {
             JKComputedCapacity[0].EndSOCPercent = tCurrentSOCPercent;
             JKComputedCapacity[0].End100MilliVoltToEmpty = JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 10;
             uint16_t tCapacityComputationAccumulator10MilliAmpereHour = sCapacityComputationInfo.Accumulator10Milliampere
-                    / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 100); // -> sCapacityComputationInfo.Accumulator10Milliampere / 1800
+                    / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 100); // -> sCapacityComputationInfo.AverageAccumulator10Milliampere / 1800
             JKComputedCapacity[0].Capacity = tCapacityComputationAccumulator10MilliAmpereHour / 100;
             JKComputedCapacity[0].TotalCapacity = tCapacityComputationAccumulator10MilliAmpereHour / tDeltaSOC;
             // Direct 32 bit computation. It is 12 bytes longer
-            //            JKComputedCapacity[0].Capacity = sCapacityComputationInfo.Accumulator10Milliampere / CAPACITY_ACCUMULATOR_1_AMPERE_HOUR;
-            //            JKComputedCapacity[0].TotalCapacity = sCapacityComputationInfo.Accumulator10Milliampere
+            //            JKComputedCapacity[0].Capacity = sCapacityComputationInfo.AverageAccumulator10Milliampere / CAPACITY_ACCUMULATOR_1_AMPERE_HOUR;
+            //            JKComputedCapacity[0].TotalCapacity = sCapacityComputationInfo.AverageAccumulator10Milliampere
             //                    / ((CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 100) * tDeltaSOC);
             if (sCapacityComputationInfo.LastDeltaSOC != tDeltaSOC) {
                 // Delta SOC changed by 1 -> print values

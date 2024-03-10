@@ -57,7 +57,8 @@ uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as receiv
 bool sJKBMSFrameHasTimeout;                 // If true, timeout message or CAN Info page is displayed.
 
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
-JKComputedDataStruct lastJKComputedData;        // For detecting changes
+JKLastPrintedDataStruct JKLastPrintedData;      // For detecting changes for printing
+
 char sUpTimeString[12];                         // "9999D23H12M" is 11 bytes long
 char sBalancingTimeString[11] = { ' ', ' ', '0', 'D', '0', '0', 'H', '0', '0', 'M', '\0' };    // "999D23H12M" is 10 bytes long
 bool sUpTimeStringMinuteHasChanged;
@@ -104,7 +105,7 @@ const char *const JK_BMSErrorStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
 const char *sCurrentErrorString;     // Pointer to the error string of the highest error bit, NULL otherwise
 const char *sErrorStringForLCD;      // Pointer to the error string for display on LCD. Is reset at page switch.
 bool sSwitchPageToShowError = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if error flags changed, and reset on switching to overview page.
-bool sErrorStatusIsError = false;    // True if status is error and beep should be started. False e.g. for "warning" like "Battery full".
+bool sErrorStatusIsError = false; // True if status is error and beep should be started. False e.g. for "warning" like "Battery full".
 
 /*
  * Helper macro for getting a macro definition as string
@@ -363,9 +364,11 @@ void fillJKConvertedCellInfo() {
             tMillivoltSum += tVoltage;
             if (tMinimumMillivolt > tVoltage) {
                 tMinimumMillivolt = tVoltage;
+                JKConvertedCellInfo.IndexOfMinimumCellMillivolt = i;
             }
             if (tMaximumMillivolt < tVoltage) {
                 tMaximumMillivolt = tVoltage;
+                JKConvertedCellInfo.IndexOfMaximumCellMillivolt = i;
             }
         }
     }
@@ -581,21 +584,25 @@ void fillJKComputedData() {
 #endif // NO_CELL_STATISTICS
 }
 
+void printJKCellInfoOverview() {
+    myPrint(F(" Minimum at "), JKConvertedCellInfo.IndexOfMinimumCellMillivolt);
+    myPrint(F(" ="), JKConvertedCellInfo.MinimumCellMillivolt);
+    myPrint(F(" mV, Maximum at "), JKConvertedCellInfo.IndexOfMaximumCellMillivolt);
+    myPrint(F(" ="), JKConvertedCellInfo.MaximumCellMillivolt);
+    myPrint(F("mV, Delta="), JKConvertedCellInfo.DeltaCellMillivolt);
+    myPrint(F(" mV, Average="), JKConvertedCellInfo.AverageCellMillivolt);
+    Serial.println(F(" mV"));
+}
 /*
  * Print formatted cell info on Serial
  */
 void printJKCellInfo() {
     uint8_t tNumberOfCellInfo = JKConvertedCellInfo.ActualNumberOfCellInfoEntries;
+    Serial.print(JKConvertedCellInfo.ActualNumberOfCellInfoEntries);
+    Serial.print(F(" Cells,"));
 
-    /*
-     * Summary
-     */
-    Serial.print(tNumberOfCellInfo);
-    myPrint(F(" Cells, Minimum="), JKConvertedCellInfo.MinimumCellMillivolt);
-    myPrint(F(" mV, Maximum="), JKConvertedCellInfo.MaximumCellMillivolt);
-    myPrint(F("mV, Delta="), JKConvertedCellInfo.DeltaCellMillivolt);
-    myPrint(F(" mV, Average="), JKConvertedCellInfo.AverageCellMillivolt);
-    Serial.println(F(" mV"));
+    // Print summary
+    printJKCellInfoOverview();
 
     /*
      * Individual cell voltages
@@ -840,22 +847,30 @@ void printJKDynamicInfo() {
     JKReplyStruct *tJKFAllReplyPointer = sJKFAllReplyPointer;
 
 #if !defined(DISABLE_MONITORING)
+#  if defined(MONOTORING_PERIOD_FAST)
+    // Print every dataset, i.e. every 2 seconds, and caption every minute
     printMonitoringInfo();
     if (sUpTimeStringMinuteHasChanged) {
         sUpTimeStringMinuteHasChanged = false;
         Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
     }
+#  else
+    // print every minute and caption every 10 minutes
+    if (sUpTimeStringMinuteHasChanged) {
+        sUpTimeStringMinuteHasChanged = false;
+        printMonitoringInfo();
+    }
+#  endif
 #endif
 
     /*
      * Print it every ten minutes
      */
-//    // Print it every minute
-//    if (sUpTimeStringMinuteHasChanged) {
-//        sUpTimeStringMinuteHasChanged = false;
     if (sUpTimeStringTenthOfMinuteHasChanged) {
         sUpTimeStringTenthOfMinuteHasChanged = false;
-
+#if !defined(DISABLE_MONITORING) && !defined(MONOTORING_PERIOD_FAST)
+        Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
+#endif
         Serial.print(F("Total Runtime_"));
         Serial.print(swap(sJKFAllReplyPointer->SystemWorkingMinutes));
         Serial.print(F(" minutes -> "));
@@ -895,7 +910,7 @@ void printJKDynamicInfo() {
             Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
         }
 #endif
-    }
+    } // Print it every ten minutes
 
     /*
      * Temperatures
@@ -905,28 +920,32 @@ void printJKDynamicInfo() {
     Serial.print(F("TokenTemperaturePowerMosFet=0x"));
     Serial.println(sJKFAllReplyPointer->TokenTemperaturePowerMosFet, HEX);
 #endif
-    if (abs(JKComputedData.TemperaturePowerMosFet - lastJKComputedData.TemperaturePowerMosFet) > 2
-            || abs(JKComputedData.TemperatureSensor1 - lastJKComputedData.TemperatureSensor1) > 2
-            || abs(JKComputedData.TemperatureSensor2 - lastJKComputedData.TemperatureSensor2) > 2) {
+    if (abs(JKComputedData.TemperaturePowerMosFet - JKLastPrintedData.TemperaturePowerMosFet) > 2
+            || abs(JKComputedData.TemperatureSensor1 - JKLastPrintedData.TemperatureSensor1) > 2
+            || abs(JKComputedData.TemperatureSensor2 - JKLastPrintedData.TemperatureSensor2) > 2) {
         myPrint(F("Temperature: Power MosFet="), JKComputedData.TemperaturePowerMosFet);
         myPrint(F(", Sensor 1="), JKComputedData.TemperatureSensor1);
         myPrintln(F(", Sensor 2="), JKComputedData.TemperatureSensor2);
+        JKLastPrintedData.TemperaturePowerMosFet = JKComputedData.TemperaturePowerMosFet;
+        JKLastPrintedData.TemperatureSensor1 = JKComputedData.TemperatureSensor1;
+        JKLastPrintedData.TemperatureSensor2 = JKComputedData.TemperatureSensor2;
     }
 
     /*
      * SOC
      */
     if (tJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent
-            || JKComputedData.RemainingCapacityAmpereHour != lastJKComputedData.RemainingCapacityAmpereHour) {
+            || JKComputedData.RemainingCapacityAmpereHour != JKLastPrintedData.RemainingCapacityAmpereHour) {
         myPrint(F("SOC[%]="), tJKFAllReplyPointer->SOCPercent);
         myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
+        JKLastPrintedData.RemainingCapacityAmpereHour = JKComputedData.RemainingCapacityAmpereHour;
     }
 
     /*
      * Charge and Discharge values
      */
-    if (abs(JKComputedData.BatteryVoltageFloat - lastJKComputedData.BatteryVoltageFloat) > 0.02 // Meant is 0.02 but use 15 to avoid strange floating point effects
-    || abs(JKComputedData.BatteryLoadPower - lastJKComputedData.BatteryLoadPower) >= 20) {
+    if (abs(JKComputedData.BatteryVoltageFloat - JKLastPrintedData.BatteryVoltageFloat) > 0.03
+            || abs(JKComputedData.BatteryLoadPower - JKLastPrintedData.BatteryLoadPower) >= 50) {
         Serial.print(F("Battery Voltage[V]="));
         Serial.print(JKComputedData.BatteryVoltageFloat, 2);
         Serial.print(F(", Current[A]="));
@@ -934,6 +953,8 @@ void printJKDynamicInfo() {
         myPrint(F(", Power[W]="), JKComputedData.BatteryLoadPower);
         Serial.print(F(", Difference to empty[V]="));
         Serial.println(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 1);
+        JKLastPrintedData.BatteryVoltageFloat = JKComputedData.BatteryVoltageFloat;
+        JKLastPrintedData.BatteryLoadPower = JKComputedData.BatteryLoadPower;
     }
 
     /*
@@ -964,7 +985,11 @@ void printJKDynamicInfo() {
          */
         Serial.print(F("Balancing"));
         printActiveState(tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive);
-        Serial.println(); // printActiveState does no println()
+        if (tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+            printJKCellInfoOverview();
+        } else {
+            Serial.println(); // printActiveState does no println()
+        }
     }
 }
 

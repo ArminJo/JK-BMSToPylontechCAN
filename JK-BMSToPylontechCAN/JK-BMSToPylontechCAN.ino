@@ -131,11 +131,18 @@ const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUE
 /*
  * Options to reduce program size
  */
-#if !defined(ENABLE_MONITORING)
+#if defined(ENABLE_MONITORING)
+#  if !defined(MONOTORING_PERIOD_SECONDS)
+//#define MONOTORING_PERIOD_FAST    // if active, then every dataset, i.e. every 2 seconds, else every minute
+#  endif
+#else
 #define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. - currently activated to save program space.
 #endif
 #if !defined(SERIAL_INFO_PRINT)
 #define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space. - currently activated to save program space.
+#endif
+#if !defined(ENABLE_LIFEPO4_PLAUSI_WARNING)
+#define SUPPRESS_LIFEPO4_PLAUSI_WARNING     // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
 #endif
 //#define NO_CAPACITY_35F_EXTENSIONS // Disables generating of frame 0x35F for total capacity. This additional frame is no problem for Deye inverters.
 //#define NO_CAPACITY_379_EXTENSIONS // Disables generating of frame 0x379 for total capacity. This additional frame is no problem for Deye inverters.
@@ -240,8 +247,6 @@ bool sLastDoErrorBeep = false;          // required for ONE_BEEP_ON_ERROR
 bool sDoErrorBeep = false;              // If true, we do an error beep at the end of the loop
 uint8_t sBeepTimeoutCounter;
 uint16_t sTimeoutFrameCounter = 0;      // Counts BMS frame timeouts, (every 2 seconds)
-
-//#define SUPPRESS_LIFEPO4_PLAUSI_WARNING   // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
 
 /*
  * Page button stuff
@@ -349,16 +354,6 @@ File LogFile;
 uint16_t sDatasetNumber = 1;
 bool initSDCardAndOpenFile();
 #  endif
-#endif
-
-/*
- * Optional sleep stuff
- */
-//#define USE_SLEEP
-#if defined(USE_SLEEP) && MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS == 2000 && MILLISECONDS_BETWEEN_CAN_FRAME_SEND == 2000
-// currently not in the mood to compute it more general ;-)
-void LoopDelayWithSleep();
-#include "AVRUtils.h"
 #endif
 
 bool sBMSFrameProcessingComplete = false; // True if one status frame was received and processed or timeout happened. Then we can do a sleep at the end of the loop.
@@ -541,10 +536,6 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     initSDCardAndOpenFile();
 #endif
 
-#if defined(USE_SLEEP)
-    initSleep(SLEEP_MODE_PWR_SAVE);
-#endif
-
 #if defined(STANDALONE_TEST)
     /*
      * Copy test data to receive buffer
@@ -560,7 +551,6 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     /*
      * Copy complete reply and computed values for change determination
      */
-    lastJKComputedData = JKComputedData;
     lastJKReply.SOCPercent = sJKFAllReplyPointer->SOCPercent;
     lastJKReply.AlarmUnion.AlarmsAsWord = sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
     lastJKReply.BMSStatus.StatusAsWord = sJKFAllReplyPointer->BMSStatus.StatusAsWord;
@@ -781,12 +771,6 @@ void loop() {
 
         sBMSFrameProcessingComplete = false; // prepare for next loop
 
-#if defined(USE_SLEEP)
-        /*
-         * Sleep instead of checking millis(). This saves only 5 mA during sleep.
-         */
-        void LoopDelayWithSleep();
-#endif // defined(USE_SLEEP)
     } // if (sBMSFrameProcessingComplete)
 }
 
@@ -825,7 +809,6 @@ void processJK_BMSStatusFrame() {
     /*
      * Copy complete reply and computed values for change determination
      */
-    lastJKComputedData = JKComputedData;
     lastJKReply.SOCPercent = sJKFAllReplyPointer->SOCPercent;
     lastJKReply.AlarmUnion.AlarmsAsWord = sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
     lastJKReply.BMSStatus.StatusAsWord = sJKFAllReplyPointer->BMSStatus.StatusAsWord;
@@ -1058,35 +1041,3 @@ bool initSDCardAndOpenFile() {
     return false;
 }
 #endif // USE_SD_CARD_FOR_MONITORING
-
-#if defined(USE_SLEEP)
-void LoopDelayWithSleep() {
-    Serial.flush();
-
-    /*
-     * Interrupts, like button press will wake us up early.
-     * The millis() timer is disabled during sleep, but millis will be incremented by sleepWithWatchdog() function.
-     */
-    if (!sPageButtonJustPressed) { // skip next delays if button was pressed after loop button processing, to enable fast response
-#  if defined(TIMING_TEST)
-        digitalWriteFast(TIMING_TEST_PIN, HIGH);
-#  endif
-        sleepWithWatchdog(WDTO_1S, true); // I have seen clock deviation of + 30 % :-(
-    }
-    if (!sPageButtonJustPressed) { // skip next delays if button was pressed during sleep, which waked us up, to enable fast response
-#  if defined(TIMING_TEST)
-        digitalWriteFast(TIMING_TEST_PIN, LOW);
-#  endif
-        sleepWithWatchdog(WDTO_500MS, true);
-    }
-    if (!sPageButtonJustPressed) { // skip next delay if button was pressed during sleep, which waked us up, to enable fast response
-#  if defined(TIMING_TEST)
-        digitalWriteFast(TIMING_TEST_PIN, HIGH);
-#  endif
-        sleepWithWatchdog(WDTO_250MS, true); // assume maximal 250 ms for BMS, LCD and CAN communication
-#  if defined(TIMING_TEST)
-        digitalWriteFast(TIMING_TEST_PIN, LOW);
-#  endif
-    }
-}
-#endif
