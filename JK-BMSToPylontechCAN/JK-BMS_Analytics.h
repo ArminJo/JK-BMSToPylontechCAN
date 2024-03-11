@@ -81,6 +81,7 @@ struct SOCDataPointsInfoStruct {
     bool currentlyWritingOnAnEvenPage; // If true SOC_EVEN_EEPROM_PAGE_INDICATION_BIT is set in SOCPercent.
     long MillisOfLastValidEntry;
     uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
+    long AverageAccumulatorVoltageDifferenceToEmpty = 0; // Serves as accumulator to enable a more smooth graph.
     long AverageAccumulator10Milliampere = 0; // Serves as accumulator for AverageAmpere
     long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. We can have a residual of up to 18000 after write.
 };
@@ -88,8 +89,8 @@ extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 
 struct SOCDataPointMinMaxStruct {
     uint8_t SOCPercent;
-    uint16_t VoltageDifferenceToEmpty40Millivolt;
-    int16_t Capacity100MilliampereHour;
+    int16_t VoltageDifferenceToEmpty10Millivolt;
+    int16_t CapacityAmpereHour;
     int8_t AverageAmpere;
 };
 

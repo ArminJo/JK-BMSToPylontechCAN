@@ -106,6 +106,9 @@
 #define VERSION_EXAMPLE "2.4.0"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN#revision-history
 
+// You can compute the ESR (Equivalent Series Resistor) by looking at a big current jump and then use the voltage jump to compute the ESR.
+//#define BATTERY_ESR_MILLIOHM 20   // if defined, the voltage in the analytics graph is corrected to get a smoother voltage curve.
+
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
  */

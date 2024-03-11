@@ -240,6 +240,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `DISABLE_MONITORING` | enabled | Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. |
 | `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 16558 bytes program space. |
 | `NO_ANALYTICS` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
+| `BATTERY_ESR_MILLIOHM` |  | If defined, the voltage in the analytics graph is corrected to get a smoother voltage curve. You can compute the ESR by looking at a big current jump and then use the voltage jump to compute the ESR. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_CAPACITY_35F_EXTENSIONS` | disabled | If activated, supress sending of frame 0x35F for total capacity for SMA Sunny Island inverters over CAN. |
 | `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. |
