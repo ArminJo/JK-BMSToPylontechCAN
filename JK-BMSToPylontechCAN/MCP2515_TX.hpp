@@ -27,9 +27,10 @@
 #ifndef _MCP2515_TX_HPP
 #define _MCP2515_TX_HPP
 
+#include "SPI_.h"
 #include "mcp2515_can_dfs.h"
+#include "digitalWriteFast.h"
 
-#include <SPI.h>
 SPISettings sSPISettings(4000000, MSBFIRST, SPI_MODE0);
 #if !defined SPI_CS_PIN
 #define SPI_CS_PIN   9 // Pin 9 seems to be the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield
@@ -42,9 +43,9 @@ SPISettings sSPISettings(4000000, MSBFIRST, SPI_MODE0);
 
 void resetMCP2515(void) {
     SPI.beginTransaction(sSPISettings);
-    digitalWrite(SPI_CS_PIN, LOW);
+    digitalWriteFast(SPI_CS_PIN, LOW);
     SPI.transfer(0xc0);
-    digitalWrite(SPI_CS_PIN, HIGH);
+    digitalWriteFast(SPI_CS_PIN, HIGH);
     SPI.endTransaction();
     delayMicroseconds(10);
 }
@@ -53,11 +54,11 @@ uint8_t readMCP2515Register(uint8_t address) {
     uint8_t value;
 
     SPI.beginTransaction(sSPISettings);
-    digitalWrite(SPI_CS_PIN, LOW);
+    digitalWriteFast(SPI_CS_PIN, LOW);
     SPI.transfer(0x03);
     SPI.transfer(address);
     value = SPI.transfer(0x00);
-    digitalWrite(SPI_CS_PIN, HIGH);
+    digitalWriteFast(SPI_CS_PIN, HIGH);
     SPI.endTransaction();
 
     return value;
@@ -65,22 +66,22 @@ uint8_t readMCP2515Register(uint8_t address) {
 
 void modifyMCP2515Register(uint8_t address, uint8_t mask, uint8_t value) {
     SPI.beginTransaction(sSPISettings);
-    digitalWrite(SPI_CS_PIN, LOW);
+    digitalWriteFast(SPI_CS_PIN, LOW);
     SPI.transfer(0x05);
     SPI.transfer(address);
     SPI.transfer(mask);
     SPI.transfer(value);
-    digitalWrite(SPI_CS_PIN, HIGH);
+    digitalWriteFast(SPI_CS_PIN, HIGH);
     SPI.endTransaction();
 }
 
 void writeMCP2515Register(uint8_t address, uint8_t value) {
     SPI.beginTransaction(sSPISettings);
-    digitalWrite(SPI_CS_PIN, LOW);
+    digitalWriteFast(SPI_CS_PIN, LOW);
     SPI.transfer(0x02);
     SPI.transfer(address);
     SPI.transfer(value);
-    digitalWrite(SPI_CS_PIN, HIGH);
+    digitalWriteFast(SPI_CS_PIN, HIGH);
     SPI.endTransaction();
 }
 
@@ -90,7 +91,7 @@ const char StringAccessFailed[] PROGMEM = " access to MCP2515 config mode regist
  * return true if error happens
  */
 bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { // Using Print class saves 95 bytes flash
-    pinMode(SPI_CS_PIN, OUTPUT);
+    pinModeFast(SPI_CS_PIN, OUTPUT);
 
     SPI.begin(); // start SPI
 

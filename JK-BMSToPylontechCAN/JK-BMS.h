@@ -53,8 +53,6 @@ void printJKReplyFrameBuffer();
 uint8_t readJK_BMSStatusFrameByte();
 void fillJKComputedData();
 
-extern const uint8_t sSOCThresholdForForceCharge;
-
 extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to write to array, thus starting with 0.
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;

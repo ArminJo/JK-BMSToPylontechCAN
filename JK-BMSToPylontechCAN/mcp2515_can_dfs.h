@@ -49,7 +49,6 @@
 #define _MCP2515DFS_H_
 
 #include <Arduino.h>
-#include <SPI.h>
 #include <inttypes.h>
 
 
@@ -492,8 +491,8 @@
 #define MCP_RXBUF_0 (MCP_RXB0SIDH)
 #define MCP_RXBUF_1 (MCP_RXB1SIDH)
 
-#define MCP2515_SELECT()   digitalWrite(SPICS, LOW)
-#define MCP2515_UNSELECT() digitalWrite(SPICS, HIGH)
+#define MCP2515_SELECT()   digitalWriteFast(SPICS, LOW)
+#define MCP2515_UNSELECT() digitalWriteFast(SPICS, HIGH)
 
 #define MCP2515_OK         (0)
 #define MCP2515_FAIL       (1)

@@ -103,18 +103,24 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "2.4.0"
+#define VERSION_EXAMPLE "2.5.0"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN#revision-history
 
-// You can compute the ESR (Equivalent Series Resistor) by looking at a big current jump and then use the voltage jump to compute the ESR.
-//#define BATTERY_ESR_MILLIOHM 20   // if defined, the voltage in the analytics graph is corrected to get a smoother voltage curve.
-
+/*
+ * Only for analytics! I.e undefined and not used if NO_ANALYTICS is defined.
+ * You can compute the ESR (Equivalent Series Resistor) by looking at a big current jump and then use the voltage jump to compute the ESR.
+ * ESR = delta voltage / delta current.
+ * The exact values can be extracted more easily by using the Arduino Serial Monitor.
+ * Printout of the current jump is forced by connecting pin DISABLE_ESR_IN_GRAPH_OUTPUT_PIN (8) to low.
+ */
+#if !defined(BATTERY_ESR_MILLIOHM)
+#define BATTERY_ESR_MILLIOHM 20   // If defined, the voltage in the analytics graph is corrected to get a smoother voltage curve.
+#endif
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
  */
-#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        5
-//#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
-const uint8_t sSOCThresholdForForceCharge = SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I;
+//#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        5
+#define SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I        0 // This disables the setting if the force charge request, even if battery SOC is 0.
 
 /*
  * Macros for CAN data modifications
@@ -187,17 +193,29 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 /*
  * Pin layout, may be adapted to your requirements
  */
-#define BUZZER_PIN                 A2 // To signal errors
-#define PAGE_BUTTON_PIN             2 // Just for documentation
+#define BUZZER_PIN                             A2 // To signal errors
+#define PAGE_SWITCH_DEBUG_BUTTON_PIN_FOR_INFO   2 // Button at INT0 / D2 for switching LCD pages - definition is not used in program, only for documentation.
 // The standard RX of the Arduino is used for the JK_BMS connection.
-#define JK_BMS_RX_PIN               0 // We use the Serial RX pin. Not used in program, only for documentation
-#if !defined(JK_BMS_TX_PIN)           // Allow override by global symbol
-#define JK_BMS_TX_PIN               4
+#define JK_BMS_RX_PIN_FOR_INFO                  0 // We use the Serial RX pin - definition is not used in program, only for documentation.
+#if !defined(JK_BMS_TX_PIN)                       // Allow override by global symbol
+#define JK_BMS_TX_PIN                           4
 #endif
 
-//#define USE_SD_CARD_FOR_MONITORING    // Write cell and current values CSV data to SD card into JK-BMS.CSV. Cannot be implemented on ATmega328 :-(.
-#if defined(USE_SD_CARD_FOR_MONITORING)
-#define SD_CS_PIN                   8
+#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+// BMS and CAN communication status LEDs
+#  if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
+#define BMS_COMMUNICATION_STATUS_LED_PIN        6
+#define CAN_COMMUNICATION_STATUS_LED_PIN        7
+#  endif
+#endif
+
+#if defined(BATTERY_ESR_MILLIOHM) && !defined(NO_ANALYTICS)
+#define DISABLE_ESR_IN_GRAPH_OUTPUT_PIN         8 // If held low, the ESR value is not used to correct the voltage in the graph output.
+#endif
+
+//#define TIMING_TEST
+#if defined(TIMING_TEST)
+#define TIMING_TEST_PIN                        10
 #endif
 
 /*
@@ -206,21 +224,13 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
  *   SPI: MOSI - 11, MISO - 12, SCK - 13. CS cannot be replaced by constant ground.
  *   I2C: SDA - A4, SCL - A5.
  */
-#if !defined(SPI_CS_PIN)              // Allow override by global symbol
-#define SPI_CS_PIN                  9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
-//#define SPI_CS_PIN                 10 // Must be specified before #include "MCP2515_TX.hpp"
+#if !defined(SPI_CS_PIN)                          // Allow override by global symbol
+#define SPI_CS_PIN                              9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
+//#define SPI_CS_PIN                              10 // Must be specified before #include "MCP2515_TX.hpp"
+#define SPI_MOSI_PIN_FOR_INFO                  11 // Definition is not used in program, only for documentation.
+#define SPI_MISO_PIN_FOR_INFO                  12 // Definition is not used in program, only for documentation.
+#define SPI_SCK_PIN_FOR_INFO                   13 // Definition is not used in program, only for documentation.
 #endif
-
-#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-// BMS and CAN communication status LEDs
-#  if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
-#define BMS_COMMUNICATION_STATUS_LED_PIN    6
-#define CAN_COMMUNICATION_STATUS_LED_PIN    7
-#  endif
-#endif
-
-//#define TIMING_TEST
-#define TIMING_TEST_PIN             7
 
 /*
  * Program timing, may be adapted to your requirements
@@ -281,6 +291,7 @@ void handleFrameReceiveTimeout();
 #endif
 
 #include "HexDump.hpp"
+#include "digitalWriteFast.h"
 
 /*
  * Software serial for JK-BMS stuff
@@ -329,7 +340,11 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 /*
  * Optional analytics stuff
  */
-#if !defined(NO_ANALYTICS)
+#if defined(NO_ANALYTICS)
+#  if defined(BATTERY_ESR_MILLIOHM)
+#undef BATTERY_ESR_MILLIOHM // To remove unused code in setup
+#  endif
+#else
 #include "JK-BMS_Analytics.hpp"
 #endif
 
@@ -339,24 +354,6 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 #if !defined(USE_NO_LCD)
 #define LCD_MESSAGE_PERSIST_TIME_MILLIS 2000
 #include "JK-BMS_LCD.hpp"
-#endif
-
-/*
- * Optional SD card stuff
- */
-#if !defined(DISABLE_MONITORING)
-#  if defined(USE_SD_CARD_FOR_MONITORING)
-#define CSV_DATA_8_3_FILENAME           "JK-BMS.CSV" // is anyway converted to uppercase
-//#include "SdFat.h"
-//#include "sdios.h"
-//SdFat32 SD;
-//File32 LogFile;
-#include <SD.h>
-File LogFile;
-#define DATASETS_BEFORE_SD_FLUSH            60 // flush every 60 datasets / every hour -> write directory and file length to SD
-uint16_t sDatasetNumber = 1;
-bool initSDCardAndOpenFile();
-#  endif
 #endif
 
 bool sBMSFrameProcessingComplete = false; // True if one status frame was received and processed or timeout happened. Then we can do a sleep at the end of the loop.
@@ -369,10 +366,6 @@ bool sBMSFrameProcessingComplete = false; // True if one status frame was receiv
 #error "TIMEOUT_MILLIS_FOR_FRAME_REPLY must be smaller than MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS to detect timeouts"
 #endif
 bool sStaticInfoWasSent = false; // Flag to send static Info only once after reset.
-
-#if defined(TIMING_TEST)
-#include "digitalWriteFast.h"
-#endif
 
 void processReceivedData();
 void printReceivedData();
@@ -424,15 +417,18 @@ const char StringStartingCANFailed[] PROGMEM = "Starting CAN failed!";
 
 void setup() {
 // LED_BUILTIN pin is used as SPI Clock !!!
-//    pinMode(LED_BUILTIN, OUTPUT);
-//    digitalWrite(LED_BUILTIN, LOW);
+//    pinModeFast(LED_BUILTIN, OUTPUT);
+//    digitalWriteFast(LED_BUILTIN, LOW);
 
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-    pinMode(BMS_COMMUNICATION_STATUS_LED_PIN, OUTPUT);
-    pinMode(CAN_COMMUNICATION_STATUS_LED_PIN, OUTPUT);
+    pinModeFast(BMS_COMMUNICATION_STATUS_LED_PIN, OUTPUT);
+    pinModeFast(CAN_COMMUNICATION_STATUS_LED_PIN, OUTPUT);
 #endif
 #if defined(TIMING_TEST)
-    pinMode(TIMING_TEST_PIN, OUTPUT);
+    pinModeFast(TIMING_TEST_PIN, OUTPUT);
+#endif
+#if defined(BATTERY_ESR_MILLIOHM)
+    pinModeFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN, INPUT_PULLUP);
 #endif
 
     Serial.begin(115200);
@@ -535,10 +531,6 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     printDebugInfoOnLCD();
 #endif
 
-#if defined(USE_SD_CARD_FOR_MONITORING)
-    initSDCardAndOpenFile();
-#endif
-
 #if defined(STANDALONE_TEST)
     /*
      * Copy test data to receive buffer
@@ -628,13 +620,13 @@ void loop() {
     delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS); // do it simple :-)
 
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-    digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+    digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
-    digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
+    digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
-    digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+    digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
-    digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
+    digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
 #endif
 
 #else
@@ -651,11 +643,11 @@ void loop() {
                  * Frame completely received, now process it
                  */
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-                digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+                digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
 #endif
                 processJK_BMSStatusFrame(); // Process the complete receiving of the status frame and set the appropriate flags
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-                digitalWrite(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn off status LED
+                digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn off status LED
 #endif
             }
 #  if defined(TIMING_TEST)
@@ -683,14 +675,14 @@ void loop() {
             && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-        digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+        digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
 #endif
         if (sDebugModeActivated) {
             Serial.println(F("Send CAN"));
         }
         sendAllCANFrames(sDebugModeActivated);
 #if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
-        digitalWrite(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn off status LED
+        digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn off status LED
 #endif
     }
 
@@ -1023,24 +1015,3 @@ bool isVCCTooHighSimple() {
     return tRawValue < 214;
 }
 #endif // _ADC_UTILS_HPP
-
-#if defined(USE_SD_CARD_FOR_MONITORING)
-/*
- * @return true, if begin and open was successful
- */
-bool initSDCardAndOpenFile() {
-//    if (SD.begin(SD_CS_PIN)) {
-        if (SD.begin(SD_CS_PIN)) {
-        bool tFileAlreadyExists = SD.exists(CSV_DATA_8_3_FILENAME);
-        LogFile = SD.open(CSV_DATA_8_3_FILENAME, FILE_WRITE); // FILE_WRITE -> append if existent
-        if (!tFileAlreadyExists) {
-            // Write CSV caption. This is not stored to file until next flush!
-            LogFile.println((__FlashStringHelper*) sCaption);
-            sDatasetNumber = 1;
-            Serial.println(F("Writing caption to SD card buffer."));
-        }
-        return true;
-    }
-    return false;
-}
-#endif // USE_SD_CARD_FOR_MONITORING

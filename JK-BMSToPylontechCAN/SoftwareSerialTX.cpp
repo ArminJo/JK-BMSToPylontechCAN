@@ -99,6 +99,7 @@ uint16_t SoftwareSerialTX::subtract_cap(uint16_t num, uint16_t sub) {
   else
     return 1;
 }
+#include "digitalWriteFast.h"
 
 void SoftwareSerialTX::setTX(uint8_t tx)
 {
@@ -106,8 +107,8 @@ void SoftwareSerialTX::setTX(uint8_t tx)
   // the pin would be output low for a short while before switching to
   // output high. Now, it is input with pullup for a short while, which
   // is fine. With inverse logic, either order is fine.
-  digitalWrite(tx, HIGH);
-  pinMode(tx, OUTPUT);
+  digitalWriteFast(tx, HIGH);
+  pinModeFast(tx, OUTPUT);
   _transmitBitMask = digitalPinToBitMask(tx);
   _transmitPortRegister = portOutputRegister(digitalPinToPort(tx));
 }

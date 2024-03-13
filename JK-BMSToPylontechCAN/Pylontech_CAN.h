@@ -268,12 +268,16 @@ struct PylontechCANBatteryRequesFrame35CStruct {
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
         FrameData.FullChargeRequest = 0;
 
-        if (aJKFAllReply->SOCPercent < sSOCThresholdForForceCharge) {
+#if SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I > 0
+        if (aJKFAllReply->SOCPercent < SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I) {
             // ForceChargeRequestI forces the inverter to charge the battery from any available power source regardless of inverter settings
             FrameData.ForceChargeRequestI = 1;
-        } else {
+        } else
             FrameData.ForceChargeRequestI = 0;
         }
+#else
+        FrameData.ForceChargeRequestI = 0;
+#endif
         // If battery drops below lower voltage. See https://powerforum.co.za/topic/13587-battery-anomaly-on-synsynk-hybrid-inverter/
         if (swap(aJKFAllReply->Battery10Millivolt) < JKComputedData.BatteryEmptyVoltage10Millivolt) {
             FrameData.ForceChargeRequestII = 1;
