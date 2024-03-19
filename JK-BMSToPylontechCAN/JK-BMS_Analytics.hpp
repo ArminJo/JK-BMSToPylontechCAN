@@ -28,6 +28,7 @@
 #define _JK_BMS_ANALYTICS_HPP
 
 #include <Arduino.h>
+#include <limits.h>
 
 #include "JK-BMS_Analytics.h"
 
@@ -192,7 +193,7 @@ void readAndPrintSOCData() {
         }
 
 #if defined(BATTERY_ESR_MILLIOHM)
-        if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW){
+        if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
             tVoltageDifferenceToEmpty100Millivolt = (tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4) / 10;
         } else {
             tVoltageDifferenceToEmpty100Millivolt = ((tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4)
@@ -212,7 +213,7 @@ void readAndPrintSOCData() {
             for (uint_fast8_t j = 0; j < 2; ++j) {
                 Serial.print(tCurrentSOCDataPoint.SOCPercent);
                 Serial.print(' ');
-                Serial.print(tCurrentCapacityAmpereHour); // print Ah
+                Serial.print(tCurrentCapacityAmpereHour); // print capacity in Ah
                 Serial.print(' ');
                 Serial.print(tVoltageDifferenceToEmpty100Millivolt);
                 Serial.print(' ');
@@ -221,7 +222,7 @@ void readAndPrintSOCData() {
             Serial.print(' ');
 #endif
                 Serial.print(tCurrentSOCDataPoint.AverageAmpere); // print ampere
-                Serial.println(F(" 0 0 0 0 0")); // to clear unwanted entries from former prints
+                Serial.println(F(" 0 0 0 0 0 0")); // to clear unwanted entries from former prints
             }
         } else {
             // print last entry with caption
@@ -233,7 +234,7 @@ void readAndPrintSOCData() {
                 Serial.print(F("%:"));
                 Serial.print(tCurrentSOCDataPoint.SOCPercent);
                 Serial.print(F(" Capacity_"));
-                uint16_t tTotalCapacity = ((tMaximumSOCData.CapacityAmpereHour - tMinimumSOCData.CapacityAmpereHour) * 10)
+                uint16_t tTotalCapacity = ((tMaximumSOCData.CapacityAmpereHour - tMinimumSOCData.CapacityAmpereHour) * 100)
                         / (tMaximumSOCData.SOCPercent - tMinimumSOCData.SOCPercent);
                 Serial.print(tTotalCapacity);
                 Serial.print(F("Ah_"));
@@ -261,7 +262,11 @@ void readAndPrintSOCData() {
                 Serial.print(F("A:"));
                 Serial.print(tCurrentSOCDataPoint.AverageAmpere);
 #if defined(BATTERY_ESR_MILLIOHM)
-                Serial.print(F(" ESR_" STR(BATTERY_ESR_MILLIOHM) "mOhm"));
+                if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) != LOW) {
+                    Serial.print(F(" ESR_" STR(BATTERY_ESR_MILLIOHM) "mOhm:0"));
+                } else {
+                    Serial.println(F(" 0"));
+                }
 #endif
                 Serial.print(F(" Empty_voltage_"));
                 Serial.print(JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 1);
@@ -271,8 +276,8 @@ void readAndPrintSOCData() {
             }
             // If not enough data points, padding to 500 data points to guarantee, that old data is shifted out
             for (; i < 249; ++i) {
-                Serial.println(F(" 0 0 0 0 0 0 0 0 0"));
-                Serial.println(F(" 0 0 0 0 0 0 0 0 0"));
+                Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
+                Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
             }
         }
 
@@ -293,8 +298,12 @@ void writeSOCData() {
 
     /*
      * Accumulate values at each call
+     * If we charge beyond 100% SOC, because the battery is not fully charged at the level the BMS thinks it is 100%,
+     * we get an positive value for the transition from 100 % to 99 % because the new 99 % learned by the BMS is bigger than the old 100 %.
+     * This can happen at the start of the system, when there was no full 0% to 100% capacity cycle
+     * and the BMS has not yet learned the correct capacity for 100%.
      */
-    SOCDataPointsInfo.DeltaAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
+    SOCDataPointsInfo.DeltaAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere; // Can hold values of +/-11930 Ah
     SOCDataPointsInfo.AverageAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
     SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty += JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
     SOCDataPointsInfo.NumberOfSamples++; // For one sample each 2 seconds, we can store up to 36.4 hours here.
@@ -361,10 +370,12 @@ void writeSOCData() {
         }
 
         // Compute current value and adjust accumulator
-        tSOCDataPoint.Delta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere
-                / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
+        int tDelta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10); // / 18000
+        tSOCDataPoint.Delta100MilliampereHour = constrain(tDelta100MilliampereHour, CHAR_MIN, CHAR_MAX);
+
+        // We can have a residual of up to 18000 after write and bigger if we have an overflow, which only happens at the learning phase of the BMS
         SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tSOCDataPoint.Delta100MilliampereHour
-                * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10); // We can have a residual of up to 18000 after write
+                * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
 
         // compute rounded average ampere
         tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.AverageAccumulator10Milliampere + (SOCDataPointsInfo.NumberOfSamples * 50))

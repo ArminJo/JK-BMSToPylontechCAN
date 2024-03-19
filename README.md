@@ -60,13 +60,15 @@ If CAN communications breaks, the inverter may use different values for controll
 
 # SOC graph for a 16S LiFePO4 battery
 Created by attaching Arduio 1.8 Serial Plotter and then doing a long button press followed by a single one to enter the capacity info page.<br/>
-The values of Delta_capacity are always clipped to + 100 and - 30 for printing.
 
-Here you see the steep voltage graph below around 15 % SOC, which means that this may be too much discharging for the battery.<br/>
-![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCData.png)
+Here you see a peak at the transition from 100 % to 99 %. This happens at the start of the system, when there was no full 0% to 100% capacity cycle
+and the BMS has not yet learned the correct capacity for 100%. The new 99 % learned by the BMS is bigger than the old 100 %!<br/>
+The capacity drop is due to a (fixed!) overflow problem.<br/>
+The voltage line is smooth, because it is corrected with the ESR (Equivalent Series Resistance) of the Battery.
+![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCDataESR.png)
 
-The new graph layout with additional current value:
-![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCDataNew.png)
+The same (raw) data without the ESR correction.
+![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCDataNoESR.png)
 
 
 # Screenshots

@@ -83,7 +83,7 @@ struct SOCDataPointsInfoStruct {
     uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
     long AverageAccumulatorVoltageDifferenceToEmpty = 0; // Serves as accumulator to enable a more smooth graph.
     long AverageAccumulator10Milliampere = 0; // Serves as accumulator for AverageAmpere
-    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. We can have a residual of up to 18000 after write.
+    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18000 after write.
 };
 extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 
