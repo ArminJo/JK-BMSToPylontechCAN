@@ -57,14 +57,14 @@ extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to writ
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern bool sJKBMSFrameHasTimeout; // For sending CAN data
-extern bool sSwitchPageToShowError;
-extern bool sErrorStatusIsError;
+extern bool sSwitchPageToShowAlarm;
+extern bool sAlarmIsActive;
 
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
 
 #if !defined(USE_NO_LCD)
-extern const char *sErrorStringForLCD;
+extern const char *sAlarmStringForLCD;
 #endif
 
 int16_t getJKTemperature(uint16_t aJKRAWTemperature);
@@ -109,7 +109,7 @@ struct JKConvertedCellInfoStruct {
     uint16_t MaximumCellMillivolt;
     uint8_t IndexOfMaximumCellMillivolt;
     uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
-    uint16_t AverageCellMillivolt;
+    uint16_t RoundedAverageCellMillivolt;
 };
 extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 void fillJKConvertedCellInfo();

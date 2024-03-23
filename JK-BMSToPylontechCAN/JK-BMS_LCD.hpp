@@ -26,8 +26,6 @@
 #ifndef _JK_BMS_LCD_HPP
 #define _JK_BMS_LCD_HPP
 
-#define USE_SERIAL_2004_LCD // Parallel or 1604 LCD not yet supported
-
 /*
  * LCD hardware stuff
  */
@@ -78,7 +76,7 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 /*
  * LCD display pages
  */
-#define JK_BMS_PAGE_OVERVIEW            0 // is displayed in case of BMS error message
+#define JK_BMS_PAGE_OVERVIEW            0 // is displayed in case of BMS alarm message
 #define JK_BMS_PAGE_CELL_INFO           1
 #if defined(NO_CELL_STATISTICS)
 #define JK_BMS_PAGE_BIG_INFO            2
@@ -772,21 +770,140 @@ void printCANInfoOnLCD() {
     }
 }
 
-void printOverwiewInfoOnLCD() {
+/*
+ * Row 3 - Voltage, Current and Power
+ */
+void printVoltageCurrentAndPowerOnLCD() {
+    myLCD.setCursor(0, 2);
+    // Voltage
+    myLCD.print(JKComputedData.BatteryVoltageFloat, 2);
+    myLCD.print(F("V "));
+    // Current
+    printCurrent5CharacterRightAlignedOnLCD();
+    // Power
+    if (JKComputedData.BatteryLoadPower < -10000) {
+        // over 10 kW
+        myLCD.setCursor(13, 2);
+        myLCD.print(JKComputedData.BatteryLoadPower); // requires 6 columns
+    } else {
+        myLCD.setCursor(14, 2);
+        sprintf_P(sStringBuffer, PSTR("%5d"), JKComputedData.BatteryLoadPower); // force use of 5 columns
+        myLCD.print(sStringBuffer);
+    }
+    myLCD.print('W');
+}
+
+/*
+ * Row 4 - 1. Voltage difference, MOS temperature, maximum temperature of 2 external sensors and 3 enable states
+ * Row 4 - 2. MOS temperature, temperature of 2 external sensors and 3 enable states
+ */
+void printVoltageDifferenceAndTemperature() {
+    myLCD.setCursor(0, 3);
     /*
-     * Top row 1 - Error message or up time
+     * If one of the temperatures is negative or they difference is more than 25%
+     * show all 3 temperatures instead of voltage difference and 2 temperatures
      */
-    if (sErrorStringForLCD != NULL) {
-        // Copy error message from flash, but not more than 20 characters
-        memcpy_P(sStringBuffer, sErrorStringForLCD, LCD_COLUMNS);
+    bool tShowBothExternalTemperatures = true;
+    if (JKComputedData.TemperatureSensor1 > 0 && JKComputedData.TemperatureSensor2 > 0
+            && abs(JKComputedData.TemperatureSensor1 - JKComputedData.TemperatureSensor2)
+                    < (min(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor1) / 4)) {
+        tShowBothExternalTemperatures = false;
+        myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
+        myLCD.print(F("V "));
+    }
+    myLCD.print(JKComputedData.TemperaturePowerMosFet);
+    myLCD.print(F("\xDF" "C "));
+    if (tShowBothExternalTemperatures) {
+        // show both external sensors
+        myLCD.print(JKComputedData.TemperatureSensor1);
+        myLCD.print(F("\xDF" "C "));
+        myLCD.print(JKComputedData.TemperatureSensor2);
+        myLCD.print(F("\xDF" "C "));
+    } else {
+        // show maximum of the 2 external sensors
+        myLCD.print(max(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor2));
+        myLCD.print(F("\xDF" "C "));
+    }
+}
+
+/*
+ * Print alarm info only once
+ * Only the alarm bits on row 4 are updated each time
+ *
+ */
+void printAlarmInfoOnLCD() {
+    if (sSwitchPageToShowAlarm) {
+        myLCD.clear();
+        /*
+         * Print alarm info only once
+         */
+        sSwitchPageToShowAlarm = false;
+        // Copy alarm message from flash, but not more than 20 characters
+        const char *tLastAlarmString = (char*) (pgm_read_word(&JK_BMSAlarmStringsArray[sAlarmIndexToShowOnLCD]));
+        strncpy_P(sStringBuffer, tLastAlarmString, LCD_COLUMNS);
         sStringBuffer[LCD_COLUMNS] = '\0';
         myLCD.print(sStringBuffer);
-    } else {
-        myLCD.print(F("Uptime:  "));
+
+        /*
+         * Row 2
+         * remainder of alarm string and uptime
+         * or index of min or max cell and cell voltage and uptime
+         */
+        myLCD.setCursor(0, 1);
+        if (sAlarmIndexToShowOnLCD == INDEX_OF_UNDERVOLTAGE_ALARM || sAlarmIndexToShowOnLCD == INDEX_OF_OVERVOLTAGE_ALARM) {
+            uint16_t tCellMillivoltToPrint;
+            uint8_t tCellIndexToPrint;
+            if (sAlarmIndexToShowOnLCD == INDEX_OF_UNDERVOLTAGE_ALARM) {
+                tCellIndexToPrint = JKConvertedCellInfo.IndexOfMinimumCellMillivolt;
+                // print fix format 3 character value
+                tCellMillivoltToPrint = JKConvertedCellInfo.MinimumCellMillivolt;
+            } else if (sAlarmIndexToShowOnLCD == INDEX_OF_OVERVOLTAGE_ALARM) {
+                tCellIndexToPrint = JKConvertedCellInfo.IndexOfMaximumCellMillivolt;
+                tCellMillivoltToPrint = JKConvertedCellInfo.MaximumCellMillivolt;
+            }
+            sprintf_P(sStringBuffer, PSTR("%2d %3dmV "), tCellIndexToPrint + 1, tCellMillivoltToPrint - 3000);
+            myLCD.print(sStringBuffer);
+        } else if (strlen_P(tLastAlarmString) > LCD_COLUMNS) {
+            strncpy_P(sStringBuffer, &tLastAlarmString[LCD_COLUMNS], LCD_COLUMNS - LENGTH_OF_UPTIME_STRING); // 11 = Length of uptime string
+            sStringBuffer[LCD_COLUMNS - LENGTH_OF_UPTIME_STRING] = '\0';
+            myLCD.print(sStringBuffer);
+        }
+        myLCD.setCursor(LCD_COLUMNS - LENGTH_OF_UPTIME_STRING, 1);
         myLCD.print(sUpTimeString);
+
+        /*
+         * Row 3 - Voltage, Current and Power
+         */
+        printVoltageCurrentAndPowerOnLCD();
+
+        /*
+         * Row 4 - 1. Voltage difference, MOS temperature, maximum temperature of 2 external sensors and 3 enable states
+         * Row 4 - 2. MOS temperature, temperature of 2 external sensors and 3 enable states
+         */
+        printVoltageDifferenceAndTemperature();
     }
+
     /*
-     * Row 2 - SOC and remaining capacity and state of MosFets or Error
+     * Last 4 characters are the actual alarm bits, which were updated
+     */
+    myLCD.setCursor(16, 3);
+    uint16_t tAlarms = swap(sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord);
+    myLCD.print(F("0x"));
+    if (tAlarms < 0x10) {
+        myLCD.print('0'); // leading 0
+    }
+    myLCD.print(tAlarms, HEX);
+}
+
+void printOverwiewInfoOnLCD() {
+    /*
+     * Top row 1 - Up time
+     */
+    myLCD.print(F("Uptime:  "));
+    myLCD.print(sUpTimeString);
+
+    /*
+     * Row 2 - SOC and remaining capacity and Charge / Discharge / Balancing enable flags
      */
     myLCD.setCursor(0, 1);
 // Percent of charge
@@ -806,58 +923,17 @@ void printOverwiewInfoOnLCD() {
     /*
      * Row 3 - Voltage, Current and Power
      */
-    myLCD.setCursor(0, 2);
-// Voltage
-    myLCD.print(JKComputedData.BatteryVoltageFloat, 2);
-    myLCD.print(F("V "));
-// Current
-    printCurrent5CharacterRightAlignedOnLCD();
-// Power
-    if (JKComputedData.BatteryLoadPower < -10000) {
-        // over 10 kW
-        myLCD.setCursor(13, 2);
-        myLCD.print(JKComputedData.BatteryLoadPower); // requires 6 columns
-    } else {
-        myLCD.setCursor(14, 2);
-        sprintf_P(sStringBuffer, PSTR("%5d"), JKComputedData.BatteryLoadPower); // force use of 5 columns
-        myLCD.print(sStringBuffer);
-    }
-    myLCD.print('W');
-    /*
-     * Row 4 - Voltage difference MOS temperature, maximum temperature of 2 external sensors and 3 enable states
-     * Row 4 - MOS temperature, temperature of 2 external sensors and 3 enable states
-     */
-    myLCD.setCursor(0, 3);
-    /*
-     * If one of the temperatures is negative or they difference is more than 25% show all 3 temperatures
-     */
-    bool tShowBothExternalTemperatures = true;
-    if (JKComputedData.TemperatureSensor1 > 0 && JKComputedData.TemperatureSensor2 > 0
-            && abs(JKComputedData.TemperatureSensor1 - JKComputedData.TemperatureSensor2)
-                    < (min(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor1) / 4)) {
-        tShowBothExternalTemperatures = false;
-        myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
-        myLCD.print(F("V "));
-    }
+    printVoltageCurrentAndPowerOnLCD();
 
-    myLCD.print(JKComputedData.TemperaturePowerMosFet);
-    myLCD.print(F("\xDF" "C "));
-    if (tShowBothExternalTemperatures) {
-        // show both external sensors
-        myLCD.print(JKComputedData.TemperatureSensor1);
-        myLCD.print(F("\xDF" "C "));
-        myLCD.print(JKComputedData.TemperatureSensor2);
-        myLCD.print(F("\xDF" "C "));
-    } else {
-        // show maximum of the 2 external sensors
-        myLCD.print(max(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor2));
-        myLCD.print(F("\xDF" "C "));
-    }
+    /*
+     * Row 4 - 1. Voltage difference, MOS temperature, maximum temperature of 2 external sensors and 3 enable states
+     * Row 4 - 2. MOS temperature, temperature of 2 external sensors and 3 enable states
+     */
+    printVoltageDifferenceAndTemperature();
 
-// Last 4 characters are the actual states
+    // Last 4 characters are the actual states
     myLCD.setCursor(16, 3);
     printShortStateOnLCD();
-
 }
 
 void printBMSDataOnLCD() {
@@ -865,30 +941,39 @@ void printBMSDataOnLCD() {
 #  if !defined(DISPLAY_ALWAYS_ON)
             && !sSerialLCDIsSwitchedOff
 #  endif
-            ) {
-        myLCD.clear();
+    ) {
         myLCD.setCursor(0, 0);
+        /*
+         * Check for alarm info, which must not be cleared before
+         */
+        if (sAlarmIndexToShowOnLCD != INDEX_NO_ALARM) {
+            printAlarmInfoOnLCD();
 
-        if (sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
-            printOverwiewInfoOnLCD();
+        } else {
+            myLCD.clear();
 
-        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
-            printCellInfoOnLCD();
+            if (sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
+                printOverwiewInfoOnLCD();
+            }
+
+            else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+                printCellInfoOnLCD();
 
 #if !defined(NO_CELL_STATISTICS)
-        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
-            printCellStatisticsOnLCD();
+            } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
+                printCellStatisticsOnLCD();
 #endif
-        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
-            printBigInfoOnLCD();
+            } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+                printBigInfoOnLCD();
 
 #if !defined(NO_ANALYTICS)
-        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
-            printCapacityInfoOnLCD();
+            } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+                printCapacityInfoOnLCD();
 #endif
 
-        } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
-            printCANInfoOnLCD();
+            } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
+                printCANInfoOnLCD();
+            }
         }
     }
 }
@@ -910,7 +995,7 @@ void checkButtonPressForLCD() {
              */
             if (checkAndTurnLCDOn()) {
                 Serial.println(F("button press")); // Switch on LCD display, triggered by button press
-                sPageButtonJustPressed = false; // avoid switching pages if page button was pressed.
+                sPageButtonJustPressed = false;// avoid switching pages if page button was pressed.
             } else
 #  endif
             {
@@ -997,11 +1082,11 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
     JK_INFO_PRINTLN(aLCDDisplayPageNumber);
 
     if (aLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
-        // Create symbols character for maximum and minimum
+// Create symbols character for maximum and minimum
         bigNumberLCD._createChar(1, bigNumbersTopBlock);
         bigNumberLCD._createChar(2, bigNumbersBottomBlock);
 #if !defined(NO_CELL_STATISTICS)
-        // Prepare for statistics page here display max first but for half the regular time
+// Prepare for statistics page here display max first but for half the regular time
         sToggleDisplayCounter = (CELL_STATISTICS_COUNTER_MASK >> 1) - 1;
 #endif
     }
@@ -1022,14 +1107,14 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
          */
         printBMSDataOnLCD();
         if (aLCDDisplayPageNumber != JK_BMS_PAGE_OVERVIEW) {
-            // Reset displayed error string
-            sErrorStringForLCD = sCurrentErrorString;
+            // Reset alarm display flag
+            sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
         }
     }
 
 #if !defined(NO_ANALYTICS)
     if (aLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
-        // do it even if we have timeout
+// do it even if we have timeout
         sDebugModeActivated = false; // Disable every debug output after entering this page
         printCapacityInfoOnLCD(); // First update LCD before printing the plotter data
         readAndPrintSOCData(); // this takes a while...
@@ -1041,17 +1126,50 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
 void testLCDPages() {
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
 // Create symbols character for maximum and minimum
     bigNumberLCD._createChar(1, bigNumbersTopBlock);
     bigNumberLCD._createChar(2, bigNumbersBottomBlock);
-    delay (LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_CAN_INFO;
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
+
+    /*
+     * Test alarms
+     */
+    sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = true;
+    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
+    printBMSDataOnLCD();
+    sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = false;
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
+
+    sJKFAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm = true;
+    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
+    printBMSDataOnLCD();
+    sJKFAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm = false;
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
+
+    /*
+     * PowerMosFetOvertemperatureAlarm
+     */
+    sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;
+    JKComputedData.TemperaturePowerMosFet = 90;
+    JKComputedData.TemperatureSensor1 = 25;
+    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
+    printBMSDataOnLCD();
+    sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
+    JKComputedData.TemperaturePowerMosFet = 33;
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
+
+    // reset alarm
+    sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
+    sAlarmIsActive = false;
+
 
     /*
      * Check display of maximum values
@@ -1061,47 +1179,38 @@ void testLCDPages() {
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
     JKComputedData.TemperaturePowerMosFet = 111;
     JKComputedData.TemperatureSensor1 = 100;
-
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
+    /*
+     * maximum values at overview
+     */
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
     bigNumberLCD.begin();
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     /*
      * Test other values
      */
-    sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;
-    JKComputedData.TemperaturePowerMosFet = 90;
-    JKComputedData.TemperatureSensor1 = 25;
-    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
-
     sJKFAllReplyPointer->SOCPercent = 1;
     JKComputedData.BatteryLoadPower = 12345;
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
-
-    lastJKReply.AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true; // to enable reset of LCD alarm string
-    sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
-    JKComputedData.TemperaturePowerMosFet = 33;
-    handleAndPrintAlarmInfo(); // this resets the LCD alarm string
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sJKFAllReplyPointer->SOCPercent = 100;
     JKComputedData.BatteryLoadCurrentFloat = -100;
-
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
     printBMSDataOnLCD();
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 }
 
 void testBigNumbers() {

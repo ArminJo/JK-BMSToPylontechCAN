@@ -74,11 +74,13 @@ The same (raw) data without the ESR correction.
 # Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and current battery voltage - Volt to full<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview page - 2.3.0 version |
+| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and (current battery voltage - Volt to full)<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview pagewith :<br/>- SOC, charged capacity, state of enable flags<br/>- Voltage, current and power<br/>- Voltage difference to empty, MosFet temperature, maximum sensor temperature, state of enabled functions |
 | :-: | :-: |
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
-| Cell info page with maximum and minimum indicators. |  Overview / Error page with start of error message in first line.<br/>Error message is cleared by switching page. |
-| ![Cell info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Error page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/ErrorPage.png) |
+| Undervoltage Alarm page<br/>Start of alarm message in first line<br/>Index and value of minimum cell and uptime in second line | Overtemperature Alarm page<br/>Alarm message is cleared by switching page |
+| ![Alarm page undervoltage](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_Undervoltage.png) | ![Alarm page overtemperature](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_MosFetOvertemperature.png) |
+| Cell info page with maximum and minimum indicators | Cell info page with:<br/>- (Cell voltages - 3 V)<br/>- SOC, current in A, balancing flag and difference between minimum / empty and current battery voltage in last column |
+| ![Cell info page long](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Cell info page short](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage_shortVoltages.png) |
 | Maximum Cell Statistics page with total Time of Balancing | Maximum Cell Statistics page |
 | ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
 | CAN info page |  |
@@ -205,7 +207,7 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 5. Other frame data are converted and enhanced to fill the JKComputedDataStruct.
 6. The content of the status frame is printed. After reset, all info is printed once, then only dynamic info is printed.
 7. The required CAN data is filled in the according PylontechCANFrameInfoStruct.
-8. Dynamic data and errors are displayed on the optional 2004 LCD if attached.
+8. Dynamic data and alarms are displayed on the optional 2004 LCD if attached.
 9. CAN data is sent.
 
 <br/>

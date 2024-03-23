@@ -103,7 +103,7 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "2.5.0"
+#define VERSION_EXAMPLE "2.5.1"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN#revision-history
 
 /*
@@ -165,6 +165,10 @@
 //#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 #if defined(STANDALONE_TEST) && defined(USE_NO_LCD)
 #undef USE_NO_LCD // LCD is activated for standalone test
+#endif
+#if !defined(USE_NO_LCD)
+#define USE_SERIAL_2004_LCD // Parallel or 1604 LCD not yet supported
+#define LCD_MESSAGE_PERSIST_TIME_MILLIS 2000
 #endif
 
 #if defined(ARDUINO_AVR_NANO)
@@ -352,7 +356,6 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
  * Optional LCD stuff
  */
 #if !defined(USE_NO_LCD)
-#define LCD_MESSAGE_PERSIST_TIME_MILLIS 2000
 #include "JK-BMS_LCD.hpp"
 #endif
 
@@ -554,17 +557,18 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     if (eeprom_read_byte(&SOCDataPointsEEPROMArray[2].SOCPercent) == 0xFF) {
         // If EEPROM empty, fill in some values
         int8_t tIncrement = -1;
+        Serial.println();
+        Serial.println();
+        Serial.println(F("Now write initial data to EEPROM"));
+
         for (int i = 0; i < 259; ++i) { // 258 will fill up 256 entries
             sJKFAllReplyPointer->SOCPercent += tIncrement;
             JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt += tIncrement * 4;
 
-            Serial.println();
-            Serial.println();
-            Serial.println(F("Now write initial data to EEPROM"));
-            Serial.println();
-            delay(2000);
+            Serial.print('.');
 
             for (int j = 0; j < (i + 4) * 10; ++j) { // 320 corresponds to 2 Ah
+                // accumulate values
                 writeSOCData();
             }
             if (sJKFAllReplyPointer->SOCPercent == 0 || sJKFAllReplyPointer->SOCPercent == 100) {
@@ -573,6 +577,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
                 tIncrement = -tIncrement;
             }
         }
+        Serial.println();
         findFirstSOCDataPointIndex();
         Serial.print(F("EEPROM SOC data start index="));
         Serial.print(SOCDataPointsInfo.ArrayStartIndex);
@@ -702,23 +707,18 @@ void loop() {
         /*
          * Checking for BMS error flags
          */
-        if (sErrorStringForLCD != NULL && sErrorStatusIsError) {
+        if (sAlarmIsActive) {
             sDoErrorBeep = true;
-            if (sSwitchPageToShowError) {
-                /*
-                 * Switch to overview page once, to show the error
-                 * Not required for non errors
-                 */
-                sSwitchPageToShowError = false;
 #if defined(USE_SERIAL_2004_LCD)
+            if (sSwitchPageToShowAlarm) {
                 setLCDDisplayPage(JK_BMS_PAGE_OVERVIEW);
 #  if !defined(DISPLAY_ALWAYS_ON)
                 if (checkAndTurnLCDOn()) {
                     Serial.println(F("error status changing")); // Switch on LCD display, triggered by error status changing
                 }
 #  endif
-#endif
             }
+#endif
         }
 
 #if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)

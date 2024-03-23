@@ -324,27 +324,31 @@ void writeSOCData() {
         SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.MillisOfLastValidEntry = millis();
+#if !defined(DISABLE_MONITORING)
+        Serial.print('#');
+        printMonitoringInfo();
+#endif
         return;
     }
 
     uint8_t tSOCDataPointsArrayLastWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength - 1)
             % NUMBER_OF_SOC_DATA_POINTS;
     auto tLastWrittenSOCPercent = eeprom_read_byte(&SOCDataPointsEEPROMArray[tSOCDataPointsArrayLastWriteIndex].SOCPercent);
-    /*
-     * check for buffer wrap around and toggle currentlyWritingOnAnEvenPage flag
-     */
-    if (tSOCDataPointsArrayLastWriteIndex == (NUMBER_OF_SOC_DATA_POINTS - 1)) {
-        // Here we write next entry at index 0, i.e. we start at next page, so we must switch even / odd indicator
-        SOCDataPointsInfo.currentlyWritingOnAnEvenPage = !(tLastWrittenSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT);
-        JK_INFO_PRINT(F("Buffer wrap around detected, even="));
-        JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
-    }
-
+    bool tLastWritingOnAnEvenPage = tLastWrittenSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
     tLastWrittenSOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
+
     if (tCurrentSOCPercent > tLastWrittenSOCPercent || tCurrentSOCPercent < (tLastWrittenSOCPercent - 1)) {
         /*
          * Insert new entry
+         * First check for buffer wrap around and toggle currentlyWritingOnAnEvenPage flag
          */
+        if (tSOCDataPointsArrayLastWriteIndex == (NUMBER_OF_SOC_DATA_POINTS - 1)) {
+            // Here we write next entry at index 0, i.e. we start at next page, so we must switch even / odd indicator
+            SOCDataPointsInfo.currentlyWritingOnAnEvenPage = !(tLastWritingOnAnEvenPage);
+            JK_INFO_PRINT(F("Buffer wrap around detected, even="));
+            JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+        }
+
         if (SOCDataPointsInfo.ArrayLength == NUMBER_OF_SOC_DATA_POINTS) {
             // Array is full, overwrite old start entry
             SOCDataPointsInfo.ArrayStartIndex++;
@@ -369,13 +373,16 @@ void writeSOCData() {
             tSOCDataPoint.SOCPercent |= SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
         }
 
-        // Compute current value and adjust accumulator
+        /*
+         * Compute current value and adjust accumulator
+         * Use integer as intermediate value and restrict the written value to the values of a signed char
+         * Adjust accumulator with the value written. We can have a residual of up to 18000 after write
+         * and bigger if we have an overflow, but this only happens at the learning phase of the BMS
+         */
         int tDelta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10); // / 18000
-        tSOCDataPoint.Delta100MilliampereHour = constrain(tDelta100MilliampereHour, CHAR_MIN, CHAR_MAX);
-
-        // We can have a residual of up to 18000 after write and bigger if we have an overflow, which only happens at the learning phase of the BMS
-        SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tSOCDataPoint.Delta100MilliampereHour
-                * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
+        tDelta100MilliampereHour = constrain(tDelta100MilliampereHour, SCHAR_MIN, SCHAR_MAX);
+        tSOCDataPoint.Delta100MilliampereHour = tDelta100MilliampereHour;
+        SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
 
         // compute rounded average ampere
         tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.AverageAccumulator10Milliampere + (SOCDataPointsInfo.NumberOfSamples * 50))
@@ -390,6 +397,7 @@ void writeSOCData() {
         uint8_t tSOCDataPointsArrayNextWriteIndex = (tSOCDataPointsArrayLastWriteIndex + 1) % NUMBER_OF_SOC_DATA_POINTS;
         eeprom_write_block(&tSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayNextWriteIndex], sizeof(tSOCDataPoint));
 
+#if !defined(STANDALONE_TEST)
         JK_INFO_PRINT(F("SOC data write at index "));
         JK_INFO_PRINT(tSOCDataPointsArrayNextWriteIndex);
         if (SOCDataPointsInfo.ArrayLength != NUMBER_OF_SOC_DATA_POINTS) {
@@ -410,16 +418,17 @@ void writeSOCData() {
         JK_INFO_PRINT(tSOCDataPoint.Delta100MilliampereHour);
         JK_INFO_PRINT(F(", Left100MilliampereHour="));
         JK_INFO_PRINTLN(SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10.0), 2);
-
-        /*
-         * Write to eeprom
-         */
-        eeprom_write_block(&tSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayNextWriteIndex], sizeof(tSOCDataPoint));
+#endif
 
         SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.MillisOfLastValidEntry = millis();
+#if !defined(DISABLE_MONITORING)
+        // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
+        Serial.print('#');
+        printMonitoringInfo();
+#endif
     }
 }
 
