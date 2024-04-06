@@ -307,6 +307,14 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 2.5.2
+- Fixed bugs.
+- Added BATTERY_ESR_MILLIOHM for voltage compensation.
+- Back to start page at next button press after 1 minute.
+- SHOW_SHORT_CELL_VOLTAGES is default now.
+- Improved graph output.
+- Reduced serial output.
+
 ### Version 2.4.0
 - Added optional user function to reduce max current at high SOC level.
 - Optional 3 digits cell voltage on LCD.

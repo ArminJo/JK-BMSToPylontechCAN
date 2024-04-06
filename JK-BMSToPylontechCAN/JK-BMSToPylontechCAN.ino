@@ -103,7 +103,7 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "2.5.1"
+#define VERSION_EXAMPLE "2.5.2"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN#revision-history
 
 /*
@@ -261,8 +261,10 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #define BEEP_TIMEOUT_SECONDS        60L // 1 minute, Maximum is 254 seconds = 4 min 14 s
 #define MULTIPLE_BEEPS_WITH_TIMEOUT     // If activated, beep for 1 minute if error was detected. Timeout is disabled if debug is active.
 bool sLastDoErrorBeep = false;          // required for ONE_BEEP_ON_ERROR
-bool sDoErrorBeep = false;              // If true, we do an error beep at the end of the loop
-uint8_t sBeepTimeoutCounter;
+bool sAlarmOrTimeout = false;           // If true, we eventually do an error beep at the end of the loop
+#  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
+uint8_t sBeepTimeoutCounter = 0;
+#endif
 uint16_t sTimeoutFrameCounter = 0;      // Counts BMS frame timeouts, (every 2 seconds)
 
 /*
@@ -286,12 +288,27 @@ bool readJK_BMSStatusFrame();
 void processJK_BMSStatusFrame();
 void handleFrameReceiveTimeout();
 
+//#define DEBUG
+#if defined(DEBUG)
+#define LOCAL_DEBUG
+#else
+//#define LOCAL_DEBUG // This enables debug output only for this file - only for development
+#endif
+
 #if defined(NO_SERIAL_INFO_PRINT)
 #define JK_INFO_PRINT(...)      void();
 #define JK_INFO_PRINTLN(...)    void();
 #else
 #define JK_INFO_PRINT(...)      Serial.print(__VA_ARGS__);
 #define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#endif
+
+#if defined(DEBUG)
+#define JK_DEBUG_PRINT(...)      void();
+#define JK_DEBUG_PRINTLN(...)    void();
+#else
+#define JK_DEBUG_PRINT(...)      Serial.print(__VA_ARGS__);
+#define JK_DEBUG_PRINTLN(...)    Serial.println(__VA_ARGS__);
 #endif
 
 #include "HexDump.hpp"
@@ -368,7 +385,7 @@ bool sBMSFrameProcessingComplete = false; // True if one status frame was receiv
 #if TIMEOUT_MILLIS_FOR_FRAME_REPLY > MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
 #error "TIMEOUT_MILLIS_FOR_FRAME_REPLY must be smaller than MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS to detect timeouts"
 #endif
-bool sStaticInfoWasSent = false; // Flag to send static Info only once after reset.
+bool sStaticInfoWasSent = false; // Flag to send static info only once after reset.
 
 void processReceivedData();
 void printReceivedData();
@@ -454,13 +471,14 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 #if defined(NO_ANALYTICS)
     JK_INFO_PRINTLN(F("Analytics deactivated"));
 #else
+    JK_INFO_PRINTLN(F("Analytics activated"));
     findFirstSOCDataPointIndex();
-    JK_INFO_PRINT(F("EEPROM SOC data start index="));
-    JK_INFO_PRINT(SOCDataPointsInfo.ArrayStartIndex);
-    JK_INFO_PRINT(F(" length="));
-    JK_INFO_PRINT(SOCDataPointsInfo.ArrayLength);
-    JK_INFO_PRINT(F(", even="));
-    JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+    JK_DEBUG_PRINT(F("EEPROM SOC data start index="));
+    JK_DEBUG_PRINT(SOCDataPointsInfo.ArrayStartIndex);
+    JK_DEBUG_PRINT(F(" length="));
+    JK_DEBUG_PRINT(SOCDataPointsInfo.ArrayLength);
+    JK_DEBUG_PRINT(F(", even="));
+    JK_DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
 #endif
 
     tone(BUZZER_PIN, 2200, 50);
@@ -704,23 +722,6 @@ void loop() {
             handleOvervoltage();
         }
 
-        /*
-         * Checking for BMS error flags
-         */
-        if (sAlarmIsActive) {
-            sDoErrorBeep = true;
-#if defined(USE_SERIAL_2004_LCD)
-            if (sSwitchPageToShowAlarm) {
-                setLCDDisplayPage(JK_BMS_PAGE_OVERVIEW);
-#  if !defined(DISPLAY_ALWAYS_ON)
-                if (checkAndTurnLCDOn()) {
-                    Serial.println(F("error status changing")); // Switch on LCD display, triggered by error status changing
-                }
-#  endif
-            }
-#endif
-        }
-
 #if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)
         if (sSerialLCDAvailable) {
             doLCDBacklightTimeoutHandling();
@@ -728,26 +729,43 @@ void loop() {
 #endif
 
         /*
-         * Beep handling
+         * Checking for BMS error flags
+         */
+        if (sAlarmJustGetsActive) {
+            sAlarmOrTimeout = true; // sAlarmOrTimeout can be set to true also by receiving timeout above
+#if defined(USE_SERIAL_2004_LCD)
+            if (sSwitchPageAndShowAlarmInfoOnce) {
+                setLCDDisplayPage(JK_BMS_PAGE_OVERVIEW);
+#  if !defined(DISPLAY_ALWAYS_ON)
+                if (checkAndTurnLCDOn()) {
+                    Serial.println(F("alarm status changing")); // Reason for switching on LCD display
+                }
+#  endif
+            }
+#endif
+        }
+
+        /*
+         * Alarm / beep handling
          */
 #if !defined(NO_BEEP_ON_ERROR)      // Beep enabled
 #  if defined(ONE_BEEP_ON_ERROR)    // Beep once
-        if (sDoErrorBeep) {
+        if (sAlarmOrTimeout) {
             if (!sLastDoErrorBeep) {
                 // First error here
-                sLastDoErrorBeep = sDoErrorBeep; // Set sLastDoErrorBeep
+                sLastDoErrorBeep = sAlarmOrTimeout; // Set sLastDoErrorBeep
                 Serial.println(F("Beep only once, suppress consecutive error beeps"));
             } else {
-                sDoErrorBeep = false; // Suppress consecutive error beeps
+                sAlarmOrTimeout = false; // Suppress consecutive error beeps
             }
         } else {
-            sLastDoErrorBeep = sDoErrorBeep; // Reset sLastDoErrorBeep
+            sLastDoErrorBeep = sAlarmOrTimeout; // Reset sLastDoErrorBeep
         }
 #  endif
-        if (sDoErrorBeep) {
-            sDoErrorBeep = false;
+        if (sAlarmOrTimeout) {
+            sAlarmOrTimeout = false;
 #  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
-            sBeepTimeoutCounter++;
+            sBeepTimeoutCounter++; // incremented at each frame request
             if (sBeepTimeoutCounter == (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
                 JK_INFO_PRINTLN(F("Timeout reached, suppress consecutive error beeps"));
             } else if (sBeepTimeoutCounter > (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
@@ -844,7 +862,7 @@ bool readJK_BMSStatusFrame() {
  * If no bytes received before (because of BMS disconnected), print it only once
  */
 void handleFrameReceiveTimeout() {
-    sDoErrorBeep = true;
+    sAlarmOrTimeout = true;
     sFrameIsRequested = false; // Do not try to receive more
     sBMSFrameProcessingComplete = true;
     sJKBMSFrameHasTimeout = true;
@@ -908,6 +926,7 @@ void processReceivedData() {
 
 void printReceivedData() {
     if (!sStaticInfoWasSent) {
+        // Send static info only once after reset
         sStaticInfoWasSent = true;
         printJKStaticInfo();
     }

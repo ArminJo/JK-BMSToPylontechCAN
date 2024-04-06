@@ -829,15 +829,14 @@ void printVoltageDifferenceAndTemperature() {
 /*
  * Print alarm info only once
  * Only the alarm bits on row 4 are updated each time
- *
  */
 void printAlarmInfoOnLCD() {
-    if (sSwitchPageToShowAlarm) {
+    if (sSwitchPageAndShowAlarmInfoOnce) {
         myLCD.clear();
         /*
          * Print alarm info only once
          */
-        sSwitchPageToShowAlarm = false;
+        sSwitchPageAndShowAlarmInfoOnce = false;
         // Copy alarm message from flash, but not more than 20 characters
         const char *tLastAlarmString = (char*) (pgm_read_word(&JK_BMSAlarmStringsArray[sAlarmIndexToShowOnLCD]));
         strncpy_P(sStringBuffer, tLastAlarmString, LCD_COLUMNS);
@@ -989,12 +988,25 @@ void checkButtonPressForLCD() {
              * New press here
              */
             sPageButtonJustPressed = false;
+            /*
+             * If alarm is active, only reset it and do no other action, except switching on the display if off
+             */
+            if (sAlarmJustGetsActive) {
+                sAlarmJustGetsActive = false;
+#  if defined(DISPLAY_ALWAYS_ON)
+                return; // no further action, just reset flag / beep
+#  else
+                if (!sSerialLCDIsSwitchedOff) {
+                    return; // no further action, just reset flag / beep
+                }
+#  endif
+            }
 #  if !defined(DISPLAY_ALWAYS_ON)
             /*
              * If backlight LED off, switch it on, but do not select next page
              */
             if (checkAndTurnLCDOn()) {
-                Serial.println(F("button press")); // Switch on LCD display, triggered by button press
+                Serial.println(F("button press")); // Reason for switching on LCD display
                 sPageButtonJustPressed = false;// avoid switching pages if page button was pressed.
             } else
 #  endif
@@ -1107,7 +1119,7 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
          */
         printBMSDataOnLCD();
         if (aLCDDisplayPageNumber != JK_BMS_PAGE_OVERVIEW) {
-            // Reset alarm display flag
+            // Reset alarm display and beep flag on button press after alarm notification
             sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
         }
     }
@@ -1168,7 +1180,7 @@ void testLCDPages() {
 
     // reset alarm
     sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
-    sAlarmIsActive = false;
+    sAlarmJustGetsActive = false;
 
 
     /*

@@ -325,6 +325,7 @@ void writeSOCData() {
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.MillisOfLastValidEntry = millis();
 #if !defined(DISABLE_MONITORING)
+        // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
         Serial.print('#');
         printMonitoringInfo();
 #endif
@@ -384,12 +385,17 @@ void writeSOCData() {
         tSOCDataPoint.Delta100MilliampereHour = tDelta100MilliampereHour;
         SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
 
-        // compute rounded average ampere
-        tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.AverageAccumulator10Milliampere + (SOCDataPointsInfo.NumberOfSamples * 50))
-                / (SOCDataPointsInfo.NumberOfSamples * 100);
         // compute rounded average volt to empty
+        int16_t tNumberOfSamplesTimes2 = SOCDataPointsInfo.NumberOfSamples * 2;
         tSOCDataPoint.VoltageDifferenceToEmpty40Millivolt = (SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty
-                + (SOCDataPointsInfo.NumberOfSamples * 2)) / (SOCDataPointsInfo.NumberOfSamples * 4);
+                + tNumberOfSamplesTimes2) / (tNumberOfSamplesTimes2 * 2);
+
+        /*
+         * Compute rounded average ampere
+         */
+        long tNumberOfSamplesTimes50 = tNumberOfSamplesTimes2 * 25; // Must use 32 bit, since number of samples can be as high as 4000
+        tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.AverageAccumulator10Milliampere + tNumberOfSamplesTimes50)
+                / (tNumberOfSamplesTimes50 * 2);
 
         /*
          * Write to eeprom

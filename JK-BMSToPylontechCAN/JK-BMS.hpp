@@ -99,6 +99,7 @@ const char CellUndervoltage[] PROGMEM = "Cell undervoltage";                // B
 const char _309AProtection[] PROGMEM = "309_A protection";                  // Byte 1.4,
 const char _309BProtection[] PROGMEM = "309_B protection";                  // Byte 1.5,
 
+// For displaying specific info for this alarm
 #define INDEX_OF_OVERVOLTAGE_ALARM      2
 #define INDEX_OF_UNDERVOLTAGE_ALARM     3
 #define INDEX_NO_ALARM                  0xFF
@@ -109,9 +110,14 @@ const char *const JK_BMSAlarmStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
         _309BProtection };
 #if defined(USE_SERIAL_2004_LCD)
 uint8_t sAlarmIndexToShowOnLCD = INDEX_NO_ALARM; // Index of current alarm. Is set to INDEX_NO_ALARM on page switch.
-bool sSwitchPageToShowAlarm = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if  flags changed, and reset on switching to overview page.
+bool sSwitchPageAndShowAlarmInfoOnce = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if flags changed, and reset on switching to overview page.
 #endif
-bool sAlarmIsActive = false;    // True if status is  and beep should be started. False e.g. for "warning" like "Battery full".
+/*
+ * Set and reset by handleAndPrintAlarmInfo() and reset by checkButtonPressForLCD().
+ * Can also be set to true if 2 alarms are active and one of them gets inactive.
+ * If true beep (with optional timeout) is generated.
+ */
+bool sAlarmJustGetsActive = false; // True if alarm bits changed and any alarm is still active. False if alarm bits changed and no alarm is active.
 
 /*
  * Helper macro for getting a macro definition as string
@@ -761,13 +767,16 @@ void handleAndPrintAlarmInfo() {
      */
     if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
         if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == 0) {
-            sAlarmIsActive = false;
             Serial.println(F("All alarms are cleared now"));
+            sAlarmJustGetsActive = false;
+#if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
+            sBeepTimeoutCounter = 0; // restart beep timeout
+#endif
         } else {
 #if defined(USE_SERIAL_2004_LCD)
-            sSwitchPageToShowAlarm = true; // This forces a switch to Overview page
+            sSwitchPageAndShowAlarmInfoOnce = true; // This forces a switch to Overview page
 #endif
-            sAlarmIsActive = true; //  This forces the beep
+            sAlarmJustGetsActive = true; //  This forces the beep
 
             /*
              * Print alarm info
@@ -953,11 +962,15 @@ void printJKDynamicInfo() {
         myPrint(F("SOC[%]="), tJKFAllReplyPointer->SOCPercent);
         myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
         JKLastPrintedData.RemainingCapacityAmpereHour = JKComputedData.RemainingCapacityAmpereHour;
+        Serial.println(); // end of output for SOC change
     }
 
     /*
      * Charge and Discharge values
+     * Print it only if NO LCD connected
+     * CSV values are printed anyway every minute
      */
+#if !defined(USE_SERIAL_2004_LCD)
     if (abs(JKComputedData.BatteryVoltageFloat - JKLastPrintedData.BatteryVoltageFloat) > 0.03
             || abs(JKComputedData.BatteryLoadPower - JKLastPrintedData.BatteryLoadPower) >= 50) {
         Serial.print(F("Battery Voltage[V]="));
@@ -970,6 +983,7 @@ void printJKDynamicInfo() {
         JKLastPrintedData.BatteryVoltageFloat = JKComputedData.BatteryVoltageFloat;
         JKLastPrintedData.BatteryLoadPower = JKComputedData.BatteryLoadPower;
     }
+#endif
 
     /*
      * Charge, Discharge and Balancer flags
