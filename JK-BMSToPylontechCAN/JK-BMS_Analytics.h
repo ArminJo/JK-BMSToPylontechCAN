@@ -33,9 +33,9 @@
 
 struct JKComputedCapacityStruct {
     uint8_t StartSOCPercent;
-    uint8_t Start100MilliVoltToEmpty; // 250 bytes program memory incl. display
+    int8_t Start100MilliVoltToEmpty; // 250 bytes program memory incl. display
     uint8_t EndSOCPercent;
-    uint8_t End100MilliVoltToEmpty;
+    int8_t End100MilliVoltToEmpty;
     uint16_t Capacity;
     uint16_t TotalCapacity;
 };
@@ -69,7 +69,7 @@ void printComputedCapacity(uint8_t aCapacityArrayIndex);
 #define SOC_EVEN_EEPROM_PAGE_INDICATION_BIT 0x80 // Set in SOCPercent if we currently write on an even page. Required to find the end of current data in cyclic buffer.
 struct SOCDataPointDeltaStruct {
     uint8_t SOCPercent;
-    uint8_t VoltageDifferenceToEmpty40Millivolt; // 1 = 40 mV, 255 = 10.200 V
+    uint8_t VoltageDifferenceToEmpty50Millivolt; // 1 = 50 mV, 255 = 12.75 V. Values > 240 to 255 / 12 V to 12.7 V are taken as negative ones.
     int8_t AverageAmpere;
     int8_t Delta100MilliampereHour; // at a capacity of 320 Ah we have 3.2 Ah per 1% SOC
 };
@@ -79,9 +79,8 @@ struct SOCDataPointsInfoStruct {
     uint8_t ArrayStartIndex;   // Index of first entry in cyclic SOCDataPointsEEPROMArray, index of next value to be written.
     uint16_t ArrayLength;      // Length of valid data in Array. Required if not fully written. Maximum is NUMBER_OF_SOC_DATA_POINTS
     bool currentlyWritingOnAnEvenPage; // If true SOC_EVEN_EEPROM_PAGE_INDICATION_BIT is set in SOCPercent.
-    long MillisOfLastValidEntry;
     uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
-    long AverageAccumulatorVoltageDifferenceToEmpty = 0; // Serves as accumulator to enable a more smooth graph.
+    long AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0; // Serves as accumulator to enable a more smooth graph.
     long AverageAccumulator10Milliampere = 0; // Serves as accumulator for AverageAmpere
     long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18000 after write.
 };
@@ -89,7 +88,7 @@ extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 
 struct SOCDataPointMinMaxStruct {
     uint8_t SOCPercent;
-    int16_t VoltageDifferenceToEmpty10Millivolt;
+    int16_t VoltageDifferenceToEmpty50Millivolt;
     int16_t CapacityAmpereHour;
     int8_t AverageAmpere;
 };

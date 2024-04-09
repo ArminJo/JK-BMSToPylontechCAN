@@ -330,7 +330,7 @@ void printCurrent5CharacterRightAlignedOnLCD() {
  * Print 3 characters 2.4 or .45
  */
 void printVoltageDifference3CharactersOnLCD() {
-    uint16_t tBatteryToEmptyDifference10Millivolt = JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
+    int16_t tBatteryToEmptyDifference10Millivolt = JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
     if (tBatteryToEmptyDifference10Millivolt < 100) {
         // Print small values as ".43" instead of "0.4"
         sprintf_P(sStringBuffer, PSTR(".%02d"), tBatteryToEmptyDifference10Millivolt);

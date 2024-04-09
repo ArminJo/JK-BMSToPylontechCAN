@@ -171,8 +171,8 @@ struct JKComputedDataStruct {
     uint16_t BatteryFullVoltage10Millivolt; // Computed by BMS! Is ActualNumberOfCellInfoEntries *  CellOvervoltageProtectionMillivolt
     uint16_t BatteryEmptyVoltage10Millivolt;
     uint16_t BatteryVoltage10Millivolt;
-//    uint16_t BatteryVoltageDifferenceToFull10Millivolt; // saves 60 bytes program memory :-)
-    uint16_t BatteryVoltageDifferenceToEmpty10Millivolt;
+//    int16_t BatteryVoltageDifferenceToFull10Millivolt; // saves 60 bytes program memory :-)
+    int16_t BatteryVoltageDifferenceToEmpty10Millivolt;
     float BatteryVoltageFloat;          // Volt
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere

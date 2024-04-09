@@ -137,6 +137,11 @@
 #define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
 #endif
 
+//#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
+#if defined(STANDALONE_TEST) && defined(USE_NO_LCD)
+#undef USE_NO_LCD // LCD is activated for standalone test
+#endif
+
 /*
  * Options to reduce program size
  */
@@ -147,9 +152,11 @@
 #else
 #define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. - currently activated to save program space.
 #endif
-#if !defined(SERIAL_INFO_PRINT)
+
+#if !defined(SERIAL_INFO_PRINT) && !defined(STANDALONE_TEST)
 #define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space. - currently activated to save program space.
 #endif
+
 #if !defined(ENABLE_LIFEPO4_PLAUSI_WARNING)
 #define SUPPRESS_LIFEPO4_PLAUSI_WARNING     // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
 #endif
@@ -162,10 +169,6 @@
 
 //#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
 
-//#define STANDALONE_TEST           // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
-#if defined(STANDALONE_TEST) && defined(USE_NO_LCD)
-#undef USE_NO_LCD // LCD is activated for standalone test
-#endif
 #if !defined(USE_NO_LCD)
 #define USE_SERIAL_2004_LCD // Parallel or 1604 LCD not yet supported
 #define LCD_MESSAGE_PERSIST_TIME_MILLIS 2000
@@ -304,11 +307,11 @@ void handleFrameReceiveTimeout();
 #endif
 
 #if defined(DEBUG)
-#define JK_DEBUG_PRINT(...)      void();
-#define JK_DEBUG_PRINTLN(...)    void();
-#else
 #define JK_DEBUG_PRINT(...)      Serial.print(__VA_ARGS__);
 #define JK_DEBUG_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#else
+#define JK_DEBUG_PRINT(...)      void();
+#define JK_DEBUG_PRINTLN(...)    void();
 #endif
 
 #include "HexDump.hpp"
@@ -479,6 +482,20 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_DEBUG_PRINT(SOCDataPointsInfo.ArrayLength);
     JK_DEBUG_PRINT(F(", even="));
     JK_DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+
+#  if defined(BATTERY_ESR_MILLIOHM)
+    JK_INFO_PRINTLN(F("Disable ESR compensation pin=" STR(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN)));
+    JK_INFO_PRINT(F("Battery ESR compensation for voltage "));
+    if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
+        JK_INFO_PRINT(F("dis"));
+    } else {
+        JK_INFO_PRINT(F("en"));
+    }
+    JK_INFO_PRINTLN(F("abled. Specified ESR=" STR(BATTERY_ESR_MILLIOHM) "mOhm"));
+
+#  else
+    JK_INFO_PRINTLN(F("No battery ESR compensation for voltage"));
+#  endif
 #endif
 
     tone(BUZZER_PIN, 2200, 50);
@@ -572,25 +589,58 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     lastJKReply.BMSStatus.StatusAsWord = sJKFAllReplyPointer->BMSStatus.StatusAsWord;
     lastJKReply.SystemWorkingMinutes = sJKFAllReplyPointer->SystemWorkingMinutes;
 
-    if (eeprom_read_byte(&SOCDataPointsEEPROMArray[2].SOCPercent) == 0xFF) {
+//    if (true) {
+    // first value is still written by processReceivedData
+    if (eeprom_read_byte(&SOCDataPointsEEPROMArray[1].SOCPercent) == 0xFF) {
         // If EEPROM empty, fill in some values
         int8_t tIncrement = -1;
         Serial.println();
         Serial.println();
         Serial.println(F("Now write initial data to EEPROM"));
+        Serial.print(F("SOC="));
+        Serial.println(sJKFAllReplyPointer->SOCPercent);
+        Serial.print(F("JKComputedData.Battery10MilliAmpere="));
+        Serial.println(JKComputedData.Battery10MilliAmpere);
+        Serial.print(F("JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt="));
+        Serial.println(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt);
 
-        for (int i = 0; i < 259; ++i) { // 258 will fill up 256 entries
+        for (int i = 0; i < 260; ++i) { // force buffer wrap around
             sJKFAllReplyPointer->SOCPercent += tIncrement;
+            writeSOCData(); // write too EEPROM here.
+
+            // change accumulated value
             JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt += tIncrement * 4;
 
-            Serial.print('.');
+            Serial.print(sJKFAllReplyPointer->SOCPercent);
+            Serial.print(F(", "));
 
-            for (int j = 0; j < (i + 4) * 10; ++j) { // 320 corresponds to 2 Ah
+            // Test negative values
+            if (sJKFAllReplyPointer->SOCPercent == 2 && tIncrement < 0) {
+                JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = -10; // -100 mV
+                Serial.print(F(" -100 mV "));
+            }
+
+            /*
+             * Generate EEPROM data by calling writeSOCData(); multiple times for each SOC value
+             */
+            for (int j = 0; j < (i + 4) * 2; ++j) { // 320 corresponds to 2 Ah
                 // accumulate values
                 writeSOCData();
+                lastJKReply.SOCPercent = sJKFAllReplyPointer->SOCPercent; // for transition detection from 0 to 1
             }
+
+            // Manage 0% and 100 %
             if (sJKFAllReplyPointer->SOCPercent == 0 || sJKFAllReplyPointer->SOCPercent == 100) {
-                // reverse values at 0
+                if (sJKFAllReplyPointer->SOCPercent == 100) {
+                    // Add additional capacity after 100%
+                    for (int j = 0; j < 8000; ++j) {
+                        writeSOCData();
+                    }
+                } else {
+                    // set difference voltage to 0
+                    JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = 0;
+                }
+                // reverse values at 0 and 100
                 JKComputedData.Battery10MilliAmpere = -JKComputedData.Battery10MilliAmpere;
                 tIncrement = -tIncrement;
             }

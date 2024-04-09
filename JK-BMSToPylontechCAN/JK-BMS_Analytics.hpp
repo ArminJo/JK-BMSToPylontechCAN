@@ -122,13 +122,13 @@ void readAndPrintSOCData() {
 
     SOCDataPointMinMaxStruct tMinimumSOCData;
     tMinimumSOCData.SOCPercent = UINT8_MAX;
-    tMinimumSOCData.VoltageDifferenceToEmpty10Millivolt = INT16_MAX;
+    tMinimumSOCData.VoltageDifferenceToEmpty50Millivolt = INT16_MAX;
     tMinimumSOCData.CapacityAmpereHour = INT16_MAX;
     tMinimumSOCData.AverageAmpere = INT8_MAX;
 
     SOCDataPointMinMaxStruct tMaximumSOCData;
     tMaximumSOCData.SOCPercent = 0;
-    tMaximumSOCData.VoltageDifferenceToEmpty10Millivolt = INT16_MIN;
+    tMaximumSOCData.VoltageDifferenceToEmpty50Millivolt = INT16_MIN;
     tMaximumSOCData.CapacityAmpereHour = INT16_MIN;
     tMaximumSOCData.AverageAmpere = INT8_MIN;
 
@@ -137,7 +137,7 @@ void readAndPrintSOCData() {
     auto tSOCDataPointsArrayIndex = SOCDataPointsInfo.ArrayStartIndex;
     int16_t tCurrentCapacityAmpereHour;
     int16_t tCurrentCapacity100MilliampereHour;
-    int16_t tVoltageDifferenceToEmpty100Millivolt;
+    int16_t tVoltageDifferenceToEmpty50Millivolt;
 
     uint8_t tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
 
@@ -147,11 +147,31 @@ void readAndPrintSOCData() {
      * Print more than 500 data points in order to shift unwanted entries out to left of plotter window
      */
     Serial.println(F("Print SOC data with each entry printed twice"));
+#if defined(BATTERY_ESR_MILLIOHM)
+    if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
+        Serial.println(F("No battery ESR compensation for voltage"));
+    }
+#endif
 
     uint16_t i;
     for (i = 0; i < SOCDataPointsInfo.ArrayLength; ++i) {
         eeprom_read_block(&tCurrentSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayIndex], sizeof(tCurrentSOCDataPoint));
         tCurrentSOCDataPoint.SOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT; // remove indication bit
+
+        /*
+         * This printout will crash the graph!
+         */
+        JK_DEBUG_PRINT(tSOCDataPointsArrayIndex);
+        JK_DEBUG_PRINT(F(" even="));
+        JK_DEBUG_PRINT((bool) (tLastSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
+        JK_DEBUG_PRINT(F(", SOC="));
+        JK_DEBUG_PRINT(tCurrentSOCDataPoint.SOCPercent);
+        JK_DEBUG_PRINT(F(", Diff50mV="));
+        JK_DEBUG_PRINT(tCurrentSOCDataPoint.VoltageDifferenceToEmpty50Millivolt);
+        JK_DEBUG_PRINT(F(", AverageA="));
+        JK_DEBUG_PRINT(tCurrentSOCDataPoint.AverageAmpere);
+        JK_DEBUG_PRINT(F(", Delta100mAh="));
+        JK_DEBUG_PRINTLN(tCurrentSOCDataPoint.Delta100MilliampereHour);
 
         if (i == 0) {
             // initialize capacity with a reasonable value
@@ -192,21 +212,25 @@ void readAndPrintSOCData() {
             tMaximumSOCData.AverageAmpere = tCurrentSOCDataPoint.AverageAmpere;
         }
 
-#if defined(BATTERY_ESR_MILLIOHM)
-        if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
-            tVoltageDifferenceToEmpty100Millivolt = (tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4) / 10;
-        } else {
-            tVoltageDifferenceToEmpty100Millivolt = ((tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4)
-                - ((tCurrentSOCDataPoint.AverageAmpere * BATTERY_ESR_MILLIOHM) / 10)) / 10;
+        tVoltageDifferenceToEmpty50Millivolt = tCurrentSOCDataPoint.VoltageDifferenceToEmpty50Millivolt;
+        if (tVoltageDifferenceToEmpty50Millivolt > 240) {
+            // Interpret values > 12 V as negative ones
+            tVoltageDifferenceToEmpty50Millivolt = (int8_t) tCurrentSOCDataPoint.VoltageDifferenceToEmpty50Millivolt;
         }
 
-#else
-        tVoltageDifferenceToEmpty100Millivolt = (tCurrentSOCDataPoint.VoltageDifferenceToEmpty40Millivolt * 4) / 10;
+#if defined(BATTERY_ESR_MILLIOHM)
+        /*
+         * Compensate voltage with Current * ESR
+         */
+        if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) != LOW) {
+            tVoltageDifferenceToEmpty50Millivolt -= (((int16_t)tCurrentSOCDataPoint.AverageAmpere * BATTERY_ESR_MILLIOHM) / 50);
+        }
 #endif
-        if (tMinimumSOCData.VoltageDifferenceToEmpty10Millivolt > tVoltageDifferenceToEmpty100Millivolt) {
-            tMinimumSOCData.VoltageDifferenceToEmpty10Millivolt = tVoltageDifferenceToEmpty100Millivolt;
-        } else if (tMaximumSOCData.VoltageDifferenceToEmpty10Millivolt < tVoltageDifferenceToEmpty100Millivolt) {
-            tMaximumSOCData.VoltageDifferenceToEmpty10Millivolt = tVoltageDifferenceToEmpty100Millivolt;
+
+        if (tMinimumSOCData.VoltageDifferenceToEmpty50Millivolt > tVoltageDifferenceToEmpty50Millivolt) {
+            tMinimumSOCData.VoltageDifferenceToEmpty50Millivolt = tVoltageDifferenceToEmpty50Millivolt;
+        } else if (tMaximumSOCData.VoltageDifferenceToEmpty50Millivolt < tVoltageDifferenceToEmpty50Millivolt) {
+            tMaximumSOCData.VoltageDifferenceToEmpty50Millivolt = tVoltageDifferenceToEmpty50Millivolt;
         }
 
         if (i < SOCDataPointsInfo.ArrayLength - 1) {
@@ -215,7 +239,7 @@ void readAndPrintSOCData() {
                 Serial.print(' ');
                 Serial.print(tCurrentCapacityAmpereHour); // print capacity in Ah
                 Serial.print(' ');
-                Serial.print(tVoltageDifferenceToEmpty100Millivolt);
+                Serial.print(tVoltageDifferenceToEmpty50Millivolt / 2);
                 Serial.print(' ');
 #if defined(SHOW_DELTA_CAPACITY)
             Serial.print(constrain(tCurrentSOCDataPoint.Delta100MilliampereHour, -30, 90)); // clip display to -30 and 90
@@ -246,11 +270,11 @@ void readAndPrintSOCData() {
                 Serial.print(F("Ah:"));
                 Serial.print(tCurrentCapacityAmpereHour); // print Ah
                 Serial.print(F(" VoltToEmpty_"));
-                Serial.print(tMinimumSOCData.VoltageDifferenceToEmpty10Millivolt / 10.0, 2);
+                Serial.print(tMinimumSOCData.VoltageDifferenceToEmpty50Millivolt / 20.0, 2);
                 Serial.print(F("V->"));
-                Serial.print(tMaximumSOCData.VoltageDifferenceToEmpty10Millivolt / 10.0, 2);
+                Serial.print(tMaximumSOCData.VoltageDifferenceToEmpty50Millivolt / 20.0, 2);
                 Serial.print(F("V_[0.1V]:"));
-                Serial.print(tVoltageDifferenceToEmpty100Millivolt);
+                Serial.print(tVoltageDifferenceToEmpty50Millivolt / 2);
 #if defined(SHOW_DELTA_CAPACITY)
                     Serial.print(F(" Delta_capacity[0.1Ah]:"));
                     Serial.print(constrain(tCurrentSOCDataPoint.Delta100MilliampereHour, -30, 90)); // clip display to -30 and 90
@@ -265,7 +289,7 @@ void readAndPrintSOCData() {
                 if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) != LOW) {
                     Serial.print(F(" ESR_" STR(BATTERY_ESR_MILLIOHM) "mOhm:0"));
                 } else {
-                    Serial.println(F(" 0"));
+                    Serial.print(F(" 0"));
                 }
 #endif
                 Serial.print(F(" Empty_voltage_"));
@@ -305,7 +329,8 @@ void writeSOCData() {
      */
     SOCDataPointsInfo.DeltaAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere; // Can hold values of +/-11930 Ah
     SOCDataPointsInfo.AverageAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
-    SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty += JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
+    SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt +=
+            JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
     SOCDataPointsInfo.NumberOfSamples++; // For one sample each 2 seconds, we can store up to 36.4 hours here.
 #if defined(LOCAL_DEBUG)
     Serial.print(F("NumberOfSamples="));
@@ -317,13 +342,13 @@ void writeSOCData() {
      * Check for transition from 0 to 1, where we do not write values, but reset all accumulators
      */
     auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
+
     if (lastJKReply.SOCPercent == 0 && tCurrentSOCPercent == 1) {
-        Serial.println(F("SOC 0 -> 1 -> reset SOC data values"));
-        SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty = 0;
+        Serial.println(F("SOC 0 -> 1 -> clear internal accumulator values"));
         SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0;
+        SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0;
         SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
-        SOCDataPointsInfo.MillisOfLastValidEntry = millis();
 #if !defined(DISABLE_MONITORING)
         // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
         Serial.print('#');
@@ -346,7 +371,7 @@ void writeSOCData() {
         if (tSOCDataPointsArrayLastWriteIndex == (NUMBER_OF_SOC_DATA_POINTS - 1)) {
             // Here we write next entry at index 0, i.e. we start at next page, so we must switch even / odd indicator
             SOCDataPointsInfo.currentlyWritingOnAnEvenPage = !(tLastWritingOnAnEvenPage);
-            JK_INFO_PRINT(F("Buffer wrap around detected, even="));
+            JK_INFO_PRINT(F("Buffer wrap around detected, set even to "));
             JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
         }
 
@@ -385,17 +410,16 @@ void writeSOCData() {
         tSOCDataPoint.Delta100MilliampereHour = tDelta100MilliampereHour;
         SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
 
-        // compute rounded average volt to empty
-        int16_t tNumberOfSamplesTimes2 = SOCDataPointsInfo.NumberOfSamples * 2;
-        tSOCDataPoint.VoltageDifferenceToEmpty40Millivolt = (SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty
-                + tNumberOfSamplesTimes2) / (tNumberOfSamplesTimes2 * 2);
+        // compute average volt to empty
+        long tNumberOfSamplesTimes5 = SOCDataPointsInfo.NumberOfSamples * 5L;
+        tSOCDataPoint.VoltageDifferenceToEmpty50Millivolt = SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt
+                / tNumberOfSamplesTimes5;
 
         /*
-         * Compute rounded average ampere
+         * Compute average ampere
+         * Must use 32 bit, since number of samples can be as high as 4000
          */
-        long tNumberOfSamplesTimes50 = tNumberOfSamplesTimes2 * 25; // Must use 32 bit, since number of samples can be as high as 4000
-        tSOCDataPoint.AverageAmpere = (SOCDataPointsInfo.AverageAccumulator10Milliampere + tNumberOfSamplesTimes50)
-                / (tNumberOfSamplesTimes50 * 2);
+        tSOCDataPoint.AverageAmpere = SOCDataPointsInfo.AverageAccumulator10Milliampere / (tNumberOfSamplesTimes5 * 20L);
 
         /*
          * Write to eeprom
@@ -416,8 +440,10 @@ void writeSOCData() {
         JK_INFO_PRINT(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
         JK_INFO_PRINT(F(", SOCPercent="));
         JK_INFO_PRINT(tSOCDataPoint.SOCPercent & (~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
-        JK_INFO_PRINT(F(", VoltageDifferenceToEmpty40Millivolt="));
-        JK_INFO_PRINT(tSOCDataPoint.VoltageDifferenceToEmpty40Millivolt);
+        JK_INFO_PRINT(F(", VoltageDifferenceToEmpty50Millivolt="));
+        JK_INFO_PRINT(tSOCDataPoint.VoltageDifferenceToEmpty50Millivolt);
+        JK_INFO_PRINT('|');
+        JK_INFO_PRINT(tSOCDataPoint.VoltageDifferenceToEmpty50Millivolt / 2);
         JK_INFO_PRINT(F(", AverageAmpere="));
         JK_INFO_PRINT(tSOCDataPoint.AverageAmpere);
         JK_INFO_PRINT(F(", Delta100MilliampereHour="));
@@ -427,9 +453,8 @@ void writeSOCData() {
 #endif
 
         SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
-        SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty = 0;
+        SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
-        SOCDataPointsInfo.MillisOfLastValidEntry = millis();
 #if !defined(DISABLE_MONITORING)
         // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
         Serial.print('#');
