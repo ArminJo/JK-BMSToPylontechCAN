@@ -33,11 +33,8 @@
 
 JKLastReplyStruct lastJKReply;
 
-#if defined(DEBUG)
-#define LOCAL_DEBUG
-#else
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
-#endif
+#include "LocalDebugLevelStart.h"
 
 // see JK Communication protocol.pdf http://www.jk-bms.com/Upload/2022-05-19/1621104621.pdf
 uint8_t JKRequestStatusFrame[21] = { 0x4E, 0x57 /*4E 57 = StartOfFrame*/, 0x00, 0x13 /*0x13 | 19 = LengthOfFrame*/, 0x00, 0x00,
@@ -54,7 +51,6 @@ uint8_t JKRequestStatusFrame[21] = { 0x4E, 0x57 /*4E 57 = StartOfFrame*/, 0x00, 
 uint16_t sReplyFrameBufferIndex = 0;        // Index of next byte to write to array, except for last byte received. Starting with 0.
 uint16_t sReplyFrameLength;                 // Received length of frame
 uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS.
-bool sJKBMSFrameHasTimeout;                 // If true, timeout message or CAN Info page is displayed.
 
 JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
 JKLastPrintedDataStruct JKLastPrintedData;      // For detecting changes for printing
@@ -80,10 +76,14 @@ uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BET
 #endif //NO_CELL_STATISTICS
 
 /*
- * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data (CellInfoSize is contained in JKReplyFrameBuffer[12])
+ * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize
+ * + the variable length cell data 3 bytes per cell, (CellInfoSize is contained in JKReplyFrameBuffer[12])
  */
-JKReplyStruct *sJKFAllReplyPointer;
+JKReplyStruct *sJKFAllReplyPointer = reinterpret_cast<JKReplyStruct*>(&JKReplyFrameBuffer[JK_BMS_FRAME_HEADER_LENGTH + 2 + 48]); // assume 16 cells
 
+/*
+ * ALARM stuff
+ */
 const char lowCapacity[] PROGMEM = "Low capacity";                          // Byte 0.0,
 const char MosFetOvertemperature[] PROGMEM = "Power MosFet overtemperature"; // Byte 0.1;
 const char chargingOvervoltage[] PROGMEM = "Battery is full";               // Byte 0.2,  // Charging overvoltage
@@ -100,24 +100,35 @@ const char _309AProtection[] PROGMEM = "309_A protection";                  // B
 const char _309BProtection[] PROGMEM = "309_B protection";                  // Byte 1.5,
 
 // For displaying specific info for this alarm
-#define INDEX_OF_OVERVOLTAGE_ALARM      2
-#define INDEX_OF_UNDERVOLTAGE_ALARM     3
-#define INDEX_NO_ALARM                  0xFF
+#define INDEX_OF_CHARGING_OVERVOLTAGE_ALARM                 2
+#define MASK_OF_CHARGING_OVERVOLTAGE_ALARM_UNSWAPPED        0x0800
+#define INDEX_OF_DISCHARGING_UNDERVOLTAGE_ALARM             3
+#define MASK_OF_DISCHARGING_UNDERVOLTAGE_ALARM_UNSWAPPED    0x0400
+#define INDEX_NO_ALARM                                      0xFF
 
 const char *const JK_BMSAlarmStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM = { lowCapacity, MosFetOvertemperature,
         chargingOvervoltage, dischargingUndervoltage, Sensor2Overtemperature, chargingOvercurrent, dischargingOvercurrent,
         CellVoltageDifference, Sensor1Overtemperature, Sensor2LowLemperature, CellOvervoltage, CellUndervoltage, _309AProtection,
         _309BProtection };
-#if defined(USE_SERIAL_2004_LCD)
-uint8_t sAlarmIndexToShowOnLCD = INDEX_NO_ALARM; // Index of current alarm. Is set to INDEX_NO_ALARM on page switch.
-bool sSwitchPageAndShowAlarmInfoOnce = false; // True -> display overview page. Is set by handleAndPrintAlarmInfo(), if flags changed, and reset on switching to overview page.
-#endif
+
 /*
- * Set and reset by handleAndPrintAlarmInfo() and reset by checkButtonPressForLCD().
- * Can also be set to true if 2 alarms are active and one of them gets inactive.
- * If true beep (with optional timeout) is generated.
+ * Flags for alarm handling
+ */
+/*
+ * sAlarmJustGetsActive is set and reset by detectAndPrintAlarmInfo() and reset by checkButtonPressForLCD() and beep handling.
+ * Can also be set to true if 2 alarms are active and one of them gets inactive. If true beep (with optional timeout) is generated.
  */
 bool sAlarmJustGetsActive = false; // True if alarm bits changed and any alarm is still active. False if alarm bits changed and no alarm is active.
+#if defined(USE_SERIAL_2004_LCD)
+uint8_t sAlarmIndexToShowOnLCD = INDEX_NO_ALARM; // Index of current alarm to show with Alarm / Overview page. Set by detectAndPrintAlarmInfo() and reset on page switch.
+bool sPrintAlarmInfoOnlyOnce = false; // True -> fill main part of LCD alarm page only once. Is set by detectAndPrintAlarmInfo().
+bool sShowAlarmInsteadOfOverview = false; // is reset on button press
+#endif
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+uint16_t sLastActiveAlarmsAsWord;   // Used to disable new alarm beep on recurring of same alarm
+#define SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS    3600 // Allow consecutive same alarms after 1 hour of no alarm
+uint16_t sNoAlarmCounter; // Counts no alarms in order to reset suppression of consecutive alarms.
+#endif
 
 /*
  * Helper macro for getting a macro definition as string
@@ -755,11 +766,13 @@ void printMiscellaneousInfo() {
 }
 
 /*
- * Token 0x8B. Prints info only if alarms existent and changed from last value
- * Stores  string for LCD in sAlarmStringForLCD
- * ChargeOvervoltageAlarm is also displayed as 'F' (full) in printShortStateOnLCD()
+ * Token 0x8B. Prints alarm info only once for each change
+ * Sets sAlarmIndexToShowOnLCD and string for LCD in sAlarmStringForLCD
+ * Sets sAlarmJustGetsActive
+ * ChargeOvervoltageAlarm is displayed as 'O' in printShortStateOnLCD()
+ * ChargeUndervoltageAlarm is displayed as 'U' in printShortStateOnLCD()
  */
-void handleAndPrintAlarmInfo() {
+void detectAndPrintAlarmInfo() {
     JKReplyStruct *tJKFAllReplyPointer = sJKFAllReplyPointer;
 
     /*
@@ -769,15 +782,29 @@ void handleAndPrintAlarmInfo() {
         if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == 0) {
             Serial.println(F("All alarms are cleared now"));
             sAlarmJustGetsActive = false;
-#if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) && !defined(ONE_BEEP_ON_ERROR)   // Beep one minute
-            sBeepTimeoutCounter = 0; // restart beep timeout
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+            sNoAlarmCounter++; // overflow does not matter here
+            if (sNoAlarmCounter
+                    == (SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS * MILLIS_IN_ONE_SECOND) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+                sLastActiveAlarmsAsWord = 0; // Allow consecutive same alarms after 1 hour of no alarm
+            }
 #endif
         } else {
-#if defined(USE_SERIAL_2004_LCD)
-            sSwitchPageAndShowAlarmInfoOnce = true; // This forces a switch to Overview page
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+            sNoAlarmCounter = 0; // reset counter
+            // only start actions if new alarm is different
+            if(sLastActiveAlarmsAsWord == tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord){
+                sDoAlarmOrTimeoutBeep = true; // do only one beep for recurring alarms
+            } else {
+                sLastActiveAlarmsAsWord = tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
 #endif
-            sAlarmJustGetsActive = true; //  This forces the beep
-
+#if defined(USE_SERIAL_2004_LCD)
+                sPrintAlarmInfoOnlyOnce = true; // This forces a switch to Alarm page
+#endif
+            sAlarmJustGetsActive = true; // This forces the beep
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+            }
+#endif
             /*
              * Print alarm info
              */
@@ -799,7 +826,8 @@ void handleAndPrintAlarmInfo() {
 #if defined(USE_SERIAL_2004_LCD)
                     sAlarmIndexToShowOnLCD = i;
 #endif
-                    Serial.println(reinterpret_cast<const __FlashStringHelper*>((char*) (pgm_read_word(&JK_BMSAlarmStringsArray[i]))));
+                    Serial.println(
+                            reinterpret_cast<const __FlashStringHelper*>((char*) (pgm_read_word(&JK_BMSAlarmStringsArray[i]))));
                 }
                 tAlarmMask <<= 1;
             }
@@ -1069,7 +1097,5 @@ void printMonitoringInfo() {
 }
 #endif // !defined(DISABLE_MONITORING)
 
-#if defined(LOCAL_DEBUG)
-#undef LOCAL_DEBUG
-#endif
+#include "LocalDebugLevelEnd.h"
 #endif // _JK_BMS_HPP

@@ -32,12 +32,6 @@
 
 #include <Arduino.h>
 
-#if defined(DEBUG)
-#define LOCAL_DEBUG
-#else
-//#define LOCAL_DEBUG // This enables debug output only for this file - only for development
-#endif
-
 #include "MCP2515_TX.h" // my reduced driver
 #include "Pylontech_CAN.h"
 
@@ -364,9 +358,6 @@ uint8_t ReachChargeLimit() {
 void modifyCANData() {
 
 }
-#endif
+#endif // !defined(USE_OWN_MODIFY_FUNCTION) && !defined(USE_CCCV_MODIFY_FUNCTION)
 
-#if defined(LOCAL_DEBUG)
-#undef LOCAL_DEBUG
-#endif
 #endif // _PYLONTECH_CAN_HPP

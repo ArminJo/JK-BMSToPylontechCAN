@@ -32,11 +32,8 @@
 
 #include "JK-BMS_Analytics.h"
 
-#if defined(DEBUG)
-#define LOCAL_DEBUG
-#else
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
-#endif
+#include "LocalDebugLevelStart.h"
 
 /*
  * The first entry [0] holds the current computed value if more than 1 Ah are accumulated
@@ -161,17 +158,17 @@ void readAndPrintSOCData() {
         /*
          * This printout will crash the graph!
          */
-        JK_DEBUG_PRINT(tSOCDataPointsArrayIndex);
-        JK_DEBUG_PRINT(F(" even="));
-        JK_DEBUG_PRINT((bool) (tLastSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
-        JK_DEBUG_PRINT(F(", SOC="));
-        JK_DEBUG_PRINT(tCurrentSOCDataPoint.SOCPercent);
-        JK_DEBUG_PRINT(F(", Diff50mV="));
-        JK_DEBUG_PRINT(tCurrentSOCDataPoint.VoltageDifferenceToEmpty50Millivolt);
-        JK_DEBUG_PRINT(F(", AverageA="));
-        JK_DEBUG_PRINT(tCurrentSOCDataPoint.AverageAmpere);
-        JK_DEBUG_PRINT(F(", Delta100mAh="));
-        JK_DEBUG_PRINTLN(tCurrentSOCDataPoint.Delta100MilliampereHour);
+        DEBUG_PRINT(tSOCDataPointsArrayIndex);
+        DEBUG_PRINT(F(" even="));
+        DEBUG_PRINT((bool) (tLastSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
+        DEBUG_PRINT(F(", SOC="));
+        DEBUG_PRINT(tCurrentSOCDataPoint.SOCPercent);
+        DEBUG_PRINT(F(", Diff50mV="));
+        DEBUG_PRINT(tCurrentSOCDataPoint.VoltageDifferenceToEmpty50Millivolt);
+        DEBUG_PRINT(F(", AverageA="));
+        DEBUG_PRINT(tCurrentSOCDataPoint.AverageAmpere);
+        DEBUG_PRINT(F(", Delta100mAh="));
+        DEBUG_PRINTLN(tCurrentSOCDataPoint.Delta100MilliampereHour);
 
         if (i == 0) {
             // initialize capacity with a reasonable value
@@ -579,7 +576,5 @@ void checkAndStoreCapacityComputationValues() {
     }
 }
 
-#if defined(LOCAL_DEBUG)
-#undef LOCAL_DEBUG
-#endif
+#include "LocalDebugLevelEnd.h"
 #endif // _JK_BMS_ANALYTICS_HPP

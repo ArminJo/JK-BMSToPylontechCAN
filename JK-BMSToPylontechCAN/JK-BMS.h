@@ -57,7 +57,7 @@ extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to writ
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
 extern struct JKReplyStruct *sJKFAllReplyPointer;
 extern bool sJKBMSFrameHasTimeout; // For sending CAN data
-extern bool sSwitchPageAndShowAlarmInfoOnce;
+extern bool sPrintAlarmInfoOnlyOnce;
 extern bool sAlarmJustGetsActive;
 
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
@@ -89,7 +89,7 @@ void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue);
 void computeUpTimeString();
 void printJKStaticInfo();
 void printJKDynamicInfo();
-void handleAndPrintAlarmInfo();
+void detectAndPrintAlarmInfo();
 #if !defined(DISABLE_MONITORING)
 void printMonitoringInfo();
 #endif
@@ -261,21 +261,25 @@ struct JKReplyStruct {
     union {
         uint16_t AlarmsAsWord;
         struct {
-            // High byte of alarms
+            uint8_t AlarmsHighByte;
+            uint8_t AlarmsLowByte;
+        } AlarmBytes;
+        struct {
+            // High byte of alarms, but low byte of AlarmsAsWord
             bool Sensor2OvertemperatureAlarm :1;    // 0x0100
             bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
             bool CellOvervoltageAlarm :1;           // 0x0400
-            bool CellUndervoltageAlarm :1; // 0x0800 Discharging undervoltage forces SOC to 0 and a few seconds later switches off discharge mosfet
+            bool CellUndervoltageAlarm :1;          // 0x0800
             bool _309_A_ProtectionAlarm :1;         // 0x1000
             bool _309_B_ProtectionAlarm :1;
             bool Reserved1Alarm :1;                 // Two highest bits are reserved
-            bool Reserved2Alarm :1;
+            bool Reserved2Alarm :1;                 // 0x8000
 
-            // Low byte of alarms
+            // Low byte of alarms, but high byte of AlarmsAsWord
             bool LowCapacityAlarm :1;               // 0x0001
             bool PowerMosFetOvertemperatureAlarm :1;
             bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
-            bool DischargeUndervoltageAlarm :1;
+            bool DischargeUndervoltageAlarm :1; // 0x0008 Discharging undervoltage forces SOC to 0 and a few seconds later switches off discharge mosfet
             bool Sensor1Or2OvertemperatureAlarm :1; // 0x0010 - Affects the charging/discharging MosFet state, not the enable flags
             /*
              * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
@@ -301,9 +305,9 @@ struct JKReplyStruct {
     } BMSStatus;
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
-    uint16_t BatteryOvervoltageProtection10Millivolt;   // 1000 to 15000 BMS computed: # of cells * CellOvervoltageProtectionMillivolt
+    uint16_t BatteryOvervoltageProtection10Millivolt; // 1000 to 15000 BMS computed: # of cells * CellOvervoltageProtectionMillivolt
     uint8_t TokenBatteryUndervoltageProtection10Millivolt; // 0x8F
-    uint16_t BatteryUndervoltageProtection10Millivolt;  // 1000 to 15000 BMS computed: # of cells * CellUndervoltageProtectionMillivolt
+    uint16_t BatteryUndervoltageProtection10Millivolt; // 1000 to 15000 BMS computed: # of cells * CellUndervoltageProtectionMillivolt
     uint8_t TokenCellOvervoltageProtectionMillivolt;    // 0x90
     uint16_t CellOvervoltageProtectionMillivolt;        // 1000 to 4500
     uint8_t TokenCellOvervoltageRecoveryMillivolt;      // 0x91

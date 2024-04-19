@@ -48,7 +48,7 @@ char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with spr
 #  else
 #define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
 #define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
-#  endif // DEBUG
+#  endif
 
 //#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
 #  if !defined(DISPLAY_ALWAYS_ON)
@@ -76,7 +76,7 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 /*
  * LCD display pages
  */
-#define JK_BMS_PAGE_OVERVIEW            0 // is displayed in case of BMS alarm message
+#define JK_BMS_PAGE_OVERVIEW            0 // is selected in case of BMS alarm message
 #define JK_BMS_PAGE_CELL_INFO           1
 #if defined(NO_CELL_STATISTICS)
 #define JK_BMS_PAGE_BIG_INFO            2
@@ -215,24 +215,6 @@ void LCDClearLine(uint8_t aLineNumber) {
     myLCD.setCursor(0, aLineNumber);
 }
 
-/*
- * Global timeout message
- */
-void printTimeoutMessageOnLCD() {
-    if (sSerialLCDAvailable
-#  if !defined(DISPLAY_ALWAYS_ON)
-            && !sSerialLCDIsSwitchedOff
-#  endif
-            && sLCDDisplayPageNumber != JK_BMS_PAGE_CAN_INFO) {
-        myLCD.clear();
-        myLCD.setCursor(0, 0);
-        myLCD.print(F("Receive timeout "));
-        myLCD.print(sTimeoutFrameCounter);
-        myLCD.setCursor(0, 1);
-        myLCD.print(F("Is BMS switched off?"));
-    }
-}
-
 void printShortEnableFlagsOnLCD() {
     if (sJKFAllReplyPointer->ChargeIsEnabled) {
         myLCD.print('C');
@@ -250,30 +232,28 @@ void printShortEnableFlagsOnLCD() {
 }
 
 /*
- * Prints state of Charge Overvoltage 'F'ull warning, and Charge, Discharge and Balancing flag
+ * Prints Charge, Discharge and Balancing flag
+ * If Overvoltage, C is replaced by O
+ * If Undervoltage, D is Replaced by U
  */
 void printShortStateOnLCD() {
-    if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm
-            && !sJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
-        myLCD.print(F(" F")); // Replace "F " by " F"
+
+    if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
+        myLCD.print('O');
+    } else if (sJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
+        myLCD.print('C');
     } else {
-        if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
-            myLCD.print('F');
-        } else {
-            myLCD.print(' ');
-        }
-        if (sJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
-            myLCD.print('C');
-        } else {
-            myLCD.print(' ');
-        }
+        myLCD.print(' ');
     }
 
-    if (sJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive) {
+    if (sJKFAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm) {
+        myLCD.print('U');
+    } else if (sJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive) {
         myLCD.print('D');
     } else {
         myLCD.print(' ');
     }
+
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
         myLCD.print('B');
     } else {
@@ -296,6 +276,30 @@ void printLongStateOnLCD() {
 
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
         myLCD.print(F("BAL"));
+    }
+}
+
+/*
+ * Print the actual HEX alarm bits in the last 4 characters
+ * or state, if no alarm or under or overvoltage alarm, which is printed also in state
+ */
+void printAlarmHexOrStateOnLCD() {
+    if ((sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord
+            & ~(MASK_OF_CHARGING_OVERVOLTAGE_ALARM_UNSWAPPED | MASK_OF_DISCHARGING_UNDERVOLTAGE_ALARM_UNSWAPPED)) == 0) {
+        myLCD.setCursor(17, 3); // Last 3 characters are the actual states
+        printShortStateOnLCD();
+    } else {
+        myLCD.setCursor(16, 3); // Last 4 characters are the actual HEX alarm bits
+        uint16_t tAlarms = swap(sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord);
+        if (tAlarms < 0x100) {
+            myLCD.print(F("0x"));
+            if (tAlarms < 0x10) {
+                myLCD.print('0'); // leading 0
+            }
+        } else if (tAlarms < 0x1000) {
+            myLCD.print('0'); // leading 0
+        }
+        myLCD.print(tAlarms, HEX);
     }
 }
 
@@ -390,7 +394,7 @@ void printCellInfoOnLCD() {
         if ((tNumberOfCellInfoEntries <= 16 && i % 4 == 0) || (tNumberOfCellInfoEntries > 16 && i % 5 == 0)) {
             if (tNumberOfCellInfoEntries <= 16) {
                 /*
-                 * Print info in last 3 columns
+                 * Print info in last 3 columns before printing next line with cell voltages
                  */
                 if (i == 4) {
                     // print SOC
@@ -425,7 +429,7 @@ void printCellInfoOnLCD() {
         sprintf_P(sStringBuffer, PSTR("%3d"), JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt - 3000); // Value can be negative!
         myLCD.print(sStringBuffer);
     }
-    if (tNumberOfCellInfoEntries <= 16) {
+    if (tNumberOfCellInfoEntries > 0 && tNumberOfCellInfoEntries <= 16) {
         // print voltage difference
         myLCD.setCursor(17, 3);
         printVoltageDifference3CharactersOnLCD();
@@ -663,7 +667,7 @@ void printBigInfoOnLCD() {
     myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
     myLCD.print('V');
 
-    myLCD.setCursor(16, 3);
+    myLCD.setCursor(17, 3); // Last 3 characters are the actual states
     printShortStateOnLCD();
 }
 
@@ -827,97 +831,65 @@ void printVoltageDifferenceAndTemperature() {
 }
 
 /*
- * Print alarm info only once
- * Only the alarm bits on row 4 are updated each time
+ * Print timeout message with uptime
  */
-void printAlarmInfoOnLCD() {
-    if (sSwitchPageAndShowAlarmInfoOnce) {
-        myLCD.clear();
-        /*
-         * Print alarm info only once
-         */
-        sSwitchPageAndShowAlarmInfoOnce = false;
-        // Copy alarm message from flash, but not more than 20 characters
-        const char *tLastAlarmString = (char*) (pgm_read_word(&JK_BMSAlarmStringsArray[sAlarmIndexToShowOnLCD]));
-        strncpy_P(sStringBuffer, tLastAlarmString, LCD_COLUMNS);
-        sStringBuffer[LCD_COLUMNS] = '\0';
-        myLCD.print(sStringBuffer);
-
-        /*
-         * Row 2
-         * remainder of alarm string and uptime
-         * or index of min or max cell and cell voltage and uptime
-         */
-        myLCD.setCursor(0, 1);
-        if (sAlarmIndexToShowOnLCD == INDEX_OF_UNDERVOLTAGE_ALARM || sAlarmIndexToShowOnLCD == INDEX_OF_OVERVOLTAGE_ALARM) {
-            uint16_t tCellMillivoltToPrint;
-            uint8_t tCellIndexToPrint;
-            if (sAlarmIndexToShowOnLCD == INDEX_OF_UNDERVOLTAGE_ALARM) {
-                tCellIndexToPrint = JKConvertedCellInfo.IndexOfMinimumCellMillivolt;
-                // print fix format 3 character value
-                tCellMillivoltToPrint = JKConvertedCellInfo.MinimumCellMillivolt;
-            } else if (sAlarmIndexToShowOnLCD == INDEX_OF_OVERVOLTAGE_ALARM) {
-                tCellIndexToPrint = JKConvertedCellInfo.IndexOfMaximumCellMillivolt;
-                tCellMillivoltToPrint = JKConvertedCellInfo.MaximumCellMillivolt;
-            }
-            sprintf_P(sStringBuffer, PSTR("%2d %3dmV "), tCellIndexToPrint + 1, tCellMillivoltToPrint - 3000);
-            myLCD.print(sStringBuffer);
-        } else if (strlen_P(tLastAlarmString) > LCD_COLUMNS) {
-            strncpy_P(sStringBuffer, &tLastAlarmString[LCD_COLUMNS], LCD_COLUMNS - LENGTH_OF_UPTIME_STRING); // 11 = Length of uptime string
-            sStringBuffer[LCD_COLUMNS - LENGTH_OF_UPTIME_STRING] = '\0';
-            myLCD.print(sStringBuffer);
-        }
-        myLCD.setCursor(LCD_COLUMNS - LENGTH_OF_UPTIME_STRING, 1);
-        myLCD.print(sUpTimeString);
-
-        /*
-         * Row 3 - Voltage, Current and Power
-         */
-        printVoltageCurrentAndPowerOnLCD();
-
-        /*
-         * Row 4 - 1. Voltage difference, MOS temperature, maximum temperature of 2 external sensors and 3 enable states
-         * Row 4 - 2. MOS temperature, temperature of 2 external sensors and 3 enable states
-         */
-        printVoltageDifferenceAndTemperature();
-    }
-
-    /*
-     * Last 4 characters are the actual alarm bits, which were updated
-     */
-    myLCD.setCursor(16, 3);
-    uint16_t tAlarms = swap(sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord);
-    myLCD.print(F("0x"));
-    if (tAlarms < 0x10) {
-        myLCD.print('0'); // leading 0
-    }
-    myLCD.print(tAlarms, HEX);
+void printTimeoutMessageOnLCD() {
+    myLCD.clear();
+    myLCD.setCursor(0, 0);
+    myLCD.print(F("Receive timeout "));
+    myLCD.setCursor(LCD_COLUMNS - LENGTH_OF_UPTIME_STRING, 1);
+    myLCD.print(sUpTimeString);
+    myLCD.setCursor(0, 2);
+    myLCD.print(F("Is BMS switched off?"));
 }
 
-void printOverwiewInfoOnLCD() {
-    /*
-     * Top row 1 - Up time
-     */
-    myLCD.print(F("Uptime:  "));
-    myLCD.print(sUpTimeString);
+/*
+ * Print alarm info only once
+ * Only the alarm bits on row 4 are updated each time
+ * Line 3 and 4 are like Overview page
+ */
+void printAlarmInfoOnLCD() {
+    myLCD.clear();
+
+    // Copy alarm message from flash, but not more than 20 characters
+    const char *tLastAlarmString = (char*) (pgm_read_word(&JK_BMSAlarmStringsArray[sAlarmIndexToShowOnLCD]));
+    strncpy_P(sStringBuffer, tLastAlarmString, LCD_COLUMNS);
+    sStringBuffer[LCD_COLUMNS] = '\0';
+    myLCD.print(sStringBuffer);
 
     /*
-     * Row 2 - SOC and remaining capacity and Charge / Discharge / Balancing enable flags
+     * Row 2
+     * index of min or max cell and cell voltage and uptime
+     * or remainder of alarm string and uptime
      */
     myLCD.setCursor(0, 1);
-// Percent of charge
-    myLCD.print(sJKFAllReplyPointer->SOCPercent);
-    myLCD.print(F("% "));
-// Remaining capacity
-    myLCD.print(JKComputedData.RemainingCapacityAmpereHour);
-    myLCD.print(F("Ah "));
-    if (JKComputedData.RemainingCapacityAmpereHour < 100) {
-        myLCD.print(' ');
+    if (sAlarmIndexToShowOnLCD == INDEX_OF_DISCHARGING_UNDERVOLTAGE_ALARM
+            || sAlarmIndexToShowOnLCD == INDEX_OF_CHARGING_OVERVOLTAGE_ALARM) {
+        uint16_t tCellMillivoltToPrint;
+        uint8_t tCellIndexToPrint;
+        if (sAlarmIndexToShowOnLCD == INDEX_OF_DISCHARGING_UNDERVOLTAGE_ALARM) {
+            // Index of minimum cell
+            tCellIndexToPrint = JKConvertedCellInfo.IndexOfMinimumCellMillivolt;
+            tCellMillivoltToPrint = JKConvertedCellInfo.MinimumCellMillivolt;
+        } else if (sAlarmIndexToShowOnLCD == INDEX_OF_CHARGING_OVERVOLTAGE_ALARM) {
+            // Index of maximum cell
+            tCellIndexToPrint = JKConvertedCellInfo.IndexOfMaximumCellMillivolt;
+            tCellMillivoltToPrint = JKConvertedCellInfo.MaximumCellMillivolt;
+        }
+        // print millivolt with fix format 3 character value
+        sprintf_P(sStringBuffer, PSTR("%2d %3dmV "), tCellIndexToPrint + 1, tCellMillivoltToPrint - 3000);
+        myLCD.print(sStringBuffer);
+
+    } else if (strlen_P(tLastAlarmString) > LCD_COLUMNS) {
+        // remainder of alarm string
+        strncpy_P(sStringBuffer, &tLastAlarmString[LCD_COLUMNS], LCD_COLUMNS - LENGTH_OF_UPTIME_STRING); // 11 = Length of uptime string
+        sStringBuffer[LCD_COLUMNS - LENGTH_OF_UPTIME_STRING] = '\0';
+        myLCD.print(sStringBuffer);
     }
-// Last 3 characters are the enable states
-    myLCD.setCursor(14, 1);
-    myLCD.print(F("En:"));
-    printShortEnableFlagsOnLCD();
+
+    // Uptime
+    myLCD.setCursor(LCD_COLUMNS - LENGTH_OF_UPTIME_STRING, 1);
+    myLCD.print(sUpTimeString);
 
     /*
      * Row 3 - Voltage, Current and Power
@@ -929,10 +901,52 @@ void printOverwiewInfoOnLCD() {
      * Row 4 - 2. MOS temperature, temperature of 2 external sensors and 3 enable states
      */
     printVoltageDifferenceAndTemperature();
+}
 
-    // Last 4 characters are the actual states
-    myLCD.setCursor(16, 3);
-    printShortStateOnLCD();
+/*
+ * If sAlarmIndexToShowOnLCD != INDEX_NO_ALARM show only actual HEX alarm bits in row 4
+ */
+void printOverwiewOrAlarmInfoOnLCD() {
+    if (!sShowAlarmInsteadOfOverview) {
+        /*
+         * Top row 1 - Up time
+         */
+        myLCD.print(F("Uptime:  "));
+        myLCD.print(sUpTimeString);
+
+        /*
+         * Row 2 - SOC and remaining capacity and Charge / Discharge / Balancing enable flags
+         */
+        myLCD.setCursor(0, 1);
+// Percent of charge
+        myLCD.print(sJKFAllReplyPointer->SOCPercent);
+        myLCD.print(F("% "));
+// Remaining capacity
+        myLCD.print(JKComputedData.RemainingCapacityAmpereHour);
+        myLCD.print(F("Ah "));
+        if (JKComputedData.RemainingCapacityAmpereHour < 100) {
+            myLCD.print(' ');
+        }
+// Last 3 characters are the enable states
+        myLCD.setCursor(14, 1);
+        myLCD.print(F("En:"));
+        printShortEnableFlagsOnLCD();
+
+        /*
+         * Row 3 - Voltage, Current and Power
+         */
+        printVoltageCurrentAndPowerOnLCD();
+
+        /*
+         * Row 4 - 1. Voltage difference, MOS temperature, maximum temperature of 2 external sensors and 3 enable states
+         * Row 4 - 2. MOS temperature, temperature of 2 external sensors and 3 enable states
+         * In case of alarm, print alarm hex instead of 3 enable states
+         */
+        printVoltageDifferenceAndTemperature();
+    }
+
+    // print it always, even for alarm display
+    printAlarmHexOrStateOnLCD();
 }
 
 void printBMSDataOnLCD() {
@@ -941,39 +955,48 @@ void printBMSDataOnLCD() {
             && !sSerialLCDIsSwitchedOff
 #  endif
     ) {
-        myLCD.setCursor(0, 0);
         /*
-         * Check for alarm info, which must not be cleared before
+         * Check for alarm info
          */
-        if (sAlarmIndexToShowOnLCD != INDEX_NO_ALARM) {
+        if (sPrintAlarmInfoOnlyOnce) {
+            sPrintAlarmInfoOnlyOnce = false;
+            sShowAlarmInsteadOfOverview = true;
+            sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
             printAlarmInfoOnLCD();
-
-        } else {
-            myLCD.clear();
-
-            if (sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
-                printOverwiewInfoOnLCD();
+#  if !defined(DISPLAY_ALWAYS_ON)
+            if (checkAndTurnLCDOn()) {
+                JK_INFO_PRINTLN(F("alarm status changing")); // Reason for switching on LCD display
             }
+    #  endif
+        }
 
-            else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
-                printCellInfoOnLCD();
+        // do not clear alarm info, which is only printed once
+        if (!sShowAlarmInsteadOfOverview) {
+            myLCD.clear();
+        }
+        if (sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
+            printOverwiewOrAlarmInfoOnLCD();
+        }
+
+        else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
+            printCellInfoOnLCD();
 
 #if !defined(NO_CELL_STATISTICS)
-            } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
-                printCellStatisticsOnLCD();
+        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CELL_STATISTICS) {
+            printCellStatisticsOnLCD();
 #endif
-            } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
-                printBigInfoOnLCD();
+        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
+            printBigInfoOnLCD();
 
 #if !defined(NO_ANALYTICS)
-            } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
-                printCapacityInfoOnLCD();
+        } else if (sLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
+            printCapacityInfoOnLCD();
 #endif
 
-            } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
-                printCANInfoOnLCD();
-            }
+        } else { //sLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO
+            printCANInfoOnLCD();
         }
+
     }
 }
 
@@ -991,8 +1014,9 @@ void checkButtonPressForLCD() {
             /*
              * If alarm is active, only reset it and do no other action, except switching on the display if off
              */
-            if (sAlarmJustGetsActive) {
-                sAlarmJustGetsActive = false;
+            if (sAlarmJustGetsActive || sTimeoutJustdetected) {
+                sAlarmJustGetsActive = false; // disable further alarm beeps
+                sTimeoutJustdetected = false; // disable further timeout beeps
 #  if defined(DISPLAY_ALWAYS_ON)
                 return; // no further action, just reset flag / beep
 #  else
@@ -1006,8 +1030,8 @@ void checkButtonPressForLCD() {
              * If backlight LED off, switch it on, but do not select next page
              */
             if (checkAndTurnLCDOn()) {
-                Serial.println(F("button press")); // Reason for switching on LCD display
-                sPageButtonJustPressed = false;// avoid switching pages if page button was pressed.
+                JK_INFO_PRINTLN(F("button press")); // Reason for switching on LCD display
+                sPageButtonJustPressed = false; // avoid switching pages if page button was pressed.
             } else
 #  endif
             {
@@ -1021,9 +1045,8 @@ void checkButtonPressForLCD() {
                      * Switch display pages to next page
                      */
                     tLCDDisplayPageNumber++;
-                    if (sJKBMSFrameHasTimeout || tLCDDisplayPageNumber == JK_BMS_PAGE_MAX + 1
-                            || tLCDDisplayPageNumber == JK_BMS_DEBUG_PAGE_MAX + 1) {
-                        // Receive timeout or wrap around here
+                    if (tLCDDisplayPageNumber == JK_BMS_PAGE_MAX + 1 || tLCDDisplayPageNumber == JK_BMS_DEBUG_PAGE_MAX + 1) {
+                        // Wrap around
                         tLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
                     }
                 }
@@ -1112,17 +1135,12 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
     else if (aLCDDisplayPageNumber == JK_BMS_PAGE_BIG_INFO) {
         bigNumberLCD.begin(); // Creates custom character used for generating big numbers
     }
-// If BMS communication timeout, only timeout message or CAN Info page can be displayed.
-    if (!sJKBMSFrameHasTimeout || aLCDDisplayPageNumber == JK_BMS_PAGE_CAN_INFO) {
-        /*
-         * Show new page
-         */
-        printBMSDataOnLCD();
-        if (aLCDDisplayPageNumber != JK_BMS_PAGE_OVERVIEW) {
-            // Reset alarm display and beep flag on button press after alarm notification
-            sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
-        }
-    }
+
+    /*
+     * Show new page
+     */
+    printBMSDataOnLCD();
+    sShowAlarmInsteadOfOverview = false; // on button press, reset any alarm display
 
 #if !defined(NO_ANALYTICS)
     if (aLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {
@@ -1138,7 +1156,7 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
 void testLCDPages() {
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     printBMSDataOnLCD();
-    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
+    delay (LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
 // Create symbols character for maximum and minimum
@@ -1155,13 +1173,13 @@ void testLCDPages() {
      * Test alarms
      */
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = true;
-    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
+    detectAndPrintAlarmInfo(); // this sets the LCD alarm string
     printBMSDataOnLCD();
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = false;
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm = true;
-    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
+    detectAndPrintAlarmInfo(); // this sets the LCD alarm string
     printBMSDataOnLCD();
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm = false;
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
@@ -1172,7 +1190,7 @@ void testLCDPages() {
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;
     JKComputedData.TemperaturePowerMosFet = 90;
     JKComputedData.TemperatureSensor1 = 25;
-    handleAndPrintAlarmInfo(); // this sets the LCD alarm string
+    detectAndPrintAlarmInfo(); // this sets the LCD alarm string
     printBMSDataOnLCD();
     sJKFAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
     JKComputedData.TemperaturePowerMosFet = 33;
@@ -1181,7 +1199,6 @@ void testLCDPages() {
     // reset alarm
     sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
     sAlarmJustGetsActive = false;
-
 
     /*
      * Check display of maximum values

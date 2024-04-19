@@ -74,7 +74,7 @@ The same (raw) data without the ESR correction.
 # Screenshots
  The screenshots are taken from the [Wokwi example](https://wokwi.com/projects/371657348012321793) with `STANDALONE_TEST` enabled and therefore may contain random data.
 
-| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and (current battery voltage - Volt to full)<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview pagewith :<br/>- SOC, charged capacity, state of enable flags<br/>- Voltage, current and power<br/>- Voltage difference to empty, MosFet temperature, maximum sensor temperature, state of enabled functions |
+| Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and (current battery voltage - Volt to full)<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview pagewith :<br/>- SOC, charged capacity, state of enable flags<br/>- Voltage, current and power<br/>- Voltage difference to empty, MosFet temperature, maximum sensor temperature, state of enabled functions. <br/>- If Overvoltage, C is replaced by O<br/>- If Undervoltage, D is Replaced by U |
 | :-: | :-: |
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Undervoltage Alarm page<br/>Start of alarm message in first line<br/>Index and value of minimum cell and uptime in second line | Overtemperature Alarm page<br/>Alarm message is cleared by switching page |
@@ -307,11 +307,15 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 2.6.0
+- Refactored alarm and timeout handling.
+- Removed default setting of `CAPACITY_35F_EXTENSIONS`, `CAPACITY_379_EXTENSIONS` and `BYD_LIMITS_373_EXTENSIONS`.
+
 ### Version 2.5.2
 - Fixed bugs.
-- Added BATTERY_ESR_MILLIOHM for voltage compensation.
+- Added `BATTERY_ESR_MILLIOHM` for voltage compensation.
 - Back to start page at next button press after 1 minute.
-- SHOW_SHORT_CELL_VOLTAGES is default now.
+- `SHOW_SHORT_CELL_VOLTAGES` is default now.
 - Improved graph output.
 - Reduced serial output.
 
