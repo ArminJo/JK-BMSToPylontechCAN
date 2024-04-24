@@ -61,13 +61,18 @@ If CAN communications breaks, the inverter may use different values for controll
 # SOC graph for a 16S LiFePO4 battery
 Created by attaching Arduio 1.8 Serial Plotter and then doing a long button press followed by a single one to enter the capacity info page.<br/>
 
-Here you see a peak at the transition from 100 % to 99 %. This happens at the start of the system, when there was no full 0% to 100% capacity cycle
-and the BMS has not yet learned the correct capacity for 100%. The new 99 % learned by the BMS is bigger than the old 100 %!<br/>
-The capacity drop is due to a (fixed!) overflow problem.<br/>
-The voltage line is smooth, because it is corrected with the ESR (Equivalent Series Resistance) of the Battery.
+Here you see a steep capacity increasing at the transition from 100 % to 99 %. 
+This happens at the start of the system, when there was no full 0% to 100% capacity cycle and the BMS has not yet learned the correct capacity for 100%.
+The new 99 % represents a bigger capacity than the old 100 %.
+But my BMS does not learned this and starts again with the old settings.<br/>
+Because the capacity is around 100 Ah, the gradient of the capacity and the SOC line should be almost identical, at least after a full 100% to 0% cycle :-(.
+
+Here the current is not negative for 99%, because it is the average of the current above 100% -increasing the capacity- and the negative current delivered for the step from 100% to 99%.
+
+The voltage line is smooth, because it is corrected with the ESR (Equivalent Series Resistance) of the battery.
 ![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCDataESR.png)
 
-The same (raw) data without the ESR correction.
+The same (raw) data without ESR correction of voltage.
 ![SOC graph](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/extras/SOCDataNoESR.png)
 
 
