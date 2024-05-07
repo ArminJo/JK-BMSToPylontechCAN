@@ -89,6 +89,10 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #define JK_BMS_PAGE_CAN_INFO            4 // Enter on long press
 #define JK_BMS_PAGE_CAPACITY_INFO       5
 #endif
+
+// Switch to start page after 10 seconds of JK_BMS_PAGE_CAPACITY_INFO. 10 seconds to allow EEROM clearing by long press.
+#define JK_BMS_PAGE_CAPACITY_INFO_PAGE_TIMEOUT_MILLIS  10000
+uint32_t sLastPageChangeMillis;
 #define CELL_CAPACITY_COUNTER_VOLTAGE   0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
 
 #define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
@@ -98,7 +102,7 @@ const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 uint8_t sLCDDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
 uint8_t sToggleDisplayCounter;            // counter for cell statistics page to determine max or min page and for capacity page
 
-void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber);
+void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber, bool aDoNotPrint = false);
 
 void printBMSDataOnLCD();
 void printCANInfoOnLCD();
@@ -543,34 +547,11 @@ void printCellStatisticsOnLCD() {
  */
 void printCapacityInfoOnLCD() {
     myLCD.setCursor(0, 0);
-    if (JKComputedCapacity[0].Capacity == 0 && JKComputedCapacity[1].Capacity == 0) {
-        myLCD.print(F("No capacity computed"));
-    } else {
-        // check if percentage or voltage is to be displayed
-        bool tDisplayDeltaVoltages = (sToggleDisplayCounter & CELL_CAPACITY_COUNTER_VOLTAGE) == CELL_CAPACITY_COUNTER_VOLTAGE; // 0x06
-        sToggleDisplayCounter++;
-        for (uint8_t i = 0; i < LCD_ROWS; ++i) {
-            if (JKComputedCapacity[i].Capacity != 0) {
-                myLCD.setCursor(0, i);
-                if (tDisplayDeltaVoltages) {
-                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%1u.%1uV->%1u.%1uV %3u %3uAh"),
-                            JKComputedCapacity[i].Start100MilliVoltToEmpty / 10,
-                            JKComputedCapacity[i].Start100MilliVoltToEmpty % 10, JKComputedCapacity[i].End100MilliVoltToEmpty / 10,
-                            JKComputedCapacity[i].End100MilliVoltToEmpty % 10, JKComputedCapacity[i].Capacity,
-                            JKComputedCapacity[i].TotalCapacity);
-                } else {
-                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%2d%%->%2d%% "), JKComputedCapacity[i].StartSOCPercent,
-                            JKComputedCapacity[i].EndSOCPercent);
-                    myLCD.print(sStringBuffer);
-                    // If we have 100% as SOC value, we end up one column later, so we start at fixed position here
-                    myLCD.setCursor(9, i);
-                    snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("  %3u %3uAh"), JKComputedCapacity[i].Capacity,
-                            JKComputedCapacity[i].TotalCapacity);
-                }
-                myLCD.print(sStringBuffer);
-            }
-        }
-    }
+    myLCD.print(F("Print plotter graph"));
+    myLCD.setCursor(0, 2);
+    myLCD.print(F("You can clear EEPROM"));
+    myLCD.setCursor(0, 3);
+    myLCD.print(F("by long press now"));
 }
 #endif
 
@@ -961,8 +942,8 @@ void printBMSDataOnLCD() {
         if (sPrintAlarmInfoOnlyOnce) {
             sPrintAlarmInfoOnlyOnce = false;
             sShowAlarmInsteadOfOverview = true;
-            sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
-            printAlarmInfoOnLCD();
+            sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Set current page
+            printAlarmInfoOnLCD(); // print info only once
 #  if !defined(DISPLAY_ALWAYS_ON)
             if (checkAndTurnLCDOn()) {
                 JK_INFO_PRINTLN(F("alarm status changing")); // Reason for switching on LCD display
@@ -974,6 +955,7 @@ void printBMSDataOnLCD() {
         if (!sShowAlarmInsteadOfOverview) {
             myLCD.clear();
         }
+
         if (sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
             printOverwiewOrAlarmInfoOnLCD();
         }
@@ -1001,11 +983,12 @@ void printBMSDataOnLCD() {
 }
 
 /*
- * Handle Page button
+ * Synchronously handle page button press (called from loop)
  */
 void checkButtonPressForLCD() {
     if (sSerialLCDAvailable) {
         uint8_t tLCDDisplayPageNumber = sLCDDisplayPageNumber;
+
         if (sPageButtonJustPressed) {
             /*
              * New press here
@@ -1035,9 +1018,9 @@ void checkButtonPressForLCD() {
             } else
 #  endif
             {
-                if (millis() - PageSwitchButtonAtPin2.ButtonReleaseMillis > 60000) {
+                if (millis() - PageSwitchButtonAtPin2.ButtonReleaseMillis > 60000 && tLCDDisplayPageNumber != JK_BMS_START_PAGE) {
                     /*
-                     * More than 1 minute since last button press -> go to directly to start page
+                     * More than 1 minute since last button press -> go to directly to start page if not already there
                      */
                     tLCDDisplayPageNumber = JK_BMS_START_PAGE;
                 } else {
@@ -1106,15 +1089,28 @@ void checkButtonPressForLCD() {
                     setLCDDisplayPage(JK_BMS_PAGE_CAN_INFO);
                 }
             }
-        } // PageSwitchButtonAtPin2.ButtonStateHasJustChanged
+
+        } else if (tLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO
+                && (millis() - sLastPageChangeMillis) > JK_BMS_PAGE_CAPACITY_INFO_PAGE_TIMEOUT_MILLIS) {
+            /*
+             * Handle timeout for Capacity Info page
+             */
+            setLCDDisplayPage(JK_BMS_START_PAGE, true);
+        }        // PageSwitchButtonAtPin2.ButtonStateHasJustChanged
     }
 }
 
-void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
+/*
+ * Exclusively called by checkButtonPressForLCD()
+ */
+void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber, bool aDoNotPrint) {
     sLCDDisplayPageNumber = aLCDDisplayPageNumber;
+    sLastPageChangeMillis = millis();
     tone(BUZZER_PIN, 2200, 30);
-    JK_INFO_PRINT(F("Set LCD display page to: "));
-    JK_INFO_PRINTLN(aLCDDisplayPageNumber);
+    if (!aDoNotPrint) {
+        JK_INFO_PRINT(F("Set LCD display page to: "));
+        JK_INFO_PRINTLN(aLCDDisplayPageNumber);
+    }
 
     if (aLCDDisplayPageNumber == JK_BMS_PAGE_CELL_INFO) {
 // Create symbols character for maximum and minimum
@@ -1136,11 +1132,13 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber) {
         bigNumberLCD.begin(); // Creates custom character used for generating big numbers
     }
 
+    // On button press, reset any alarm display
+    sShowAlarmInsteadOfOverview = false;
+
     /*
      * Show new page
      */
     printBMSDataOnLCD();
-    sShowAlarmInsteadOfOverview = false; // on button press, reset any alarm display
 
 #if !defined(NO_ANALYTICS)
     if (aLCDDisplayPageNumber == JK_BMS_PAGE_CAPACITY_INFO) {

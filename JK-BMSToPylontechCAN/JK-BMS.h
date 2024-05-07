@@ -91,7 +91,7 @@ void printJKStaticInfo();
 void printJKDynamicInfo();
 void detectAndPrintAlarmInfo();
 #if !defined(DISABLE_MONITORING)
-void printMonitoringInfo();
+void printCSVLine(char aLeadingChar = '\0');
 #endif
 
 struct JKCellInfoStruct {
@@ -176,10 +176,14 @@ struct JKComputedDataStruct {
     float BatteryVoltageFloat;          // Volt
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
+    int32_t BatteryCapacityAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds
+    int32_t LastPrintedBatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every Ah
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
+
+#define AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE   (3600L * 100 * MILLIS_IN_ONE_SECOND / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
 
 struct JKLastPrintedDataStruct {
     int16_t TemperaturePowerMosFet;     // Degree Celsius
@@ -233,6 +237,8 @@ union BMSStatusUnion {
  */
 
 #define NUMBER_OF_DEFINED_ALARM_BITS    14
+#define NO_ALARM_WORD_CONTENT         0x00
+
 struct JKReplyStruct {
     uint8_t TokenTemperaturePowerMosFet;    // 0x80
     uint16_t TemperaturePowerMosFet;        // 99 = 99 degree Celsius, 100 = 100, 101 = -1, 140 = -40

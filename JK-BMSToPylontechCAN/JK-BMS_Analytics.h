@@ -25,33 +25,6 @@
 #ifndef _JK_BMS_ANALYTICS_H
 #define _JK_BMS_ANALYTICS_H
 
-#  if !defined(USE_NO_LCD)
-#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         4 // LCD_ROWS
-#  else
-#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         16
-#  endif
-
-struct JKComputedCapacityStruct {
-    uint8_t StartSOCPercent;
-    int8_t Start100MilliVoltToEmpty; // 250 bytes program memory incl. display
-    uint8_t EndSOCPercent;
-    int8_t End100MilliVoltToEmpty;
-    uint16_t Capacity;
-    uint16_t TotalCapacity;
-};
-
-#define CAPACITY_COMPUTATION_MODE_IDLE                  0
-#define CAPACITY_COMPUTATION_MODE_CHARGE                1
-#define CAPACITY_COMPUTATION_MODE_DISCHARGE             2
-#define CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION 4 // If we have 5 wrong directions, we end computation
-
-struct CapacityComputationInfoStruct {
-    uint8_t WrongDirectionCount = 0;
-    uint8_t Mode = CAPACITY_COMPUTATION_MODE_IDLE;
-    uint32_t Accumulator10Milliampere = 0;
-    uint8_t LastDeltaSOC = 0;
-};
-extern CapacityComputationInfoStruct sCapacityComputationInfo;
 /*
  * The value of AverageAccumulator10Milliampere for 1 Ah is:
  * (60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) is number of samples in 1 hour -> 1800 at 1 sample / 2 seconds
@@ -59,21 +32,18 @@ extern CapacityComputationInfoStruct sCapacityComputationInfo;
  */
 #define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
 
-extern struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY]; // The last 4 values
-void checkAndStoreCapacityComputationValues();
-void printComputedCapacity(uint8_t aCapacityArrayIndex);
-
 /*
  * This structure is stored to EEPROM
  */
 #define SOC_EVEN_EEPROM_PAGE_INDICATION_BIT 0x80 // Set in SOCPercent if we currently write on an even page. Required to find the end of current data in cyclic buffer.
 struct SOCDataPointDeltaStruct {
     uint8_t SOCPercent;
-    uint8_t VoltageDifferenceToEmpty50Millivolt; // 1 = 50 mV, 255 = 12.75 V. Values > 240 to 255 / 12 V to 12.7 V are taken as negative ones.
+    uint8_t VoltageDifferenceToEmpty50Millivolt; // 1 = 50 mV, 255 = 12.75 V. Values > 240 to 255 / 12 V to 12.7 V are taken as negative ones, just in case it happens.
     int8_t AverageAmpere;
     int8_t Delta100MilliampereHour; // at a capacity of 320 Ah we have 3.2 Ah per 1% SOC
 };
-#define NUMBER_OF_SOC_DATA_POINTS   ((E2END + 1) / sizeof(SOCDataPointDeltaStruct)) // 0x100
+// First place of size SOCDataPointDeltaStruct is user for other purposes
+#define NUMBER_OF_SOC_DATA_POINTS   (((E2END + 1) - sizeof(SOCDataPointDeltaStruct)) / sizeof(SOCDataPointDeltaStruct)) // 0xFF
 
 struct SOCDataPointsInfoStruct {
     uint8_t ArrayStartIndex;   // Index of first entry in cyclic SOCDataPointsEEPROMArray, index of next value to be written.
@@ -94,9 +64,9 @@ struct SOCDataPointMinMaxStruct {
 };
 
 void updateEEPROMTo_FF();
-void computeCapacity();
 void writeSOCData();
 void findFirstSOCDataPointIndex();
+void readBatteryESRfromEEPROM();
 void readAndPrintSOCData();
 
 #endif // _JK_BMS_ANALYTICS_H

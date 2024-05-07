@@ -103,20 +103,10 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "2.6.0"
-// For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN#revision-history
+#define VERSION_EXAMPLE "3.0.0"
+// For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
 #define MILLIS_IN_ONE_SECOND 1000L
 
-/*
- * Only for analytics! I.e undefined and not used if NO_ANALYTICS is defined.
- * You can compute the ESR (Equivalent Series Resistor) by looking at a big current jump and then use the voltage jump to compute the ESR.
- * ESR = delta voltage / delta current.
- * The exact values can be extracted more easily by using the Arduino Serial Monitor.
- * Printout of the current jump is forced by connecting pin DISABLE_ESR_IN_GRAPH_OUTPUT_PIN (8) to low.
- */
-#if !defined(BATTERY_ESR_MILLIOHM)
-#define BATTERY_ESR_MILLIOHM 18   // If defined, the voltage in the analytics graph is corrected to get a smoother voltage curve.
-#endif
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
  */
@@ -139,8 +129,11 @@
 #endif
 
 //#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
-#if defined(STANDALONE_TEST) && defined(USE_NO_LCD)
+#if defined(STANDALONE_TEST)
+//#define ENABLE_MONITORING
+#  if defined(USE_NO_LCD)
 #undef USE_NO_LCD // LCD is activated for standalone test
+#  endif
 #endif
 
 /*
@@ -148,7 +141,8 @@
  */
 #if defined(ENABLE_MONITORING)
 #  if !defined(MONOTORING_PERIOD_SECONDS)
-//#define MONOTORING_PERIOD_FAST    // if active, then every dataset, i.e. every 2 seconds, else every minute
+//#define MONOTORING_PERIOD_FAST    // If active, then print CSV line every 2 seconds, else every minute
+#define MONOTORING_PERIOD_SLOW    // If active, then print CSV line every hour, and CSV line every 10 minutes
 #  endif
 #else
 #define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. - currently activated to save program space.
@@ -193,7 +187,7 @@
 
 // sStringBuffer is defined in JK-BMS_LCD.hpp if DISABLE_MONITORING and NO_ANALYTICS are defined
 #if !defined(DISABLE_MONITORING)
-char sStringBuffer[90];                 // For cvs lines, "Store computed capacity" line and LCD rows
+char sStringBuffer[100];                 // For cvs lines, "Store computed capacity" line and LCD rows
 #elif !defined(NO_ANALYTICS)
 char sStringBuffer[40];                 // for "Store computed capacity" line, printComputedCapacity() and LCD rows
 #endif
@@ -226,8 +220,8 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #define TURN_CAN_STATUS_LED_OFF                 digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, LOW)
 #endif
 
-#if defined(BATTERY_ESR_MILLIOHM) && !defined(NO_ANALYTICS)
-#define DISABLE_ESR_IN_GRAPH_OUTPUT_PIN         8 // If held low, the ESR value is not used to correct the voltage in the graph output.
+#if !defined(NO_ANALYTICS)
+#define DISABLE_ESR_IN_GRAPH_OUTPUT_PIN         8 // If this pin is held low, the ESR value is not used to correct the voltage in the graph output.
 #endif
 
 //#define TIMING_TEST
@@ -368,11 +362,7 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 /*
  * Optional analytics stuff
  */
-#if defined(NO_ANALYTICS)
-#  if defined(BATTERY_ESR_MILLIOHM)
-#undef BATTERY_ESR_MILLIOHM // To remove unused code in setup
-#  endif
-#else
+#if !defined(NO_ANALYTICS)
 #include "JK-BMS_Analytics.hpp"
 #endif
 
@@ -430,8 +420,8 @@ const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 
         0xEC, 0xA8, 0xFF, 0xF6, 0xA9, 0x0E, /*TotalCapacityAmpereHour*/0xAA, 0x00, 0x00, 0x01, 0x40, 0xAB, 0x01, 0xAC, 0x01, 0xAD,
         0x04, 0x11, 0xAE, 0x01, 0xAF, 0x01, 0xB0, 0x00, 0x0A, 0xB1, 0x14, 0xB2, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x00, 0x00,
         0x00, 0x00, 0xB3, 0x00, 0xB4, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0xB5, 0x32, 0x31, 0x30, 0x31, 0xB6, 0x00,
-        0x00, 0xE2, 0x00, 0xB7, 0x31, 0x31, 0x2E, 0x58, 0x57, 0x5F, 0x53, 0x31, 0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F, 0xB8,
-        0x00, /*ActualBatteryCapacityAmpereHour*/
+        0x06, 0x07, 0x29, /*Uptime*/0xB7, 0x31, 0x31, 0x2E, 0x58, 0x57, 0x5F, 0x53, 0x31, 0x31, 0x2E, 0x32, 0x36, 0x5F, 0x5F, 0x5F,
+        0xB8, 0x00, /*ActualBatteryCapacityAmpereHour*/
         0xB9, 0x00, 0x00, 0x01, 0x30, 0xBA, 0x49, 0x6E, 0x70, 0x75, 0x74, 0x20, 0x55, 0x73, 0x65, 0x72, 0x64, 0x61, 0x4A, 0x4B,
         0x5F, 0x42, 0x32, 0x41, 0x32, 0x30, 0x53, 0x32, 0x30, 0x50, 0xC0, 0x01,
         /*Trailer*/
@@ -460,7 +450,7 @@ void setup() {
 #if defined(TIMING_TEST)
     pinModeFast(TIMING_TEST_PIN, OUTPUT);
 #endif
-#if defined(BATTERY_ESR_MILLIOHM)
+#if !defined(NO_ANALYTICS)
     pinModeFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN, INPUT_PULLUP);
 #endif
 
@@ -485,6 +475,10 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_INFO_PRINTLN(F("Analytics deactivated"));
 #else
     JK_INFO_PRINTLN(F("Analytics activated"));
+    readBatteryESRfromEEPROM();
+    JK_INFO_PRINT(F("EEPROM BatteryESR="));
+    JK_INFO_PRINTLN(sBatteryESRMilliohm);
+
     findFirstSOCDataPointIndex();
     DEBUG_PRINT(F("EEPROM SOC data start index="));
     DEBUG_PRINT(SOCDataPointsInfo.ArrayStartIndex);
@@ -493,7 +487,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     DEBUG_PRINT(F(", even="));
     DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
 
-#  if defined(BATTERY_ESR_MILLIOHM)
+#  if !defined(NO_ANALYTICS)
     JK_INFO_PRINTLN(F("Disable ESR compensation pin=" STR(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN)));
     JK_INFO_PRINT(F("Battery ESR compensation for voltage "));
     if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
@@ -501,10 +495,10 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     } else {
         JK_INFO_PRINT(F("en"));
     }
-    JK_INFO_PRINTLN(F("abled. Specified ESR=" STR(BATTERY_ESR_MILLIOHM) "mOhm"));
+    JK_INFO_PRINT(F("abled. Specified ESR="));
+    JK_INFO_PRINT(sBatteryESRMilliohm);
+    JK_INFO_PRINTLN(F("mOhm"));
 
-#  else
-    JK_INFO_PRINTLN(F("No battery ESR compensation for voltage"));
 #  endif
 #endif
 
@@ -601,7 +595,9 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 
 //    if (true) {
     // first value is still written by processReceivedData
-    if (eeprom_read_byte(&SOCDataPointsEEPROMArray[1].SOCPercent) == 0xFF) {
+    if (SOCDataPointsInfo.ArrayLength > 250) {
+        Serial.println(F("EEPROM for standalone test is already initialized"));
+    } else {
         // If EEPROM empty, fill in some values
         int8_t tIncrement = -1;
         Serial.println();
@@ -867,6 +863,9 @@ void processJK_BMSStatusFrame() {
     }
     processReceivedData();
     printReceivedData();
+#if !defined(NO_ANALYTICS)
+    writeSOCData();
+#endif
     /*
      * Copy complete reply and computed values for change determination
      */
@@ -951,11 +950,6 @@ void processReceivedData() {
     fillJKConvertedCellInfo();
     fillJKComputedData();
 
-#if !defined(NO_ANALYTICS)
-    computeCapacity();
-    writeSOCData();
-#endif
-
     computeUpTimeString();
     detectAndPrintAlarmInfo(); // UpTimeString is used here
 
@@ -988,7 +982,7 @@ void handlePageButtonPress(bool aButtonToggleState __attribute__((unused))) {
 }
 
 /*
- * Manually handle button press
+ * Synchronously handle button press (called from loop)
  */
 void checkButtonPress() {
 #if defined(USE_SERIAL_2004_LCD)

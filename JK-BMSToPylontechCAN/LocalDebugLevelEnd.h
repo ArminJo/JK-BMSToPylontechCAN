@@ -27,16 +27,16 @@
  */
 #if defined(LOCAL_TRACE)
 #undef LOCAL_TRACE
+#endif
 #undef TRACE_PRINT
 #undef TRACE_PRINTLN
-#endif
 #if defined(LOCAL_DEBUG)
 #undef LOCAL_DEBUG
+#endif
 #undef DEBUG_PRINT
 #undef DEBUG_PRINTLN
-#endif
 #if defined(LOCAL_INFO)
 #undef LOCAL_INFO
+#endif
 #undef INFO_PRINT
 #undef INFO_PRINTLN
-#endif

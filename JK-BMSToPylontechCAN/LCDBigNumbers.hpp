@@ -3,7 +3,7 @@
  *
  *  Arduino library to write big numbers on a 1602 or 2004 LCD.
  *
- *  Copyright (C) 2022-2023  Armin Joachimsmeyer
+ *  Copyright (C) 2022-2024  Armin Joachimsmeyer
  *  armin.joachimsmeyer@gmail.com
  *
  *  This file is part of LCDBigNumbers https://github.com/ArminJo/LCDBigNumbers.
@@ -33,6 +33,19 @@
 
 #define ONE_COLUMN_HYPHEN_CHARACTER      '_' // This input character is printed as a one column hyphen. Normal hyphen / minus are printed as a hyphen with the width of the number - 1.
 #define ONE_COLUMN_HYPHEN_STRING         "_" // This input string is printed as a one column hyphen. Normal hyphen / minus are printed as a hyphen with the width of the number - 1.
+
+#define VERSION_LCD_BIG_NUMBERS "1.2.2"
+#define VERSION_LCD_BIG_NUMBERS_MAJOR 1
+#define VERSION_LCD_BIG_NUMBERS_MINOR 2
+#define VERSION_LCD_BIG_NUMBERS_PATCH 2
+// The change log is at the README.md
+
+/*
+ * Macro to convert 3 version parts into an integer
+ * To be used in preprocessor comparisons, such as #if VERSION_LCD_BIG_NUMBERS_HEX >= VERSION_HEX_VALUE(3, 0, 0)
+ */
+#define VERSION_HEX_VALUE(major, minor, patch) ((major << 16) | (minor << 8) | (patch))
+#define VERSION_LCD_BIG_NUMBERS_HEX  VERSION_HEX_VALUE(VERSION_LCD_BIG_NUMBERS_MAJOR, VERSION_LCD_BIG_NUMBERS_MINOR, VERSION_LCD_BIG_NUMBERS_PATCH)
 
 //#define USE_PARALLEL_2004_LCD // Is default
 //#define USE_PARALLEL_1602_LCD
@@ -274,6 +287,7 @@ const uint8_t bigNumbers3x4_2[4][33] PROGMEM = {                         // 4-li
 class LCDBigNumbers: public Print {
 
 public:
+    virtual ~LCDBigNumbers(){}
 #if defined(USE_PARALLEL_LCD)
     LiquidCrystal *LCD;
 #else
@@ -304,6 +318,7 @@ public:
 
     /*
      * Creates custom character used for generating big numbers
+     * This also sets cursor to 0.0 by call to _createChar()
      */
     void begin() {
         maximumColumnIndex = 0;
@@ -399,13 +414,18 @@ public:
         init(aBigNumberFontIdentifier);
     }
 
-    //createChar with PROGMEM input
+    /*
+     * Like LiquidCrystal::createChar(uint8_t location, uint8_t charmap[])
+     * but with PROGMEM input
+     * This also sets cursor to 0.0
+     */
     void _createChar(uint8_t location, const uint8_t *charmap) {
         location &= 0x7; // we only have 8 locations 0-7
         LCD->command(LCD_SETCGRAMADDR | (location << 3));
         for (int i = 0; i < 8; i++) {
             LCD->write(pgm_read_byte(charmap++));
         }
+        LCD->command(LCD_SETDDRAMADDR); // set cursor to 0.0, this avoids overwriting CGRAM by next write() command.
     }
 
     /**

@@ -47,26 +47,26 @@
  * Define appropriate print macros
  */
 #if defined(LOCAL_TRACE)
-#define TRACE_PRINT(...)      Serial.print(__VA_ARGS__);
-#define TRACE_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#define TRACE_PRINT(...)      Serial.print(__VA_ARGS__)
+#define TRACE_PRINTLN(...)    Serial.println(__VA_ARGS__)
 #else
-#define TRACE_PRINT(...)      void();
-#define TRACE_PRINTLN(...)    void();
+#define TRACE_PRINT(...)      void()
+#define TRACE_PRINTLN(...)    void()
 #endif
 
 #if defined(LOCAL_DEBUG)
-#define DEBUG_PRINT(...)      Serial.print(__VA_ARGS__);
-#define DEBUG_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#define DEBUG_PRINT(...)      Serial.print(__VA_ARGS__)
+#define DEBUG_PRINTLN(...)    Serial.println(__VA_ARGS__)
 #else
-#define DEBUG_PRINT(...)      void();
-#define DEBUG_PRINTLN(...)    void();
+#define DEBUG_PRINT(...)      void()
+#define DEBUG_PRINTLN(...)    void()
 #endif
 
 #if defined(LOCAL_INFO)
-#define INFO_PRINT(...)      Serial.print(__VA_ARGS__);
-#define INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#define INFO_PRINT(...)      Serial.print(__VA_ARGS__)
+#define INFO_PRINTLN(...)    Serial.println(__VA_ARGS__)
 #else
-#define INFO_PRINT(...)      void();
-#define INFO_PRINTLN(...)    void();
+#define INFO_PRINT(...)      void()
+#define INFO_PRINTLN(...)    void()
 #endif
 

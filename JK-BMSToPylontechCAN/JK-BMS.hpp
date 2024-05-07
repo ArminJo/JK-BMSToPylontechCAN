@@ -61,6 +61,8 @@ char sBalancingTimeString[11] = { ' ', ' ', '0', 'D', '0', '0', 'H', '0', '0', '
 bool sUpTimeStringMinuteHasChanged;
 bool sUpTimeStringTenthOfMinuteHasChanged;
 char sLastUpTimeTenthOfMinuteCharacter;     // For detecting changes in string and setting sUpTimeStringTenthOfMinuteHasChanged
+bool sUpTimeStringHourHasChanged;
+char sLastUpTimeHourCharacter;              // For setting sUpTimeStringHourHasChanged
 
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 #if !defined(NO_CELL_STATISTICS)
@@ -73,6 +75,7 @@ uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
 uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
 uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
 uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
+uint32_t sLastPrintedBalancingCount;
 #endif //NO_CELL_STATISTICS
 
 /*
@@ -577,12 +580,17 @@ void fillJKComputedData() {
     JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = JKComputedData.BatteryVoltage10Millivolt
             - JKComputedData.BatteryEmptyVoltage10Millivolt;
 
-    JKComputedData.BatteryVoltageFloat = JKComputedData.BatteryVoltage10Millivolt;
-    JKComputedData.BatteryVoltageFloat /= 100;
+    JKComputedData.BatteryVoltageFloat = JKComputedData.BatteryVoltage10Millivolt / 100.0;
 
     JKComputedData.Battery10MilliAmpere = getCurrent(sJKFAllReplyPointer->Battery10MilliAmpere);
-    JKComputedData.BatteryLoadCurrentFloat = JKComputedData.Battery10MilliAmpere;
-    JKComputedData.BatteryLoadCurrentFloat /= 100;
+    JKComputedData.BatteryLoadCurrentFloat = JKComputedData.Battery10MilliAmpere / 100.0;
+    JKComputedData.BatteryCapacityAccumulator10MilliAmpere += JKComputedData.Battery10MilliAmpere;
+    if (sJKFAllReplyPointer->SOCPercent == 0 && lastJKReply.SOCPercent == 1) {
+        JK_INFO_PRINTLN(F("Reset capacity"));
+        // Reset capacity at transition from 1 to 0
+        JKComputedData.BatteryCapacityAccumulator10MilliAmpere = 0;
+        JKComputedData.LastPrintedBatteryCapacityAccumulator10MilliAmpere = 0;
+    }
 
 //    Serial.print("Battery10MilliAmpere=0x");
 //    Serial.print(sJKFAllReplyPointer->Battery10MilliAmpere, HEX);
@@ -647,8 +655,6 @@ void printJKCellInfo() {
             Serial.print(' ');
         }
     }
-    Serial.println();
-
     Serial.println();
 }
 
@@ -779,14 +785,15 @@ void detectAndPrintAlarmInfo() {
      * Do it only once per change
      */
     if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
-        if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == 0) {
+        if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == NO_ALARM_WORD_CONTENT) {
             Serial.println(F("All alarms are cleared now"));
             sAlarmJustGetsActive = false;
 #if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
             sNoAlarmCounter++; // overflow does not matter here
+            // sNoAlarmCounter == 1800 - Allow consecutive same alarms after 1 hour of no alarm
             if (sNoAlarmCounter
                     == (SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS * MILLIS_IN_ONE_SECOND) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                sLastActiveAlarmsAsWord = 0; // Allow consecutive same alarms after 1 hour of no alarm
+                sLastActiveAlarmsAsWord = NO_ALARM_WORD_CONTENT;
             }
 #endif
         } else {
@@ -883,12 +890,15 @@ void computeUpTimeString() {
             sLastUpTimeTenthOfMinuteCharacter = sUpTimeString[8];
             sUpTimeStringTenthOfMinuteHasChanged = true;
         }
+        if (sLastUpTimeHourCharacter != sUpTimeString[6]) {
+            sLastUpTimeHourCharacter = sUpTimeString[6];
+            sUpTimeStringHourHasChanged = true;
+        }
     }
 }
 
-const char sCSVCaption[] PROGMEM
-        = "Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage;Current;SOC;Balancing";
-
+// Declaration here, because definition below is better for documentation
+extern const char sCSVCaption[] PROGMEM;
 /*
  * Print received data
  * Use converted cell voltage info from JKConvertedCellInfo
@@ -899,30 +909,47 @@ void printJKDynamicInfo() {
 
 #if !defined(DISABLE_MONITORING)
 #  if defined(MONOTORING_PERIOD_FAST)
-    // Print every dataset, i.e. every 2 seconds, and caption every minute
-    printMonitoringInfo();
+    // Print every dataset, every 2 seconds, and caption every minute
+    printCSVLine();
     if (sUpTimeStringMinuteHasChanged) {
         sUpTimeStringMinuteHasChanged = false;
         Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
     }
+#  elif defined(MONOTORING_PERIOD_SLOW)
+    // print CSV line every 10 minutes and CSV caption every hour
+    if (sUpTimeStringTenthOfMinuteHasChanged) {
+        sUpTimeStringTenthOfMinuteHasChanged = false;
+        printCSVLine();
+    }
 #  else
-    // print every minute and caption every 10 minutes
+    // print CSV line every minute and CSV caption every 10 minutes
     if (sUpTimeStringMinuteHasChanged) {
         sUpTimeStringMinuteHasChanged = false;
-        printMonitoringInfo();
+        printCSVLine();
     }
 #  endif
+    // Print CSV line every Ah for capacity to voltage graph
+    if (abs(
+            JKComputedData.LastPrintedBatteryCapacityAccumulator10MilliAmpere
+            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere) > AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE) {
+        JKComputedData.LastPrintedBatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+        printCSVLine('+');
+    }
+
 #endif
 
+#  if defined(MONOTORING_PERIOD_SLOW)
+    if (sUpTimeStringHourHasChanged) {
+        sUpTimeStringHourHasChanged = false;
+#  else
     /*
-     * Print it every ten minutes
+     * Print CSV caption, runtime, and Cell Info every ten minutes
      */
     if (sUpTimeStringTenthOfMinuteHasChanged) {
         sUpTimeStringTenthOfMinuteHasChanged = false;
-#if !defined(DISABLE_MONITORING) && !defined(MONOTORING_PERIOD_FAST)
-        Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
-#endif
-        Serial.print(F("Total Runtime_"));
+#  endif
+        Serial.println();
+        Serial.print(F("Total Runtime: "));
         Serial.print(swap(sJKFAllReplyPointer->SystemWorkingMinutes));
         Serial.print(F(" minutes -> "));
         Serial.println(sUpTimeString);
@@ -930,7 +957,11 @@ void printJKDynamicInfo() {
         Serial.println(F("*** CELL INFO ***"));
         printJKCellInfo();
 #if !defined(NO_CELL_STATISTICS)
-        if (sBalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
+        /*
+         * Print cell statistics only if balancing count changed and is big enough for reasonable info
+         */
+        if (sLastPrintedBalancingCount != sBalancingCount && sBalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
+            sLastPrintedBalancingCount = sBalancingCount;
             Serial.println(F("*** CELL STATISTICS ***"));
             Serial.print(F("Total balancing time="));
 
@@ -961,6 +992,12 @@ void printJKDynamicInfo() {
             Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
         }
 #endif
+#if !defined(DISABLE_MONITORING) && !defined(MONOTORING_PERIOD_FAST)
+        /*
+         * Print CSV caption every 10 minute
+         */
+        Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
+#endif
     } // Print it every ten minutes
 
     /*
@@ -987,10 +1024,13 @@ void printJKDynamicInfo() {
      */
     if (tJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent
             || JKComputedData.RemainingCapacityAmpereHour != JKLastPrintedData.RemainingCapacityAmpereHour) {
+        /*
+         * SOC or RemainingCapacityAmpereHour changed
+         */
+        Serial.println();
         myPrint(F("SOC[%]="), tJKFAllReplyPointer->SOCPercent);
         myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
         JKLastPrintedData.RemainingCapacityAmpereHour = JKComputedData.RemainingCapacityAmpereHour;
-        Serial.println(); // end of output for SOC change
     }
 
     /*
@@ -1050,20 +1090,25 @@ void printJKDynamicInfo() {
 }
 
 #if !defined(DISABLE_MONITORING)
+const char sCSVCaption[] PROGMEM
+        = "Uptime[min];Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage[mv];Current[A];Capacity[100mAh];SOC[%]";
+
 /*
  * Fills sStringBuffer with CSV data
  * Can be used for SD Card also, otherwise direct printing would be more efficient.
- * Print all (cell voltages - 3000 mV), voltage, current, SOC in CSV format
- * E.g. 185;185;186;185;185;206;185;214;183;185;201;186;186;186;185;186;5096;-565;54;1
+ * E.g. 13753;185;185;186;185;185;206;185;214;183;185;201;186;186;186;185;186;5096;-5.65;36;54;1
  *
  */
 void setCSVString() {
-    JKReplyStruct *tJKFAllReplyPointer = sJKFAllReplyPointer;
+
+    /*
+     * Uptime minutes
+     */
+    uint_fast8_t tBufferIndex = sprintf_P(sStringBuffer, PSTR("%lu;"), (swap(sJKFAllReplyPointer->SystemWorkingMinutes)));
+
     /*
      * Individual cell voltages
      */
-    uint_fast8_t tBufferIndex = 0;
-
 //    for (uint8_t i = 0; i < JKConvertedCellInfo.ActualNumberOfCellInfoEntries; ++i) {
     if (sizeof(sStringBuffer) > (5 * 16)) {
         for (uint8_t i = 0; i < 16; ++i) { // only 16 fits into sStringBuffer[90]
@@ -1082,15 +1127,20 @@ void setCSVString() {
         Serial.println(sizeof(sStringBuffer));
         sStringBuffer[0] = '\0';
     } else {
-        // maximal string 5096;-20.00;100;1 -> 17 characters
+        // maximal string 50960;-20.00;3200;100;1 -> 18 characters
         char tCurrentAsFloatString[7];
         dtostrf(JKComputedData.BatteryLoadCurrentFloat, 4, 2, &tCurrentAsFloatString[0]);
-        tBufferIndex += sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%s;%d;%d"), JKComputedData.BatteryVoltage10Millivolt,
-                tCurrentAsFloatString, tJKFAllReplyPointer->SOCPercent, tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive);
+        sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%s;%ld;%d"), JKComputedData.BatteryVoltage10Millivolt * 10,
+                tCurrentAsFloatString,
+                JKComputedData.BatteryCapacityAccumulator10MilliAmpere / (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 10),
+                sJKFAllReplyPointer->SOCPercent);
     }
 }
 
-void printMonitoringInfo() {
+void printCSVLine(char aLeadingChar) {
+    if (aLeadingChar != '\0') {
+        Serial.print(aLeadingChar);
+    }
     Serial.print(F("CSV: "));
     setCSVString();
     Serial.println(sStringBuffer);

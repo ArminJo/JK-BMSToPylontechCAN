@@ -39,6 +39,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Beep on alarm and connection timeouts with selectable timeout.
 - Serial.print() function is still available for monitoring and debugging.
 - SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
+- The voltage in the SOC graph is corrected by the automatic computed ESR to get a smoother voltage curve.
 
 **If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**<br/>
 Enabling the macro `NO_SERIAL_INFO_PRINT` saves program space.
@@ -59,13 +60,12 @@ If CAN communications breaks, the inverter may use different values for controll
 <br/>
 
 # SOC graph for a 16S LiFePO4 battery
-Created by attaching Arduio 1.8 Serial Plotter and then doing a long button press followed by a single one to enter the capacity info page.<br/>
+Created by attaching Arduio 1.8.19 Serial Plotter and then doing a long button press followed by a single one to enter the capacity info page.<br/>
 
-Here you see a steep capacity increasing at the transition from 100 % to 99 %. 
-This happens at the start of the system, when there was no full 0% to 100% capacity cycle and the BMS has not yet learned the correct capacity for 100%.
-The new 99 % represents a bigger capacity than the old 100 %.
-But my BMS does not learned this and starts again with the old settings.<br/>
-Because the capacity is around 100 Ah, the gradient of the capacity and the SOC line should be almost identical, at least after a full 100% to 0% cycle :-(.
+Here you see a steep capacity increasing at the transition from 100 % to 99 %.
+This happens when the specified capacity in the BMS is smaller than the real one.
+The new 99 % represents a bigger capacity than the old 100 %.<br/>
+If the capacity is around 100 Ah, the gradient of the capacity and the SOC line is identical.
 
 Here the current is not negative for 99%, because it is the average of the current above 100% -increasing the capacity- and the negative current delivered for the step from 100% to 99%.
 
@@ -222,7 +222,7 @@ Download and extract the repository. In the Arduino IDE open the sketch with Fil
 All libraries, especially the modified ones, are included in this project.
 
 It is always recommended to burn the Uno bootloader on a Nano board, and trating your Nano board as an an Uno board for Arduino compiles.
-This will give you 1.5 kB more program space, without any disadvantages. Even A6 and A7 are available :-). 
+This will give you 1.5 kB more program space, without any disadvantages. Even A6 and A7 are available :-).
 
 <br/>
 
@@ -249,7 +249,6 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `DISABLE_MONITORING` | enabled | Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. |
 | `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 16558 bytes program space. |
 | `NO_ANALYTICS` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
-| `BATTERY_ESR_MILLIOHM` |  | If defined, the voltage in the analytics graph is corrected to get a smoother voltage curve. You can compute the ESR by looking at a big current jump and then use the voltage jump to compute the ESR. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_CAPACITY_35F_EXTENSIONS` | disabled | If activated, supress sending of frame 0x35F for total capacity for SMA Sunny Island inverters over CAN. |
 | `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. |
@@ -312,13 +311,19 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 3.0.0
+- Automatic detection of battery ESR if analytics are enabled.
+- Removed direct computation of capacity.
+- Changed CSV line.
+- Changed default monitoring interval to 10 min / 1 hour.
+- Added monitoring every Ah.
+
 ### Version 2.6.0
 - Refactored alarm and timeout handling.
 - Removed default setting of `CAPACITY_35F_EXTENSIONS`, `CAPACITY_379_EXTENSIONS` and `BYD_LIMITS_373_EXTENSIONS`.
 
 ### Version 2.5.2
 - Fixed bugs.
-- Added `BATTERY_ESR_MILLIOHM` for voltage compensation.
 - Back to start page at next button press after 1 minute.
 - `SHOW_SHORT_CELL_VOLTAGES` is default now.
 - Improved graph output.
