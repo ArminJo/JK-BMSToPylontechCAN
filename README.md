@@ -127,7 +127,7 @@ The standard **TX** of the Arduino is used for Serial.print() for monitoring and
 If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to **swap the lines for RX and TX (pin 4)** on the Uno / Nano.
 
 **Power** is taken from an **USB power supply** connected to the Nano. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.<br/>
-Optionally, power can be taken from the second battery, but then you may require an external 5V regulator. My built in regulator broke 2 times (with LCD connected).<br/>
+Optionally, power can be taken from the second battery (>6.4 V), but then you may require an external 5V regulator. My built in regulator broke 2 times (with LCD connected).<br/>
 Or use the complete battery voltage for Nano supply and a buck converters for around 48 to 60 volt. But my test converter had an idle current of 6 mA (0.3 W), so I decided to stay with the USB power supply.
 
 
@@ -137,7 +137,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  ALTERNATIVE EXTERNAL POWER SUPPLY:
                                           78L05    Optional Schottky diode - From Uno/Nano 5 V
                                            ___                         to enable powering CAN
- Optional 6.6 V from Battery #2 >-o-------|___|-------o-|<|-< Uno 5V   module by Nano USB, if
+ Optional 6.4 V from Battery #2 >-o-------|___|-------o-|<|-< Uno 5V   module by Nano USB, if
                                   |         |         |                battery is not attached
                                   |        ---        |
  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
@@ -191,13 +191,19 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
   GND O-------------o
 
 ```
+<br/>
 
+# Example schematics and PCB layouts
+- EasyEda [schematics](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401) and [PCB](https://easyeda.com/editor#id=623a04630b8b4449b72bd5462f59e85f) layouts by Ngoc Dang Dinh.
 
-[EasyEda shematics by Ngoc Dang Dinh](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401|8c434b5057fc4d769d664a0dc9c7d66c)
-![EasyEda shematics by Ngoc Dang Dinh](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)
+- EasyEda [schematics](https://easyeda.com/editor#id=809cb7e913b5453f9d324c442df66a4e) and [PCB layout](https://easyeda.com/editor#id=005061dbeb414870bc63ab052561ddf4) by rooftopsolarsa/WannaBeSolarSparky from [this](https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/27) discussion. The status LEDs are missing in the schematic and button2 is no longer required.
 
+### Minimal layout (by Ngoc Dang Dinh)
+![Minimal layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)
 
-### Board pinout diagrams
+<br/>
+
+# Board pinout diagrams
 - [Nano](https://store.arduino.cc/products/arduino-nano#docs)
 - [Uno](https://store.arduino.cc/products/arduino-uno-rev3#docs)
  <br/>
@@ -312,7 +318,7 @@ This program uses the following libraries, which are already included in this re
 
 # Revision History
 ### Version 3.0.0
-- Automatic detection of battery ESR if analytics are enabled.
+- Automatic computation of battery ESR if analytics are enabled.
 - Removed direct computation of capacity.
 - Changed CSV line.
 - Changed default monitoring interval to 10 min / 1 hour.

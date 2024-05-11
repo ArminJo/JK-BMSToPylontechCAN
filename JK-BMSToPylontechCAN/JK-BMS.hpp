@@ -1091,7 +1091,7 @@ void printJKDynamicInfo() {
 
 #if !defined(DISABLE_MONITORING)
 const char sCSVCaption[] PROGMEM
-        = "Uptime[min];Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage[mv];Current[A];Capacity[100mAh];SOC[%]";
+        = "Uptime[min];Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage[mV];Current[A];Capacity[100mAh];SOC[%]";
 
 /*
  * Fills sStringBuffer with CSV data

@@ -354,7 +354,7 @@ void readAndPrintSOCData() {
         }
 
         if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
-            break; // no automatic ESR detection here
+            break; // no automatic ESR computation here
         }
         /*
          * Check if BatteryESR + 1 or BatteryESR - 1 deltas are at least 3 smaller than current value,
@@ -496,8 +496,11 @@ void writeSOCData() {
 #if !defined(STANDALONE_TEST)
         JK_INFO_PRINT(F("EEPROM write of "));
         JK_INFO_PRINT(SOCDataPointsInfo.NumberOfSamples);
-        JK_INFO_PRINT(F(" samples to "));
-        JK_INFO_PRINT(tSOCDataPointsArrayNextWriteIndex);
+        JK_INFO_PRINT(F(" samples"));
+
+        DEBUG_PRINT(F(" to "));
+        DEBUG_PRINT(tSOCDataPointsArrayNextWriteIndex);
+
         if (SOCDataPointsInfo.ArrayLength != NUMBER_OF_SOC_DATA_POINTS) {
             JK_INFO_PRINT(F(", length="));
             JK_INFO_PRINT(SOCDataPointsInfo.ArrayLength);
@@ -510,10 +513,12 @@ void writeSOCData() {
         JK_INFO_PRINT(tSOCDataPoint.AverageAmpere);
         JK_INFO_PRINT(F(", Delta100MilliampereHour="));
         JK_INFO_PRINT(tSOCDataPoint.Delta100MilliampereHour);
+
         DEBUG_PRINT(F(", Left100MilliampereHour=")); // correlates to number of samples
         DEBUG_PRINT(SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10.0), 2);
         DEBUG_PRINT(F(", even="));
         DEBUG_PRINT(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+
         JK_INFO_PRINTLN();
 #endif
 
