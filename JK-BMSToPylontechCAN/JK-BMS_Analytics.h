@@ -30,7 +30,7 @@
  * (60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) is number of samples in 1 hour -> 1800 at 1 sample / 2 seconds
  * 100 is factor for 10 mA to 1 A
  */
-#define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
+#define CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180,000
 
 /*
  * This structure is stored to EEPROM
@@ -42,7 +42,7 @@ struct SOCDataPointDeltaStruct {
     int8_t AverageAmpere;
     int8_t Delta100MilliampereHour; // at a capacity of 320 Ah we have 3.2 Ah per 1% SOC
 };
-// First place of size SOCDataPointDeltaStruct is user for other purposes
+// First place of size SOCDataPointDeltaStruct is used for sBatteryESRMilliohm_EEPROM + 3 filler bytes
 #define NUMBER_OF_SOC_DATA_POINTS   (((E2END + 1) - sizeof(SOCDataPointDeltaStruct)) / sizeof(SOCDataPointDeltaStruct)) // 0xFF
 
 struct SOCDataPointsInfoStruct {
@@ -52,7 +52,8 @@ struct SOCDataPointsInfoStruct {
     uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
     long AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0; // Serves as accumulator to enable a more smooth graph.
     long AverageAccumulator10Milliampere = 0; // Serves as accumulator for AverageAmpere
-    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18000 after write.
+    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180,000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18,000 (100 mAh) after write.
+    long lastWrittenBatteryCapacityAccumulator10Milliampere = 0;
 };
 extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 
@@ -63,6 +64,7 @@ struct SOCDataPointMinMaxStruct {
     int8_t AverageAmpere;
 };
 
+void initializeAnaltics();
 void updateEEPROMTo_FF();
 void writeSOCData();
 void findFirstSOCDataPointIndex();

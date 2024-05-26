@@ -52,6 +52,7 @@ void printJKReplyFrameBuffer();
 #define JK_BMS_RECEIVE_ERROR        2
 uint8_t readJK_BMSStatusFrameByte();
 void fillJKComputedData();
+void initializeComputedData();
 
 extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to write to array, thus starting with 0.
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
@@ -177,21 +178,21 @@ struct JKComputedDataStruct {
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int32_t BatteryCapacityAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds
-    int32_t LastPrintedBatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every Ah
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 
 #define AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE   (3600L * 100 * MILLIS_IN_ONE_SECOND / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
+int32_t getOnePercentCapacityAsAccumulator10Milliampere();
 
 struct JKLastPrintedDataStruct {
     int16_t TemperaturePowerMosFet;     // Degree Celsius
     int16_t TemperatureSensor1;
     int16_t TemperatureSensor2;
-    uint16_t RemainingCapacityAmpereHour; // Computed value
     float BatteryVoltageFloat;          // Volt
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
+    int32_t BatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every 1%
 };
 extern struct JKLastPrintedDataStruct JKLastPrintedData;
 

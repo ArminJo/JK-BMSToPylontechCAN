@@ -39,6 +39,7 @@
 #include "JK-BMS_Analytics.h"
 
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
+//#define LOCAL_TRACE // This enables trace output only for this file - only for development
 #include "LocalDebugLevelStart.h"
 
 EEMEM uint8_t sBatteryESRMilliohm_EEPROM;
@@ -54,6 +55,10 @@ volatile EEMEM uint8_t sFiller3_EEPROM;
 EEMEM SOCDataPointDeltaStruct SOCDataPointsEEPROMArray[NUMBER_OF_SOC_DATA_POINTS]; // 255 for 1 kB EEPROM
 SOCDataPointsInfoStruct SOCDataPointsInfo;
 
+void initializeAnaltics(){
+    SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere =
+            JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+}
 /*
  * Just clear the complete EEPROM
  */
@@ -99,14 +104,14 @@ void findFirstSOCDataPointIndex() {
             SOCDataPointsInfo.currentlyWritingOnAnEvenPage = tPageIsEvenFlag;
         } else if (tStartPageIsEvenFlag ^ tPageIsEvenFlag) {
             // Here data page changes from even to odd or vice versa
-            DEBUG_PRINT(F("Found even/odd toggling at index="));
+            DEBUG_PRINT(F("Found even/odd toggling before index="));
             DEBUG_PRINT(i);
             tSOCDataPointsArrayStartIndex = i;
             break;
         }
     }
 
-    DEBUG_PRINT(F(" even="));
+    DEBUG_PRINT(F(" now even is "));
     DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
     SOCDataPointsInfo.ArrayStartIndex = tSOCDataPointsArrayStartIndex;
     SOCDataPointsInfo.ArrayLength = tSOCDataPointsArrayLength;
@@ -115,6 +120,7 @@ void findFirstSOCDataPointIndex() {
 /*
  * Read and print SOC EEPROM data for Arduino Plotter
  * Compute ESR.
+ * Capacity is reset to 1% on transition from SOC 0% to 1%
  */
 void readAndPrintSOCData() {
     if (SOCDataPointsInfo.ArrayLength == 0) {
@@ -134,7 +140,6 @@ void readAndPrintSOCData() {
         tMaximumSOCData.CapacityAmpereHour = INT16_MIN;
         tMaximumSOCData.AverageAmpere = INT8_MIN;
 
-// Read first block
         SOCDataPointDeltaStruct tCurrentSOCDataPoint;
         auto tSOCDataPointsArrayIndex = SOCDataPointsInfo.ArrayStartIndex;
         int16_t tCurrentCapacityAmpereHour;
@@ -150,8 +155,7 @@ void readAndPrintSOCData() {
         int16_t tLastVoltageDifferenceToEmpty50MillivoltESR;
         int16_t tLastVoltageDifferenceToEmpty50MillivoltESRPlus1;
         int16_t tLastVoltageDifferenceToEmpty50MillivoltESRMinus1;
-
-        uint8_t tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
+        uint8_t tLastSOCPercent = 0;
 
 //    float tDeltaTimeMinutes = 0;
 
@@ -159,22 +163,29 @@ void readAndPrintSOCData() {
          * Print more than 500 data points in order to shift unwanted entries out to left of plotter window
          */
         Serial.println(F("Print SOC data with each entry printed twice"));
+        // Using a bool variable requires 16 bytes more
         if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
             Serial.println(F("No battery ESR compensation for voltage"));
         }
 
         uint16_t i;
         for (i = 0; i < SOCDataPointsInfo.ArrayLength; ++i) {
+            /*
+             * Read EEPROM data block
+             */
             eeprom_read_block(&tCurrentSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayIndex],
                     sizeof(tCurrentSOCDataPoint));
-            tCurrentSOCDataPoint.SOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT; // remove indication bit
 
             /*
-             * This printout will crash the graph!
+             * This printout does not disturb the graph :-)
              */
+            DEBUG_PRINT(F("index="));
             DEBUG_PRINT(tSOCDataPointsArrayIndex);
             DEBUG_PRINT(F(" even="));
-            DEBUG_PRINT((bool) (tLastSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
+            DEBUG_PRINT((bool) (tCurrentSOCDataPoint.SOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT));
+
+            tCurrentSOCDataPoint.SOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT; // remove indication bit
+
             DEBUG_PRINT(F(", SOC="));
             DEBUG_PRINT(tCurrentSOCDataPoint.SOCPercent);
             DEBUG_PRINT(F(", Diff50mV="));
@@ -185,18 +196,17 @@ void readAndPrintSOCData() {
             DEBUG_PRINTLN(tCurrentSOCDataPoint.Delta100MilliampereHour);
 
             if (i == 0) {
-                // initialize capacity with a reasonable value
-                tCurrentCapacityAmpereHour = (tCurrentSOCDataPoint.SOCPercent * JKComputedData.TotalCapacityAmpereHour) / 100;
+                // Initialize start value of capacity with a reasonable value
                 tCurrentCapacity100MilliampereHour = (tCurrentSOCDataPoint.SOCPercent * JKComputedData.TotalCapacityAmpereHour)
                         / 10;
+                tCurrentCapacityAmpereHour = tCurrentCapacity100MilliampereHour / 10;
             }
 
             /*
-             * Check for transition from 1 to 2 in order to reset capacity to value expected at 2 %.
-             * Use 2 times the delta value from 1 % to 2 %.
+             * Check for transition from 1 to 2 in order to reset capacity (before adding the delta) to the value of 1%
              */
             if (tLastSOCPercent == 1 && tCurrentSOCDataPoint.SOCPercent == 2) {
-                tCurrentCapacity100MilliampereHour = tCurrentSOCDataPoint.Delta100MilliampereHour;
+                tCurrentCapacity100MilliampereHour = JKComputedData.TotalCapacityAmpereHour / 10; // * 10 / 100
                 tMinimumSOCData.CapacityAmpereHour = 0; // Set minimum to 0
             }
             tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
@@ -380,10 +390,11 @@ void readAndPrintSOCData() {
 
 /*
  * Compute delta values and write them to EEPROM if SOC changed
+ * Write additional values, if written SOC is 1% or 100% and capacity changed more than 1%.
  * Is called for every new dataset
  * Values are taken at the lower edge of SOC.
  * E.g. values for SOC 10 are written for rising SOC at SOC = 10.001 for falling SOC at 9.990
- * => we can not write values for SOC 0!
+ * => we can not write values for SOC 0 with this condition!
  */
 void writeSOCData() {
     SOCDataPointDeltaStruct tSOCDataPoint;
@@ -400,27 +411,22 @@ void writeSOCData() {
     SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt +=
             JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
     SOCDataPointsInfo.NumberOfSamples++; // For one sample each 2 seconds, we can store up to 36.4 hours here.
-    TRACE_PRINT(F("NumberOfSamples="));
+    TRACE_PRINT(F("#Samples="));
     TRACE_PRINT(SOCDataPointsInfo.NumberOfSamples);
-    TRACE_PRINT(F(", DeltaAccumulator10Milliampere="));
+    TRACE_PRINT(F(", 10mA="));
+    TRACE_PRINT(JKComputedData.Battery10MilliAmpere);
+    TRACE_PRINT(F(", DeltaAcc10mA="));
     TRACE_PRINTLN(SOCDataPointsInfo.DeltaAccumulator10Milliampere);
-    /*
-     * Check for transition from 0 to 1, where we do not write values, but reset all accumulators
-     */
-    auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
 
+    auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
+    /*
+     * Check for transition from 0 to 1, where we can reset residual capacity
+     */
     if (lastJKReply.SOCPercent == 0 && tCurrentSOCPercent == 1) {
-        Serial.println(F("SOC 0 -> 1 -> clear internal accumulator values"));
-        SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0;
-        SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0;
-        SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
-        SOCDataPointsInfo.NumberOfSamples = 0;
-#if !defined(DISABLE_MONITORING)
-        // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
-        printCSVLine('#');
-        Serial.println();
-#endif
-        return;
+//        Serial.println(F("SOC 0 -> 1 -> reset residual capacity"));
+        SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0; // reset residual capacity
+        SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere =
+                JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
     }
 
     uint8_t tSOCDataPointsArrayLastWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength - 1)
@@ -429,9 +435,25 @@ void writeSOCData() {
     bool tLastWritingOnAnEvenPage = tLastWrittenSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
     tLastWrittenSOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
 
-    if (tCurrentSOCPercent > tLastWrittenSOCPercent || tCurrentSOCPercent < (tLastWrittenSOCPercent - 1)) {
+    /*
+     * Allow to go down from tLastWrittenSOCPercent 1% to 0%, but do not allow to go up from tLastWrittenSOCPercent 1%
+     * e.g. capacity delta is already reached from 1% to 1.9% SOC
+     */
+    bool tExtraCapacityChangedMoreThan1Percent = (tLastWrittenSOCPercent == 100 || tLastWrittenSOCPercent == 0
+            || (tLastWrittenSOCPercent == 1 && tCurrentSOCPercent != 1)) && abs(
+            SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere
+            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere();
+
+    if (tExtraCapacityChangedMoreThan1Percent) {
+        JK_INFO_PRINTLN(F("Write data for extra capacity"));
+    }
+
+    if ((tExtraCapacityChangedMoreThan1Percent) || tCurrentSOCPercent > tLastWrittenSOCPercent
+            || tCurrentSOCPercent < (tLastWrittenSOCPercent - 1)) {
+
         /*
-         * Insert new entry
+         * Insert new entry, if last written SOC was 100% or 1% or 0% and capacity change of more than 1 %
+         * Insert new entry on SOC change, but not for 100% -> 99% and 1% <-> 0%
          * First check for buffer wrap around and toggle currentlyWritingOnAnEvenPage flag
          */
         if (tSOCDataPointsArrayLastWriteIndex == (NUMBER_OF_SOC_DATA_POINTS - 1)) {
@@ -444,14 +466,17 @@ void writeSOCData() {
         if (SOCDataPointsInfo.ArrayLength == NUMBER_OF_SOC_DATA_POINTS) {
             // Array is full, overwrite old start entry
             SOCDataPointsInfo.ArrayStartIndex++;
+            if (SOCDataPointsInfo.ArrayStartIndex == NUMBER_OF_SOC_DATA_POINTS) {
+                SOCDataPointsInfo.ArrayStartIndex = 0; // Wrap around (required if NUMBER_OF_SOC_DATA_POINTS != 0x100)
+            }
         } else {
             // Array is not full, increase length
             SOCDataPointsInfo.ArrayLength++;
         }
 
         // Compute new SOC to be written
-        if (tCurrentSOCPercent > tLastWrittenSOCPercent) {
-            // Here SOC was just incremented
+        if (tCurrentSOCPercent > tLastWrittenSOCPercent || tExtraCapacityChangedMoreThan1Percent) {
+            // Here SOC was just incremented or capacity changed
             tSOCDataPoint.SOCPercent = tCurrentSOCPercent;
         } else {
             /*
@@ -468,13 +493,13 @@ void writeSOCData() {
         /*
          * Compute current value and adjust accumulator
          * Use integer as intermediate value and restrict the written value to the values of a signed char
-         * Adjust accumulator with the value written. We can have a residual of up to 18000 after write
-         * and bigger if we have an overflow, but this only happens at the learning phase of the BMS
+         * Adjust accumulator with the value written to avoid rounding errors.
+         * We can have a residual of up to 18000 (100 mAh) after write
          */
-        int tDelta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10); // / 18000
-        tDelta100MilliampereHour = constrain(tDelta100MilliampereHour, SCHAR_MIN, SCHAR_MAX);
+        int tDelta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10); // / 18000
+        tDelta100MilliampereHour = constrain(tDelta100MilliampereHour, SCHAR_MIN, SCHAR_MAX); // clip to -128 to 128
         tSOCDataPoint.Delta100MilliampereHour = tDelta100MilliampereHour;
-        SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour * (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10);
+        SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour * (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10);
 
         // compute average volt to empty
         long tNumberOfSamplesTimes5 = SOCDataPointsInfo.NumberOfSamples * 5L;
@@ -496,10 +521,8 @@ void writeSOCData() {
 #if !defined(STANDALONE_TEST)
         JK_INFO_PRINT(F("EEPROM write of "));
         JK_INFO_PRINT(SOCDataPointsInfo.NumberOfSamples);
-        JK_INFO_PRINT(F(" samples"));
-
-        DEBUG_PRINT(F(" to "));
-        DEBUG_PRINT(tSOCDataPointsArrayNextWriteIndex);
+        JK_INFO_PRINT(F(" samples at "));
+        JK_INFO_PRINT(tSOCDataPointsArrayNextWriteIndex);
 
         if (SOCDataPointsInfo.ArrayLength != NUMBER_OF_SOC_DATA_POINTS) {
             JK_INFO_PRINT(F(", length="));
@@ -514,17 +537,22 @@ void writeSOCData() {
         JK_INFO_PRINT(F(", Delta100MilliampereHour="));
         JK_INFO_PRINT(tSOCDataPoint.Delta100MilliampereHour);
 
-        DEBUG_PRINT(F(", Left100MilliampereHour=")); // correlates to number of samples
-        DEBUG_PRINT(SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_ACCUMULATOR_1_AMPERE_HOUR / 10.0), 2);
+        DEBUG_PRINT(F(", Left100MilliampereHour=")); // residual for next value to avoid rounding errors
+        DEBUG_PRINT(SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10.0), 2);
         DEBUG_PRINT(F(", even="));
         DEBUG_PRINT(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
 
         JK_INFO_PRINTLN();
 #endif
 
+        /*
+         * Initialize for next samples
+         */
         SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
+        SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere =
+                JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
 #if !defined(DISABLE_MONITORING)
         // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
         printCSVLine('#');

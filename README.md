@@ -194,7 +194,7 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 <br/>
 
 # Example schematics and PCB layouts
-- EasyEda [schematics](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401) and [PCB](https://easyeda.com/editor#id=623a04630b8b4449b72bd5462f59e85f) layouts by Ngoc Dang Dinh.
+- EasyEda [schematics](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401) and [PCB layout](https://easyeda.com/editor#id=623a04630b8b4449b72bd5462f59e85f) by Ngoc Dang Dinh.
 
 - EasyEda [schematics](https://easyeda.com/editor#id=809cb7e913b5453f9d324c442df66a4e) and [PCB layout](https://easyeda.com/editor#id=005061dbeb414870bc63ab052561ddf4) by rooftopsolarsa/WannaBeSolarSparky from [this](https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/27) discussion. The status LEDs are missing in the schematic and button2 is no longer required.
 
@@ -317,6 +317,10 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 3.1.0
+- Analytics bug fixing.
+- Analytics graph handling of extra capacity below 0 % and above 100 %.
+
 ### Version 3.0.0
 - Automatic computation of battery ESR if analytics are enabled.
 - Removed direct computation of capacity.

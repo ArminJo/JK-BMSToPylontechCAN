@@ -103,7 +103,7 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "3.0.0"
+#define VERSION_EXAMPLE "3.1.0"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
 #define MILLIS_IN_ONE_SECOND 1000L
 
@@ -139,13 +139,14 @@
 /*
  * Options to reduce program size
  */
+//#define ENABLE_MONITORING // Requires additional 846 bytes program space
 #if defined(ENABLE_MONITORING)
 #  if !defined(MONOTORING_PERIOD_SECONDS)
 //#define MONOTORING_PERIOD_FAST    // If active, then print CSV line every 2 seconds, else every minute
 #define MONOTORING_PERIOD_SLOW    // If active, then print CSV line every hour, and CSV line every 10 minutes
 #  endif
 #else
-#define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. - currently activated to save program space.
+#define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 846 bytes program space. - currently activated to save program space.
 #endif
 
 #if !defined(SERIAL_INFO_PRINT) && !defined(STANDALONE_TEST)
@@ -466,11 +467,13 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
 #else
     JK_INFO_PRINTLN(F("Monitoring enabled"));
 #endif
+
 #if defined(NO_CELL_STATISTICS)
     JK_INFO_PRINTLN(F("Cell statistics deactivated"));
 #else
     JK_INFO_PRINTLN(F("Cell statistics activated"));
 #endif
+
 #if defined(NO_ANALYTICS)
     JK_INFO_PRINTLN(F("Analytics deactivated"));
 #else
@@ -487,7 +490,6 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     DEBUG_PRINT(F(", even="));
     DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
 
-#  if !defined(NO_ANALYTICS)
     JK_INFO_PRINTLN(F("Disable ESR compensation pin=" STR(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN)));
     JK_INFO_PRINT(F("Battery ESR compensation for voltage "));
     if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
@@ -498,8 +500,6 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_INFO_PRINT(F("abled. Specified ESR="));
     JK_INFO_PRINT(sBatteryESRMilliohm);
     JK_INFO_PRINTLN(F("mOhm"));
-
-#  endif
 #endif
 
     tone(BUZZER_PIN, 2200, 50);
@@ -948,6 +948,12 @@ void processReceivedData() {
             + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH]]);
 
     fillJKConvertedCellInfo();
+    /*
+     * Print newline, if SOC changed
+     */
+    if (sJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent) {
+        Serial.println();
+    }
     fillJKComputedData();
 
     computeUpTimeString();
@@ -961,11 +967,16 @@ void printReceivedData() {
     if (!sStaticInfoWasSent) {
         // Send static info only once after reset
         sStaticInfoWasSent = true;
+        initializeComputedData();
+#if !defined(NO_ANALYTICS)
+        initializeAnaltics();
+#endif
         printJKStaticInfo();
     }
 #if defined(USE_SERIAL_2004_LCD)
     if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
-        printJKDynamicInfo(); // do not interfere with plotter output
+        // Do not interfere with plotter output
+        printJKDynamicInfo(); // Prints newline before SOC[%]=
     }
     printBMSDataOnLCD();
 #else

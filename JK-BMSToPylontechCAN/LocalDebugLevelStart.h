@@ -31,7 +31,8 @@
  */
 
 /*
- * Propagate debug level to local ones
+ * Propagate debug level to local ones but not to each other
+ * I.e. Enabling TRACE does not enable DEBUG and INFO
  */
 #if defined(TRACE) && !defined(LOCAL_TRACE)
 #define LOCAL_TRACE

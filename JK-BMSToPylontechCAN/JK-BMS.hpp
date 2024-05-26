@@ -279,6 +279,10 @@ int16_t getJKTemperature(uint16_t aJKRAWTemperature) {
     return 100 - tTemperature;
 }
 
+int32_t getOnePercentCapacityAsAccumulator10Milliampere() {
+    return (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 100) * JKComputedData.TotalCapacityAmpereHour;
+}
+
 // Identity function to avoid swapping if accidentally called
 uint8_t swap(uint8_t aByte) {
     return (aByte);
@@ -356,6 +360,7 @@ void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue) 
     Serial.print(aPGMString);
     Serial.println(swap(a32BitValue));
 }
+
 
 /*
  * Convert the big endian cell voltage data from JKReplyFrameBuffer to little endian data in JKConvertedCellInfo
@@ -548,6 +553,12 @@ void printJKCellStatisticsInfo() {
 
 #endif // NO_CELL_STATISTICS
 
+void initializeComputedData(){
+    // Initialize capacity accumulator with sensible value
+    JKComputedData.BatteryCapacityAccumulator10MilliAmpere = (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 100)
+            * sJKFAllReplyPointer->SOCPercent * JKComputedData.TotalCapacityAmpereHour;
+}
+
 void fillJKComputedData() {
     JKComputedData.TemperaturePowerMosFet = getJKTemperature(sJKFAllReplyPointer->TemperaturePowerMosFet);
     int16_t tMaxTemperature = JKComputedData.TemperaturePowerMosFet;
@@ -585,11 +596,11 @@ void fillJKComputedData() {
     JKComputedData.Battery10MilliAmpere = getCurrent(sJKFAllReplyPointer->Battery10MilliAmpere);
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.Battery10MilliAmpere / 100.0;
     JKComputedData.BatteryCapacityAccumulator10MilliAmpere += JKComputedData.Battery10MilliAmpere;
-    if (sJKFAllReplyPointer->SOCPercent == 0 && lastJKReply.SOCPercent == 1) {
-        JK_INFO_PRINTLN(F("Reset capacity"));
-        // Reset capacity at transition from 1 to 0
-        JKComputedData.BatteryCapacityAccumulator10MilliAmpere = 0;
-        JKComputedData.LastPrintedBatteryCapacityAccumulator10MilliAmpere = 0;
+    if (lastJKReply.SOCPercent == 0 && sJKFAllReplyPointer->SOCPercent == 1) {
+        JK_INFO_PRINTLN(F("Reset capacity to 1%"));
+        // Reset capacity at transition from 0 to 1
+        JKComputedData.BatteryCapacityAccumulator10MilliAmpere = getOnePercentCapacityAsAccumulator10Milliampere();
+        JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
     }
 
 //    Serial.print("Battery10MilliAmpere=0x");
@@ -928,11 +939,11 @@ void printJKDynamicInfo() {
         printCSVLine();
     }
 #  endif
-    // Print CSV line every Ah for capacity to voltage graph
+    // Print +CSV line every percent of nominal battery capacity (TotalCapacityAmpereHour) for capacity to voltage graph
     if (abs(
-            JKComputedData.LastPrintedBatteryCapacityAccumulator10MilliAmpere
-            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere) > AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE) {
-        JKComputedData.LastPrintedBatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+            JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere
+            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere()) {
+        JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
         printCSVLine('+');
     }
 
@@ -1022,15 +1033,12 @@ void printJKDynamicInfo() {
     /*
      * SOC
      */
-    if (tJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent
-            || JKComputedData.RemainingCapacityAmpereHour != JKLastPrintedData.RemainingCapacityAmpereHour) {
+    if (tJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent) {
         /*
-         * SOC or RemainingCapacityAmpereHour changed
+         * SOC changed
          */
-        Serial.println();
         myPrint(F("SOC[%]="), tJKFAllReplyPointer->SOCPercent);
         myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
-        JKLastPrintedData.RemainingCapacityAmpereHour = JKComputedData.RemainingCapacityAmpereHour;
     }
 
     /*
@@ -1132,7 +1140,7 @@ void setCSVString() {
         dtostrf(JKComputedData.BatteryLoadCurrentFloat, 4, 2, &tCurrentAsFloatString[0]);
         sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%s;%ld;%d"), JKComputedData.BatteryVoltage10Millivolt * 10,
                 tCurrentAsFloatString,
-                JKComputedData.BatteryCapacityAccumulator10MilliAmpere / (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 10),
+                JKComputedData.BatteryCapacityAccumulator10MilliAmpere / (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 10), /* 100mAh units*/
                 sJKFAllReplyPointer->SOCPercent);
     }
 }
