@@ -3,6 +3,13 @@
  *
  * Functions to read, convert and print JK-BMS data
  *
+ *  We use 6 Structures:
+ *  1. JKReplyStruct - the main reply structure, containing raw BMS reply data Big Endian, which must be swapped.
+ *  2. JKLastReplyStruct - copy of SOC, Uptime, Alarm and Status flags of last reply to detect changes.
+ *  3. JKConvertedCellInfoStruct - including statistics (min, max, average etc.) for print and LCD usage.
+ *  4. JKComputedDataStruct - swapped and computed data based on JKReplyStruct content.
+ *  5. JKLastPrintedDataStruct - part of last JKComputedDataStruct to detect changes.
+ *  6. CellStatisticsStruct - for minimum and maximum cell voltages statistics.
  *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
@@ -66,16 +73,7 @@ char sLastUpTimeHourCharacter;              // For setting sUpTimeStringHourHasC
 
 JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
 #if !defined(NO_CELL_STATISTICS)
-/*
- * Arrays of counters, which count the times, a cell has minimal or maximal voltage
- * To identify runaway cells
- */
-uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS];
-uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
-uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
-uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
-uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
-uint32_t sLastPrintedBalancingCount;
+struct CellStatisticsStruct CellStatistics;
 #endif //NO_CELL_STATISTICS
 
 /*
@@ -361,7 +359,6 @@ void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue) 
     Serial.println(swap(a32BitValue));
 }
 
-
 /*
  * Convert the big endian cell voltage data from JKReplyFrameBuffer to little endian data in JKConvertedCellInfo
  * and compute minimum, maximum, delta, and average
@@ -416,12 +413,12 @@ void fillJKConvertedCellInfo() {
         if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMinimumMillivolt) {
             JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MINIMUM;
             if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
-                CellMinimumArray[i]++; // count for statistics
+                CellStatistics.CellMinimumArray[i]++; // count for statistics
             }
         } else if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMaximumMillivolt) {
             JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MAXIMUM;
             if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
-                CellMaximumArray[i]++;
+                CellStatistics.CellMaximumArray[i]++;
             }
         } else {
             JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM;
@@ -439,7 +436,7 @@ void fillJKConvertedCellInfo() {
         /*
          * After 43200 counts (a whole day being the minimum / maximum) we do scaling
          */
-        uint16_t tCellStatisticsCount = CellMinimumArray[i];
+        uint16_t tCellStatisticsCount = CellStatistics.CellMinimumArray[i];
         tCellStatisticsSum += tCellStatisticsCount;
         if (tCellStatisticsCount > (60UL * 60UL * 24UL * 1000UL / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
             /*
@@ -452,7 +449,7 @@ void fillJKConvertedCellInfo() {
 // Here, we demand 2 minutes of balancing as minimum
     if (tCellStatisticsSum > 60) {
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-            CellMinimumPercentageArray[i] = ((uint32_t) (CellMinimumArray[i] * 100UL)) / tCellStatisticsSum;
+            CellStatistics.CellMinimumPercentageArray[i] = ((uint32_t) (CellStatistics.CellMinimumArray[i] * 100UL)) / tCellStatisticsSum;
         }
     }
 
@@ -462,7 +459,7 @@ void fillJKConvertedCellInfo() {
          */
         Serial.println(F("Do scaling of minimum counts"));
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-            CellMinimumArray[i] = CellMinimumArray[i] / 2;
+            CellStatistics.CellMinimumArray[i] = CellStatistics.CellMinimumArray[i] / 2;
         }
     }
 
@@ -475,7 +472,7 @@ void fillJKConvertedCellInfo() {
         /*
          * After 43200 counts (a whole day being the minimum / maximum) we do scaling
          */
-        uint16_t tCellStatisticsCount = CellMaximumArray[i];
+        uint16_t tCellStatisticsCount = CellStatistics.CellMaximumArray[i];
         tCellStatisticsSum += tCellStatisticsCount;
         if (tCellStatisticsCount > (60UL * 60UL * 24UL * 1000UL / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS)) {
             /*
@@ -488,7 +485,7 @@ void fillJKConvertedCellInfo() {
 // Here, we demand 2 minutes of balancing as minimum
     if (tCellStatisticsSum > 60) {
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-            CellMaximumPercentageArray[i] = ((uint32_t) (CellMaximumArray[i] * 100UL)) / tCellStatisticsSum;
+            CellStatistics.CellMaximumPercentageArray[i] = ((uint32_t) (CellStatistics.CellMaximumArray[i] * 100UL)) / tCellStatisticsSum;
         }
     }
     if (tDoDaylyScaling) {
@@ -497,7 +494,7 @@ void fillJKConvertedCellInfo() {
          */
         Serial.println(F("Do scaling of maximum counts"));
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-            CellMaximumArray[i] = CellMaximumArray[i] / 2;
+            CellStatistics.CellMaximumArray[i] = CellStatistics.CellMaximumArray[i] / 2;
         }
     }
 #endif // NO_CELL_STATISTICS
@@ -533,7 +530,7 @@ void printJKCellStatisticsInfo() {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMinimumPercentageArray[i], CellMinimumArray[i]);
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMinimumPercentageArray[i], CellStatistics.CellMinimumArray[i]);
         Serial.print(tStringBuffer);
     }
     Serial.println();
@@ -543,7 +540,7 @@ void printJKCellStatisticsInfo() {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellMaximumPercentageArray[i], CellMaximumArray[i]);
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMaximumPercentageArray[i], CellStatistics.CellMaximumArray[i]);
         Serial.print(tStringBuffer);
     }
     Serial.println();
@@ -553,7 +550,7 @@ void printJKCellStatisticsInfo() {
 
 #endif // NO_CELL_STATISTICS
 
-void initializeComputedData(){
+void initializeComputedData() {
     // Initialize capacity accumulator with sensible value
     JKComputedData.BatteryCapacityAccumulator10MilliAmpere = (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 100)
             * sJKFAllReplyPointer->SOCPercent * JKComputedData.TotalCapacityAmpereHour;
@@ -616,12 +613,12 @@ void fillJKComputedData() {
 
 #if !defined(NO_CELL_STATISTICS)
     /*
-     * Increment sBalancingCount and fill sBalancingTimeString
+     * Increment BalancingCount and fill sBalancingTimeString
      */
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
-        sBalancingCount++;
-        sprintf_P(sBalancingTimeString, PSTR("%3uD%02uH%02uM"), (uint16_t) (sBalancingCount / (60 * 24 * 30UL)),
-                (uint16_t) ((sBalancingCount / (60 * 30)) % 24), (uint16_t) (sBalancingCount / 30) % 60);
+        CellStatistics.BalancingCount++;
+        sprintf_P(sBalancingTimeString, PSTR("%3uD%02uH%02uM"), (uint16_t) (CellStatistics.BalancingCount / (60 * 24 * 30UL)),
+                (uint16_t) ((CellStatistics.BalancingCount / (60 * 30)) % 24), (uint16_t) (CellStatistics.BalancingCount / 30) % 60);
     }
 #endif // NO_CELL_STATISTICS
 }
@@ -792,6 +789,17 @@ void printMiscellaneousInfo() {
 void detectAndPrintAlarmInfo() {
     JKReplyStruct *tJKFAllReplyPointer = sJKFAllReplyPointer;
 
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+    if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == NO_ALARM_WORD_CONTENT) {
+        sNoAlarmCounter++; // overflow does not really matter here
+        // sNoAlarmCounter == 1800 - Allow consecutive same alarms after 1 hour of no alarm
+        if (sNoAlarmCounter
+                == (SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS * MILLIS_IN_ONE_SECOND) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+            sLastActiveAlarmsAsWord = NO_ALARM_WORD_CONTENT; // Reset LastActiveAlarmsAsWord
+        }
+    }
+#endif
+
     /*
      * Do it only once per change
      */
@@ -799,14 +807,6 @@ void detectAndPrintAlarmInfo() {
         if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == NO_ALARM_WORD_CONTENT) {
             Serial.println(F("All alarms are cleared now"));
             sAlarmJustGetsActive = false;
-#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
-            sNoAlarmCounter++; // overflow does not matter here
-            // sNoAlarmCounter == 1800 - Allow consecutive same alarms after 1 hour of no alarm
-            if (sNoAlarmCounter
-                    == (SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS * MILLIS_IN_ONE_SECOND) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                sLastActiveAlarmsAsWord = NO_ALARM_WORD_CONTENT;
-            }
-#endif
         } else {
 #if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
             sNoAlarmCounter = 0; // reset counter
@@ -971,17 +971,17 @@ void printJKDynamicInfo() {
         /*
          * Print cell statistics only if balancing count changed and is big enough for reasonable info
          */
-        if (sLastPrintedBalancingCount != sBalancingCount && sBalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
-            sLastPrintedBalancingCount = sBalancingCount;
+        if (CellStatistics.LastPrintedBalancingCount != CellStatistics.BalancingCount && CellStatistics.BalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
+            CellStatistics.LastPrintedBalancingCount = CellStatistics.BalancingCount;
             Serial.println(F("*** CELL STATISTICS ***"));
             Serial.print(F("Total balancing time="));
 
-            Serial.print(sBalancingCount * (MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS / 1000));
+            Serial.print(CellStatistics.BalancingCount * (MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS / 1000));
             Serial.print(F(" s -> "));
             Serial.print(sBalancingTimeString);
             // Append seconds
             char tString[4]; // "03S" is 3 bytes long
-            sprintf_P(tString, PSTR("%02uS"), (uint16_t) (sBalancingCount % 30) * 2);
+            sprintf_P(tString, PSTR("%02uS"), (uint16_t) (CellStatistics.BalancingCount % 30) * 2);
             Serial.println(tString);
             printJKCellStatisticsInfo();
         }

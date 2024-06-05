@@ -3,6 +3,14 @@
  *
  * Definitions of the data structures used by JK-BMS and the converter
  *
+ *  We use 6 Structures:
+ *  1. JKReplyStruct - the main reply structure, containing raw BMS reply data Big Endian, which must be swapped.
+ *  2. JKLastReplyStruct - copy of SOC, Uptime, Alarm and Status flags of last reply to detect changes.
+ *  3. JKConvertedCellInfoStruct - including statistics (min, max, average etc.) for print and LCD usage.
+ *  4. JKComputedDataStruct - swapped and computed data based on JKReplyStruct content.
+ *  5. JKLastPrintedDataStruct - part of last JKComputedDataStruct to detect changes.
+ *  6. CellStatisticsStruct - for minimum and maximum cell voltages statistics.
+ *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
@@ -124,12 +132,16 @@ void fillJKConvertedCellInfo();
  * Arrays of counters, which count the times, a cell has minimal or maximal voltage
  * To identify runaway cells
  */
-extern uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS];
-extern uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
-extern uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
-extern uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+struct CellStatisticsStruct {
+uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS]; // Count of cell minimums
+uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
+uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS]; // Percentage of cell minimums
+uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+uint32_t BalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
+uint32_t LastPrintedBalancingCount; // For printing with printJKDynamicInfo()
+};
+
 #define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
-extern uint32_t sBalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
 #endif // NO_CELL_STATISTICS
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
@@ -177,8 +189,8 @@ struct JKComputedDataStruct {
     float BatteryVoltageFloat;          // Volt
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
-    int32_t BatteryCapacityAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
+    int32_t BatteryCapacityAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display

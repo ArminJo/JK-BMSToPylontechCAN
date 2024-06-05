@@ -4,7 +4,7 @@
  *  Stack, Ram and Heap utilities.
  *  Sleep utilities.
  *
- *  Copyright (C) 2016-2023  Armin Joachimsmeyer
+ *  Copyright (C) 2016-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of Arduino-Utils https://github.com/ArminJo/Arduino-Utils.
@@ -212,21 +212,22 @@ void printStackUnusedAndUsedBytesIfChanged(Print *aSerial) {
  * It ends with the heap and the stack.
  *
  * Sample output if stack runs into data:
- * Size of Data + BSS, Heap start, Stack end=2041
- * Stack used 20 of 7
- * Currently available Heap=0
+ * Size of Data + BSS / Heap start=0x773 | 1907
+ * Currently available Heap=7
+ * Stack used 100 of 141
  */
 void printRAMInfo(Print *aSerial) {
     uint16_t tHeapStart = (uint16_t) getHeapStart();
-    aSerial->print(F("Size of Data + BSS, Heap start, Stack end=0x"));
+    aSerial->print(F("Size of Data + BSS / Heap start=0x"));
     aSerial->print(tHeapStart - RAMSTART, HEX);
     aSerial->print(F(" | "));
     aSerial->println(tHeapStart - RAMSTART);
 
-    printStackUsedBytes(aSerial);
-
     aSerial->print(F("Currently available Heap="));
     aSerial->println(getCurrentAvailableHeap());
+
+    printStackUsedBytes(aSerial);
+
 }
 
 void printCurrentFreeHeap(Print *aSerial) {

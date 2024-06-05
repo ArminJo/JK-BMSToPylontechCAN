@@ -29,7 +29,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 
 # Features
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
-- Supports sending of total capayity for SMA and Luxpower inverters.
+- Supports sending of total capayity for **SMA** and **Luxpower** inverters.
 - Optional linear **reducing maximum current above 80% SOC** (values can be adapted to your needs).
 - Display of BMS information, Cell voltages, statistics and alarms on a locally attached **serial 2004 LCD**.
 - Page button for switching **5 LCD display pages**.
@@ -39,7 +39,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Beep on alarm and connection timeouts with selectable timeout.
 - Serial.print() function is still available for monitoring and debugging.
 - SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
-- The voltage in the SOC graph is corrected by the automatic computed ESR to get a smoother voltage curve.
+- The voltage in the SOC graph is corrected by the automatically computed ESR to get a smoother voltage curve.
 
 **If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**<br/>
 Enabling the macro `NO_SERIAL_INFO_PRINT` saves program space.
@@ -194,12 +194,14 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 <br/>
 
 # Example schematics and PCB layouts
-- EasyEda [schematics](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401) and [PCB layout](https://easyeda.com/editor#id=623a04630b8b4449b72bd5462f59e85f) by Ngoc Dang Dinh.
+- KiCad8 schematics and PCB layout for ATmega644 compiled with [MightyCore](https://github.com/MCUdude/MightyCore) and 2 BMS connectors by Andé Meier.
+[![PCB layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BMS-CAN_PCB_top_v0.1.png)](https://github.com/dremeier/Arduino-JK-BMS-To-Pylontech-CAN-PCB)
+
+- EasyEda schematics and PCB layout by Ngoc Dang Dinh.
+[![Minimal layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401)
 
 - EasyEda [schematics](https://easyeda.com/editor#id=809cb7e913b5453f9d324c442df66a4e) and [PCB layout](https://easyeda.com/editor#id=005061dbeb414870bc63ab052561ddf4) by rooftopsolarsa/WannaBeSolarSparky from [this](https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/27) discussion. The status LEDs are missing in the schematic and button2 is no longer required.
 
-### Minimal layout (by Ngoc Dang Dinh)
-![Minimal layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)
 
 <br/>
 
@@ -317,6 +319,10 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 3.2.0
+- Adaption for ATmega644.
+- Automatic ESR computation only for more than 100 data points.
+
 ### Version 3.1.0
 - Analytics bug fixing.
 - Analytics graph handling of extra capacity below 0 % and above 100 %.

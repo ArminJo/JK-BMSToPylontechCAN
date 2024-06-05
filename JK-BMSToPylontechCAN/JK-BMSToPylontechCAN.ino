@@ -103,7 +103,7 @@
  */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "3.1.0"
+#define VERSION_EXAMPLE "3.2.0"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
 #define MILLIS_IN_ONE_SECOND 1000L
 
@@ -128,6 +128,7 @@
 #define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
 #endif
 
+//#define DEBUG                 // This enables debug output for all files - only for development
 //#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 #if defined(STANDALONE_TEST)
 //#define ENABLE_MONITORING
@@ -145,11 +146,11 @@
 //#define MONOTORING_PERIOD_FAST    // If active, then print CSV line every 2 seconds, else every minute
 #define MONOTORING_PERIOD_SLOW    // If active, then print CSV line every hour, and CSV line every 10 minutes
 #  endif
-#else
+#elif FLASHEND <= 0x7FFF // for 32k or less
 #define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 846 bytes program space. - currently activated to save program space.
 #endif
 
-#if !defined(SERIAL_INFO_PRINT) && !defined(STANDALONE_TEST)
+#if !defined(SERIAL_INFO_PRINT) && !defined(STANDALONE_TEST) && FLASHEND <= 0x7FFF
 #define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space. - currently activated to save program space.
 #endif
 
@@ -159,7 +160,7 @@
 //#define NO_CAPACITY_35F_EXTENSIONS // Disables generating of frame 0x35F for total capacity. This additional frame is no problem for Deye inverters.
 //#define NO_CAPACITY_379_EXTENSIONS // Disables generating of frame 0x379 for total capacity. This additional frame is no problem for Deye inverters.
 //#define NO_BYD_LIMITS_373_EXTENSIONS // Disables generating of frame 0x373 for cell limits as sent by BYD battery. See https://github.com/dfch/BydCanProtocol/tree/main. This additional frame is no problem for Deye inverters.
-//#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 16558 bytes program space.
+//#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 1628 bytes program space.
 //#define NO_ANALYTICS          // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space.
 //#define USE_NO_LCD            // Disables the code for the LCD display. Saves 25% program space on a Nano.
 
@@ -179,11 +180,12 @@
  * but additionally this sets the right fuse settings which reserve only 0.5 kB program space.
  * I regularly do this for all Nano boards I have!
  *
- * With the new fuse settings you can disable the DISABLE_MONITORING macro below,
- * or just compile and upload the source for an Uno board even if you have connected the Nano board.
+ * With the new fuse settings you can just compile and upload the source for an Uno board even if you have connected the Nano board.
  */
-#define DISABLE_MONITORING              // activating this macro saves 528 bytes program space
+// Save space for an unmodified Nano
+#  if !defined(NO_CELL_STATISTICS)
 #define NO_CELL_STATISTICS          // No cell values, cell minimum, maximum and percentages.
+#  endif
 #endif
 
 // sStringBuffer is defined in JK-BMS_LCD.hpp if DISABLE_MONITORING and NO_ANALYTICS are defined
@@ -196,12 +198,17 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 /*
  * Pin layout, may be adapted to your requirements
  */
+//#define ANDRES_644_BOARD
 #define BUZZER_PIN                             A2 // To signal errors
 #define PAGE_SWITCH_DEBUG_BUTTON_PIN_FOR_INFO   2 // Button at INT0 / D2 for switching LCD pages - definition is not used in program, only for documentation.
 // The standard RX of the Arduino is used for the JK_BMS connection.
 #define JK_BMS_RX_PIN_FOR_INFO                  0 // We use the Serial RX pin - definition is not used in program, only for documentation.
 #if !defined(JK_BMS_TX_PIN)                       // Allow override by global symbol
+#  if defined(ANDRES_644_BOARD)
+#define JK_BMS_TX_PIN                          12
+#  else
 #define JK_BMS_TX_PIN                           4
+#  endif
 #endif
 
 #if defined(USE_NO_COMMUNICATION_STATUS_LEDS)
@@ -212,8 +219,13 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #else
 // BMS and CAN communication status LEDs
 #  if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
+#    if defined(ANDRES_644_BOARD)
+#define BMS_COMMUNICATION_STATUS_LED_PIN        14
+#define CAN_COMMUNICATION_STATUS_LED_PIN        15
+#    else
 #define BMS_COMMUNICATION_STATUS_LED_PIN        6
 #define CAN_COMMUNICATION_STATUS_LED_PIN        7
+#    endif
 #  endif
 #define TURN_BMS_STATUS_LED_ON                  digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH)
 #define TURN_BMS_STATUS_LED_OFF                 digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, LOW)
@@ -227,7 +239,11 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 
 //#define TIMING_TEST
 #if defined(TIMING_TEST)
-#define TIMING_TEST_PIN                        10
+#  if defined(ANDRES_644_BOARD)
+#define TIMING_TEST_PIN                        13
+#  else
+#define TIMING_TEST_PIN                        10 // is SS pin for SPI and must be used as OUTPUT (set by SPI.init())!
+#  endif
 #endif
 
 /*
@@ -236,13 +252,20 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
  *   SPI: MOSI - 11, MISO - 12, SCK - 13. CS cannot be replaced by constant ground.
  *   I2C: SDA - A4, SCL - A5.
  */
-#if !defined(SPI_CS_PIN)                          // Allow override by global symbol
+#if defined(ANDRES_644_BOARD)
+#define SPI_CS_PIN                              4 // !SS Must be specified before #include "MCP2515_TX.hpp"
+#define SPI_MOSI_PIN_FOR_INFO                   5 // Definition is not used in program, only for documentation.
+#define SPI_MISO_PIN_FOR_INFO                   6 // Definition is not used in program, only for documentation.
+#define SPI_SCK_PIN_FOR_INFO                    7 // Definition is not used in program, only for documentation.
+#else
+#  if !defined(SPI_CS_PIN)                          // Allow override by global symbol
 #define SPI_CS_PIN                              9 // Pin 9 is the default pin for the Arduino CAN bus shield. Alternately you can use pin 10 on this shield.
-//#define SPI_CS_PIN                              10 // Must be specified before #include "MCP2515_TX.hpp"
+//#define SPI_CS_PIN                             10 // Must be specified before #include "MCP2515_TX.hpp"
 #define SPI_MOSI_PIN_FOR_INFO                  11 // Definition is not used in program, only for documentation.
 #define SPI_MISO_PIN_FOR_INFO                  12 // Definition is not used in program, only for documentation.
 #define SPI_SCK_PIN_FOR_INFO                   13 // Definition is not used in program, only for documentation.
-#endif
+#  endif
+#endif // defined(ANDRES_644_BOARD)
 
 /*
  * Program timing, may be adapted to your requirements
@@ -284,6 +307,9 @@ uint8_t sBeepTimeoutCounter = 0;
  *
  * Button at INT0 / D2 for switching LCD pages
  */
+#if defined(ARDUINO_AVR_ATmega644)
+#define USE_INT2_FOR_BUTTON_0
+#endif
 #define USE_BUTTON_0                 // Enable code for 1. button at INT0 / D2
 #define BUTTON_DEBOUNCING_MILLIS 100 // With this you can adapt to the characteristic of your button. Default is 50.
 #define NO_BUTTON_RELEASE_CALLBACK   // Disables the code for release callback. This saves 2 bytes RAM and 64 bytes program memory.
@@ -456,11 +482,19 @@ void setup() {
 #endif
 
     Serial.begin(115200);
-#if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) /*stm32duino*/|| defined(USBCON) /*STM32_stm32*/|| defined(SERIALUSB_PID) || defined(ARDUINO_attiny3217)
+    while (!Serial)
+        ; // Wait for Serial to become available. Is optimized away for some cores.
+
+#if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) /*stm32duino*/|| defined(USBCON) /*STM32_stm32*/ \
+    || defined(SERIALUSB_PID)  || defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_attiny3217)
 delay(4000); // To be able to connect Serial monitor after reset or power up and before first print out. Do not wait for an attached Serial Monitor!
 #endif
     // Just to know which program is running on my Arduino
     Serial.println(F("START " __FILE__ "\r\nVersion " VERSION_EXAMPLE " from " __DATE__));
+
+#if defined(ANDRES_644_BOARD)
+    JK_INFO_PRINTLN(F("Settings are for Andres 644 board"));
+#endif
 
 #if defined(DISABLE_MONITORING)
     JK_INFO_PRINTLN(F("Monitoring disabled"));
@@ -483,13 +517,21 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_INFO_PRINTLN(sBatteryESRMilliohm);
 
     findFirstSOCDataPointIndex();
+#if defined(ANDRES_644_BOARD)
+    JK_INFO_PRINT(F("EEPROM SOC data start index="));
+    JK_INFO_PRINT(SOCDataPointsInfo.ArrayStartIndex);
+    JK_INFO_PRINT(F(" length="));
+    JK_INFO_PRINT(SOCDataPointsInfo.ArrayLength);
+    JK_INFO_PRINT(F(", even="));
+    JK_INFO_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+#else
     DEBUG_PRINT(F("EEPROM SOC data start index="));
     DEBUG_PRINT(SOCDataPointsInfo.ArrayStartIndex);
     DEBUG_PRINT(F(" length="));
     DEBUG_PRINT(SOCDataPointsInfo.ArrayLength);
     DEBUG_PRINT(F(", even="));
     DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
-
+#endif
     JK_INFO_PRINTLN(F("Disable ESR compensation pin=" STR(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN)));
     JK_INFO_PRINT(F("Battery ESR compensation for voltage "));
     if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
@@ -583,7 +625,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     sReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
     printJKReplyFrameBuffer();
     Serial.println();
-    processReceivedData();
+    processReceivedData(); // sets sCANDataIsInitialized to true
     printReceivedData();
     /*
      * Copy complete reply and computed values for change determination
@@ -693,20 +735,19 @@ void loop() {
     }
 
 #if defined(STANDALONE_TEST)
+    sResponseFrameBytesAreExpected = false; // No response!
     sBMSFrameProcessingComplete = true; // for LCD timeout etc.
     processReceivedData(); // for statistics
     printBMSDataOnLCD(); // for switching between MAX and MIN display
     delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS); // do it simple :-)
 
-#if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+#  if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
+    // Simulate BMS reading
     digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
     digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
-    digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
-    delay(20); // do it simple :-)
-    digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
-#endif
+#  endif
 
 #else
     /*
@@ -756,9 +797,18 @@ void loop() {
      * Inverter reply every second: 0x305: 00-00-00-00-00-00-00-00
      * Do not send, if BMS is starting up, the 0% SOC during this time will trigger a deye error beep.
      */
+#if defined(TRACE)
+    Serial.print(F("sCANDataIsInitialized="));
+    Serial.print(sCANDataIsInitialized);
+    Serial.print(F(" BMSIsStarting="));
+    Serial.print(JKComputedData.BMSIsStarting);
+    Serial.print(F(", sResponseFrameBytesAreExpected="));
+    Serial.println(sResponseFrameBytesAreExpected);
+#endif
     if (sCANDataIsInitialized && !JKComputedData.BMSIsStarting && !sResponseFrameBytesAreExpected
             && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
+
         TURN_CAN_STATUS_LED_ON;
         if (sDebugModeActivated) {
             Serial.println(F("Send CAN"));
@@ -969,7 +1019,7 @@ void printReceivedData() {
         sStaticInfoWasSent = true;
         initializeComputedData();
 #if !defined(NO_ANALYTICS)
-        initializeAnaltics();
+        initializeAnalytics();
 #endif
         printJKStaticInfo();
     }
@@ -1055,6 +1105,7 @@ void handleOvervoltage() {
 }
 
 #if !defined(_ADC_UTILS_HPP)
+#include "ADCUtils.h"
 /*
  * Recommended VCC is 1.8 V to 5.5 V, absolute maximum VCC is 6.0 V.
  * Check for 5.25 V, because such overvoltage is quite unlikely to happen during regular operation.
@@ -1065,16 +1116,16 @@ void handleOvervoltage() {
  * @return true if overvoltage reached
  */
 bool isVCCTooHighSimple() {
-    ADMUX = 14 | (DEFAULT << 6);
+    ADMUX = ADC_1_1_VOLT_CHANNEL_MUX | (DEFAULT << SHIFT_VALUE_FOR_REFERENCE);
 // ADCSRB = 0; // Only active if ADATE is set to 1.
 // ADSC-StartConversion ADIF-Reset Interrupt Flag - NOT free running mode
-    ADCSRA = (_BV(ADEN) | _BV(ADSC) | _BV(ADIF) | 7); //  7 -> 104 microseconds per ADC conversion at 16 MHz --- Arduino default
+    ADCSRA = (_BV(ADEN) | _BV(ADSC) | _BV(ADIF) | ADC_PRESCALE128); //  128 -> 104 microseconds per ADC conversion at 16 MHz --- Arduino default
 // wait for single conversion to finish
     loop_until_bit_is_clear(ADCSRA, ADSC);
 
 // Get value
     uint16_t tRawValue = ADCL | (ADCH << 8);
 
-    return tRawValue < 214;
+    return tRawValue < 1126000 / VCC_OVERVOLTAGE_THRESHOLD_MILLIVOLT; // < 214
 }
 #endif // _ADC_UTILS_HPP

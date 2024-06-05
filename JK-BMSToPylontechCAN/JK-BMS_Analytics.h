@@ -43,11 +43,15 @@ struct SOCDataPointDeltaStruct {
     int8_t Delta100MilliampereHour; // at a capacity of 320 Ah we have 3.2 Ah per 1% SOC
 };
 // First place of size SOCDataPointDeltaStruct is used for sBatteryESRMilliohm_EEPROM + 3 filler bytes
-#define NUMBER_OF_SOC_DATA_POINTS   (((E2END + 1) - sizeof(SOCDataPointDeltaStruct)) / sizeof(SOCDataPointDeltaStruct)) // 0xFF
+#define NUMBER_OF_SOC_DATA_POINTS   (((E2END + 1) - sizeof(SOCDataPointDeltaStruct)) / sizeof(SOCDataPointDeltaStruct)) // 0xFE for 1k EEPROM, 0x1FE for 2kEEPROM
 
 struct SOCDataPointsInfoStruct {
-    uint8_t ArrayStartIndex;   // Index of first entry in cyclic SOCDataPointsEEPROMArray, index of next value to be written.
-    uint16_t ArrayLength;      // Length of valid data in Array. Required if not fully written. Maximum is NUMBER_OF_SOC_DATA_POINTS
+    /*
+     * Index of next value to be written is ArrayStartIndex + ArrayLength % NUMBER_OF_SOC_DATA_POINTS
+     * => if array is full i.e. ArrayLength == NUMBER_OF_SOC_DATA_POINTS, index of next value to be written is ArrayStartIndex.
+     */
+    uint16_t ArrayStartIndex;   // Index of first data entry in cyclic SOCDataPointsEEPROMArray. Index of next value to be written if ArrayLength == NUMBER_OF_SOC_DATA_POINTS.
+    uint16_t ArrayLength;       // Length of valid data in Array. Required if not fully written. Maximum is NUMBER_OF_SOC_DATA_POINTS
     bool currentlyWritingOnAnEvenPage; // If true SOC_EVEN_EEPROM_PAGE_INDICATION_BIT is set in SOCPercent.
     uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
     long AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0; // Serves as accumulator to enable a more smooth graph.
@@ -64,7 +68,7 @@ struct SOCDataPointMinMaxStruct {
     int8_t AverageAmpere;
 };
 
-void initializeAnaltics();
+void initializeAnalytics();
 void updateEEPROMTo_FF();
 void writeSOCData();
 void findFirstSOCDataPointIndex();

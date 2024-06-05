@@ -25,7 +25,7 @@ http://arduiniana.org.
 
 */
 
-#if defined(__AVR_ATmega168__) ||defined(__AVR_ATmega168P__) ||defined(__AVR_ATmega328P__)
+#if defined(__AVR_ATmega168__) ||defined(__AVR_ATmega168P__) ||defined(__AVR_ATmega328P__) ||defined(__AVR_ATmega644P__)
 //
 // Includes
 //

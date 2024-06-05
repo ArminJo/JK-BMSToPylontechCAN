@@ -55,9 +55,8 @@ volatile EEMEM uint8_t sFiller3_EEPROM;
 EEMEM SOCDataPointDeltaStruct SOCDataPointsEEPROMArray[NUMBER_OF_SOC_DATA_POINTS]; // 255 for 1 kB EEPROM
 SOCDataPointsInfoStruct SOCDataPointsInfo;
 
-void initializeAnaltics(){
-    SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere =
-            JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+void initializeAnalytics() {
+    SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
 }
 /*
  * Just clear the complete EEPROM
@@ -80,18 +79,21 @@ void readBatteryESRfromEEPROM() {
 }
 
 /*
+ * Assumes that cleared EEPROM is filled with 0xFF
  * Looks for first 0xFF entry or for a change in the SOC_EVEN_EEPROM_PAGE_INDICATION_BIT stored in SOC value.
  * Sets SOCDataPointsInfo.ArrayStartIndex and SOCDataPointsInfo.ArrayLength
  */
 void findFirstSOCDataPointIndex() {
 
     // Default values
-    uint8_t tSOCDataPointsArrayStartIndex = 0; // value if buffer was not fully written
+    uint16_t tSOCDataPointsArrayStartIndex = 0; // value if buffer was not fully written
     uint16_t tSOCDataPointsArrayLength = NUMBER_OF_SOC_DATA_POINTS; // value if SOC jump was found
 
     bool tStartPageIsEvenFlag;
-    for (uint_fast8_t i = 0; i < NUMBER_OF_SOC_DATA_POINTS - 1; ++i) {
+    for (uint16_t i = 0; i < NUMBER_OF_SOC_DATA_POINTS - 1; ++i) {
         uint8_t tSOCPercent = eeprom_read_byte(&SOCDataPointsEEPROMArray[i].SOCPercent);
+        DEBUG_PRINT(F("tSOCPercent=0x"));
+        DEBUG_PRINTLN(tSOCPercent, HEX);
         if (tSOCPercent == 0xFF) {
             // We found an empty entry, so EEPROM was not fully written => SOCDataPointsInfo.ArrayStartIndex is 0
             tSOCDataPointsArrayLength = i;
@@ -104,17 +106,37 @@ void findFirstSOCDataPointIndex() {
             SOCDataPointsInfo.currentlyWritingOnAnEvenPage = tPageIsEvenFlag;
         } else if (tStartPageIsEvenFlag ^ tPageIsEvenFlag) {
             // Here data page changes from even to odd or vice versa
+#if defined(ANDRES_644_BOARD)
+            JK_INFO_PRINT(F("Found even/odd toggling before index="));
+            JK_INFO_PRINTLN(i);
+#else
             DEBUG_PRINT(F("Found even/odd toggling before index="));
-            DEBUG_PRINT(i);
+            DEBUG_PRINTLN(i);
+#endif
             tSOCDataPointsArrayStartIndex = i;
             break;
         }
     }
-
-    DEBUG_PRINT(F(" now even is "));
-    DEBUG_PRINTLN(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
     SOCDataPointsInfo.ArrayStartIndex = tSOCDataPointsArrayStartIndex;
     SOCDataPointsInfo.ArrayLength = tSOCDataPointsArrayLength;
+}
+
+void setESRMilliohmAndPrintDeltas(uint16_t aVoltToEmptyAccumulatedDeltasESR, uint16_t aVoltToEmptyAccumulatedDeltasNewESR,
+        uint8_t aNewESRMilliohm) {
+#if !defined(NO_SERIAL_INFO_PRINT)
+    Serial.print(F("Delta of "));
+    Serial.print(sBatteryESRMilliohm);
+    Serial.print(F(" mOhm="));
+    Serial.print(aVoltToEmptyAccumulatedDeltasESR);
+    Serial.print(F(", Delta of new "));
+    Serial.print(aNewESRMilliohm);
+    Serial.print(F(" mOhm="));
+    Serial.println(aVoltToEmptyAccumulatedDeltasNewESR);
+#else
+    (void) aVoltToEmptyAccumulatedDeltasESR;
+    (void) aVoltToEmptyAccumulatedDeltasNewESR;
+#endif
+    sBatteryESRMilliohm = aNewESRMilliohm;
 }
 
 /*
@@ -160,9 +182,13 @@ void readAndPrintSOCData() {
 //    float tDeltaTimeMinutes = 0;
 
         /*
-         * Print more than 500 data points in order to shift unwanted entries out to left of plotter window
+         * Print 500 data points in order to shift unwanted entries out to left of plotter window
          */
-        Serial.println(F("Print SOC data with each entry printed twice"));
+        if (((499 / NUMBER_OF_SOC_DATA_POINTS) + 1) > 1) {
+            Serial.println(F("Print SOC data with each entry printed twice"));
+        } else {
+            Serial.println(F("Print SOC data"));
+        }
         // Using a bool variable requires 16 bytes more
         if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
             Serial.println(F("No battery ESR compensation for voltage"));
@@ -284,7 +310,10 @@ void readAndPrintSOCData() {
             }
 
             if (i < SOCDataPointsInfo.ArrayLength - 1) {
-                for (uint_fast8_t j = 0; j < 2; ++j) {
+                /*
+                 * ((499 / NUMBER_OF_SOC_DATA_POINTS) + 1) is 2 from 166 to 499 and 1 above
+                 */
+                for (uint_fast8_t j = 0; j < ((499 / NUMBER_OF_SOC_DATA_POINTS) + 1); ++j) {
                     Serial.print(tCurrentSOCDataPoint.SOCPercent);
                     Serial.print(' ');
                     Serial.print(tCurrentCapacityAmpereHour); // print capacity in Ah
@@ -294,9 +323,10 @@ void readAndPrintSOCData() {
                     Serial.print(tCurrentSOCDataPoint.AverageAmpere); // print ampere
                     Serial.println(F(" 0 0 0 0 0 0")); // to clear unwanted entries from former prints
                 }
+
             } else {
                 // print last entry with caption
-                for (uint_fast8_t j = 0; j < 2; ++j) {
+                for (uint_fast8_t j = 0; j < ((499 / NUMBER_OF_SOC_DATA_POINTS) + 1); ++j) {
                     Serial.print(F("SOC="));
                     Serial.print(tMinimumSOCData.SOCPercent);
                     Serial.print(F("%->"));
@@ -352,10 +382,22 @@ void readAndPrintSOCData() {
                     Serial.print(swap(sJKFAllReplyPointer->CellUndervoltageProtectionMillivolt) / 1000.0, 2);
                     Serial.println(F("V:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0"));
                 }
-                // If not enough data points, padding to 500 data points to guarantee, that old data is shifted out
-                for (; i < 249; ++i) {
-                    Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
-                    Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
+
+                /*
+                 * If not enough data points, padding to 500 data points to guarantee,
+                 * that old data is shifted out of the 500 point Arduino Serial Plotter window
+                 */
+                if (((499 / NUMBER_OF_SOC_DATA_POINTS) + 1) > 1) {
+                    for (; i < 249; ++i) {
+                        // For 1 k EEPROM
+                        Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
+                        Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
+                    }
+                } else {
+                    for (; i < 499; ++i) {
+                        // For 2 k EEPROM
+                        Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
+                    }
                 }
             }
 
@@ -363,7 +405,7 @@ void readAndPrintSOCData() {
             tSOCDataPointsArrayIndex = (tSOCDataPointsArrayIndex + 1) % NUMBER_OF_SOC_DATA_POINTS;
         }
 
-        if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
+        if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW || SOCDataPointsInfo.ArrayLength < 100) {
             break; // no automatic ESR computation here
         }
         /*
@@ -371,21 +413,19 @@ void readAndPrintSOCData() {
          * then run loop again with the ESR of the smaller value.
          */
         if (tVoltToEmptyAccumulatedDeltasESR - 3 >= tVoltToEmptyAccumulatedDeltasESRPlus1) {
-            JK_INFO_PRINT(F("Delta of +1="));
-            JK_INFO_PRINTLN(tVoltToEmptyAccumulatedDeltasESRPlus1);
-            sBatteryESRMilliohm++;
+            setESRMilliohmAndPrintDeltas(tVoltToEmptyAccumulatedDeltasESR, tVoltToEmptyAccumulatedDeltasESRPlus1,
+                    sBatteryESRMilliohm + 1);
         } else if (tVoltToEmptyAccumulatedDeltasESR - 3 >= tVoltToEmptyAccumulatedDeltasESRMinus1) {
-            JK_INFO_PRINT(F("Delta of -1="));
-            JK_INFO_PRINTLN(tVoltToEmptyAccumulatedDeltasESRPlus1);
-            sBatteryESRMilliohm--;
+            setESRMilliohmAndPrintDeltas(tVoltToEmptyAccumulatedDeltasESR, tVoltToEmptyAccumulatedDeltasESRMinus1,
+                    sBatteryESRMilliohm - 1);
         } else {
             break; // Current BatteryESR deltas is smaller than BatteryESR + 1 and BatteryESR - 1 deltas.
         }
         // This is NOT printed for last graph :-)
         JK_INFO_PRINT(F("Set new ESR to "));
         JK_INFO_PRINTLN(sBatteryESRMilliohm);
-    };
-    eeprom_update_byte(&sBatteryESRMilliohm_EEPROM, sBatteryESRMilliohm); // write final value to eeprom
+    }
+    eeprom_update_byte(&sBatteryESRMilliohm_EEPROM, sBatteryESRMilliohm); // Update final ESR value to eeprom
 }
 
 /*
@@ -429,8 +469,15 @@ void writeSOCData() {
                 JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
     }
 
-    uint8_t tSOCDataPointsArrayLastWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength - 1)
-            % NUMBER_OF_SOC_DATA_POINTS;
+    uint16_t tSOCDataPointsArrayNextWriteIndex = (SOCDataPointsInfo.ArrayStartIndex
+            + SOCDataPointsInfo.ArrayLength) % NUMBER_OF_SOC_DATA_POINTS;
+    uint16_t tSOCDataPointsArrayLastWriteIndex;
+    if (tSOCDataPointsArrayNextWriteIndex == 0) {
+        tSOCDataPointsArrayLastWriteIndex = NUMBER_OF_SOC_DATA_POINTS - 1;
+    } else {
+        tSOCDataPointsArrayLastWriteIndex = tSOCDataPointsArrayNextWriteIndex - 1;
+    }
+
     auto tLastWrittenSOCPercent = eeprom_read_byte(&SOCDataPointsEEPROMArray[tSOCDataPointsArrayLastWriteIndex].SOCPercent);
     bool tLastWritingOnAnEvenPage = tLastWrittenSOCPercent & SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
     tLastWrittenSOCPercent &= ~SOC_EVEN_EEPROM_PAGE_INDICATION_BIT;
@@ -440,14 +487,19 @@ void writeSOCData() {
      * e.g. capacity delta is already reached from 1% to 1.9% SOC
      */
     bool tExtraCapacityChangedMoreThan1Percent = (tLastWrittenSOCPercent == 100 || tLastWrittenSOCPercent == 0
-            || (tLastWrittenSOCPercent == 1 && tCurrentSOCPercent != 1)) && abs(
-            SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere
-            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere();
+            || (tLastWrittenSOCPercent == 1 && tCurrentSOCPercent != 1))
+            && abs(
+                    SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere
+                            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere)
+                    > getOnePercentCapacityAsAccumulator10Milliampere();
 
     if (tExtraCapacityChangedMoreThan1Percent) {
         JK_INFO_PRINTLN(F("Write data for extra capacity"));
     }
 
+    /*
+     * Write condition
+     */
     if ((tExtraCapacityChangedMoreThan1Percent) || tCurrentSOCPercent > tLastWrittenSOCPercent
             || tCurrentSOCPercent < (tLastWrittenSOCPercent - 1)) {
 
@@ -467,7 +519,7 @@ void writeSOCData() {
             // Array is full, overwrite old start entry
             SOCDataPointsInfo.ArrayStartIndex++;
             if (SOCDataPointsInfo.ArrayStartIndex == NUMBER_OF_SOC_DATA_POINTS) {
-                SOCDataPointsInfo.ArrayStartIndex = 0; // Wrap around (required if NUMBER_OF_SOC_DATA_POINTS != 0x100)
+                SOCDataPointsInfo.ArrayStartIndex = 0; // Wrap around
             }
         } else {
             // Array is not full, increase length
@@ -496,10 +548,12 @@ void writeSOCData() {
          * Adjust accumulator with the value written to avoid rounding errors.
          * We can have a residual of up to 18000 (100 mAh) after write
          */
-        int tDelta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere / (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10); // / 18000
+        int tDelta100MilliampereHour = SOCDataPointsInfo.DeltaAccumulator10Milliampere
+                / (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10); // / 18000
         tDelta100MilliampereHour = constrain(tDelta100MilliampereHour, SCHAR_MIN, SCHAR_MAX); // clip to -128 to 128
         tSOCDataPoint.Delta100MilliampereHour = tDelta100MilliampereHour;
-        SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour * (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10);
+        SOCDataPointsInfo.DeltaAccumulator10Milliampere -= tDelta100MilliampereHour
+                * (CAPACITY_10_mA_ACCUMULATOR_1_AMPERE_HOUR / 10);
 
         // compute average volt to empty
         long tNumberOfSamplesTimes5 = SOCDataPointsInfo.NumberOfSamples * 5L;
@@ -515,7 +569,6 @@ void writeSOCData() {
         /*
          * Write to eeprom
          */
-        uint8_t tSOCDataPointsArrayNextWriteIndex = (tSOCDataPointsArrayLastWriteIndex + 1) % NUMBER_OF_SOC_DATA_POINTS;
         eeprom_write_block(&tSOCDataPoint, &SOCDataPointsEEPROMArray[tSOCDataPointsArrayNextWriteIndex], sizeof(tSOCDataPoint));
 
 #if !defined(STANDALONE_TEST)

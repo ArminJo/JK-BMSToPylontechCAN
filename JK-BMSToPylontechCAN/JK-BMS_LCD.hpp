@@ -499,9 +499,9 @@ void printCellStatisticsOnLCD() {
     for (uint8_t i = 0; i < tNumberOfCellInfoEntries; ++i) {
         uint8_t tPercent;
         if (tDisplayCellMinimumStatistics) {
-            tPercent = CellMinimumPercentageArray[i];
+            tPercent = CellStatistics.CellMinimumPercentageArray[i];
         } else {
-            tPercent = CellMaximumPercentageArray[i];
+            tPercent = CellStatistics.CellMaximumPercentageArray[i];
         }
         if (tPercent < 10) {
             myLCD.print(' ');
@@ -548,10 +548,14 @@ void printCellStatisticsOnLCD() {
 void printCapacityInfoOnLCD() {
     myLCD.setCursor(0, 0);
     myLCD.print(F("Print plotter graph"));
-    myLCD.setCursor(0, 2);
-    myLCD.print(F("You can clear EEPROM"));
-    myLCD.setCursor(0, 3);
-    myLCD.print(F("by long press now"));
+    if (SOCDataPointsInfo.ArrayLength > 1) {
+        myLCD.setCursor(0, 1);
+        myLCD.print(F("You can clear EEPROM"));
+        myLCD.setCursor(0, 2);
+        myLCD.print(F("by long press"));
+        myLCD.setCursor(0, 3);
+        myLCD.print(F("instead of short one"));
+    }
 }
 #endif
 
@@ -1051,16 +1055,18 @@ void checkButtonPressForLCD() {
                     // EEPROM data not already cleared here
                     myLCD.setCursor(0, 0);
                     myLCD.print(F("Clear EEPROM data in"));
-                    myLCD.setCursor(0, 1);
-                    myLCD.print(F("2 seconds           "));
+                    LCDClearLine(1);
+                    myLCD.print(F("2 seconds"));
+                    LCDClearLine(2);
+                    LCDClearLine(3);
                     delay(1000);
                     if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
                         myLCD.setCursor(0, 1);
                         myLCD.print('1');
                         delay(1000); // To wait for eventual button release
                         if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
-                            myLCD.setCursor(0, 1);
-                            myLCD.print(F("now      ")); // is visible for the time EEPROM needs for erasing (+200 ms)
+                            LCDClearLine(1);
+                            myLCD.print(F("now")); // is visible for the time EEPROM needs for erasing (+200 ms)
                             delay(200); // To wait for eventual button release
                         }
                     }
@@ -1242,6 +1248,7 @@ void testLCDPages() {
 
 void testBigNumbers() {
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+    myLCD.clear();
 
     for (int j = 0; j < 3; ++j) {
         // Test with 100 %  and 42 %

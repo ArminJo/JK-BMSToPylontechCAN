@@ -31,6 +31,7 @@ jobs:
           - arduino:avr:uno|LOCAL_DEBUG
           - arduino:avr:uno|DISPLAY_ALWAYS_ON
           - arduino:avr:uno|USE_NO_LCD
+          - MightyCore:avr:644
 
         include:
           - arduino-boards-fqbn: arduino:avr:uno|STANDALONE_TEST
@@ -49,6 +50,11 @@ jobs:
             build-properties:
               All: -DUSE_NO_LCD
 
+          - arduino-boards-fqbn: MightyCore:avr:644
+            platform-url: https://mcudude.github.io/MightyCore/package_MCUdude_MightyCore_index.json
+            build-properties:
+              All: -DANDRES_644_BOARD
+
     steps:
       - name: Checkout
         uses: actions/checkout@master
@@ -57,4 +63,6 @@ jobs:
         uses: ArminJo/arduino-test-compile@master
         with:
 #          required-libraries: EasyButtonAtInt01,SoftI2CMaster
+          arduino-board-fqbn: ${{ matrix.arduino-boards-fqbn }}
+          platform-url: ${{ matrix.platform-url }}
           build-properties: ${{ toJson(matrix.build-properties) }}
