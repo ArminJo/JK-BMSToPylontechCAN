@@ -53,10 +53,57 @@ volatile EEMEM uint8_t sFiller3_EEPROM;
  * Cyclic buffer start is SOCDataPointsInfo.ArrayStartIndex and length (required if not fully written) SOCDataPointsInfo.ArrayLength
  */
 EEMEM SOCDataPointDeltaStruct SOCDataPointsEEPROMArray[NUMBER_OF_SOC_DATA_POINTS]; // 255 for 1 kB EEPROM
-SOCDataPointsInfoStruct SOCDataPointsInfo;
+SOCDataPointsInfoStruct SOCDataPointsInfo
+#ifdef KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET
+__attribute__((section(".noinit")))
+#endif
+;
 
+/*
+ * Compute clipped 16 bit sum of 7 16 bit values from SOCDataPointsInfo.NumberOfSamples up to lastWrittenBatteryCapacityAsAccumulator10Milliampere
+ */
+uint16_t computeSOCDataPointsInfoChecksum() {
+    uint16_t *tPointer = (uint16_t*) &SOCDataPointsInfo.NumberOfSamples;
+    uint16_t tChecksum = 0;
+    do {
+        tChecksum += *tPointer++;
+    } while (tPointer < &SOCDataPointsInfo.checksumForReboot);
+    DEBUG_PRINT(F("CS="));
+    DEBUG_PRINTLN(SOCDataPointsInfo.checksumForReboot);
+    return tChecksum;
+}
+
+/*
+ * Is called only once in loop after receiving of first response
+ */
 void initializeAnalytics() {
-    SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+#ifdef KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET
+    /*
+     * If computed checksum is equal actual checksum, we assume that we had an reset
+     * e.g. for displaying the Arduino Plotter graph and can reuse the contents of the accumulators,
+     * especially NumberOfSamples and DeltaAccumulator10Milliampere
+     */
+    auto tComputedChecksum= computeSOCDataPointsInfoChecksum();
+    if (tComputedChecksum != SOCDataPointsInfo.checksumForReboot) {
+        // Clear only members from NumberOfSamples up to DeltaAccumulator10Milliampere
+        memset(&SOCDataPointsInfo.NumberOfSamples, 0, 14);
+        // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
+        SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
+                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
+        JK_INFO_PRINT(tComputedChecksum);
+        JK_INFO_PRINT(F(" != "));
+        JK_INFO_PRINT(SOCDataPointsInfo.checksumForReboot);
+        JK_INFO_PRINT(F(" -> clear"));
+    } else {
+        JK_INFO_PRINT(F("Reboot detected: keep"));
+    }
+    JK_INFO_PRINTLN(F(" SOCDataPointsInfo"));
+
+#else
+    // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
+    SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
+            JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
+#endif
 }
 /*
  * Just clear the complete EEPROM
@@ -106,7 +153,7 @@ void findFirstSOCDataPointIndex() {
             SOCDataPointsInfo.currentlyWritingOnAnEvenPage = tPageIsEvenFlag;
         } else if (tStartPageIsEvenFlag ^ tPageIsEvenFlag) {
             // Here data page changes from even to odd or vice versa
-#if defined(ANDRES_644_BOARD)
+#if defined(USE_LAYOUT_FOR_644_BOARD)
             JK_INFO_PRINT(F("Found even/odd toggling before index="));
             JK_INFO_PRINTLN(i);
 #else
@@ -123,16 +170,16 @@ void findFirstSOCDataPointIndex() {
 
 void setESRMilliohmAndPrintDeltas(uint16_t aVoltToEmptyAccumulatedDeltasESR, uint16_t aVoltToEmptyAccumulatedDeltasNewESR,
         uint8_t aNewESRMilliohm) {
-#if !defined(NO_SERIAL_INFO_PRINT)
-    Serial.print(F("Delta of "));
-    Serial.print(sBatteryESRMilliohm);
-    Serial.print(F(" mOhm="));
-    Serial.print(aVoltToEmptyAccumulatedDeltasESR);
-    Serial.print(F(", Delta of new "));
-    Serial.print(aNewESRMilliohm);
-    Serial.print(F(" mOhm="));
-    Serial.println(aVoltToEmptyAccumulatedDeltasNewESR);
-#else
+
+    JK_INFO_PRINT(F("Delta of "));
+    JK_INFO_PRINT(sBatteryESRMilliohm);
+    JK_INFO_PRINT(F(" mOhm="));
+    JK_INFO_PRINT(aVoltToEmptyAccumulatedDeltasESR);
+    JK_INFO_PRINT(F(", Delta of new "));
+    JK_INFO_PRINT(aNewESRMilliohm);
+    JK_INFO_PRINT(F(" mOhm="));
+    JK_INFO_PRINTLN(aVoltToEmptyAccumulatedDeltasNewESR);
+#if defined(NO_SERIAL_INFO_PRINT)
     (void) aVoltToEmptyAccumulatedDeltasESR;
     (void) aVoltToEmptyAccumulatedDeltasNewESR;
 #endif
@@ -464,13 +511,13 @@ void writeSOCData() {
      */
     if (lastJKReply.SOCPercent == 0 && tCurrentSOCPercent == 1) {
 //        Serial.println(F("SOC 0 -> 1 -> reset residual capacity"));
-        SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0; // reset residual capacity
-        SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere =
-                JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+        SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0; // Reset residual capacity
+        SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
+                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere; // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
     }
 
-    uint16_t tSOCDataPointsArrayNextWriteIndex = (SOCDataPointsInfo.ArrayStartIndex
-            + SOCDataPointsInfo.ArrayLength) % NUMBER_OF_SOC_DATA_POINTS;
+    uint16_t tSOCDataPointsArrayNextWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength)
+            % NUMBER_OF_SOC_DATA_POINTS;
     uint16_t tSOCDataPointsArrayLastWriteIndex;
     if (tSOCDataPointsArrayNextWriteIndex == 0) {
         tSOCDataPointsArrayLastWriteIndex = NUMBER_OF_SOC_DATA_POINTS - 1;
@@ -489,8 +536,8 @@ void writeSOCData() {
     bool tExtraCapacityChangedMoreThan1Percent = (tLastWrittenSOCPercent == 100 || tLastWrittenSOCPercent == 0
             || (tLastWrittenSOCPercent == 1 && tCurrentSOCPercent != 1))
             && abs(
-                    SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere
-                            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere)
+                    SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere
+                            - JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere)
                     > getOnePercentCapacityAsAccumulator10Milliampere();
 
     if (tExtraCapacityChangedMoreThan1Percent) {
@@ -604,14 +651,19 @@ void writeSOCData() {
         SOCDataPointsInfo.AverageAccumulator10Milliampere = 0;
         SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
-        SOCDataPointsInfo.lastWrittenBatteryCapacityAccumulator10Milliampere =
-                JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
-#if !defined(DISABLE_MONITORING)
+        SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
+                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
+#if defined(ENABLE_MONITORING)
         // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
         printCSVLine('#');
         Serial.println();
 #endif
     }
+
+#ifdef KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET
+        // Update checksum
+        SOCDataPointsInfo.checksumForReboot = computeSOCDataPointsInfoChecksum();
+#endif
 }
 
 #include "LocalDebugLevelEnd.h"

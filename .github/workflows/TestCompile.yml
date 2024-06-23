@@ -53,7 +53,7 @@ jobs:
           - arduino-boards-fqbn: MightyCore:avr:644
             platform-url: https://mcudude.github.io/MightyCore/package_MCUdude_MightyCore_index.json
             build-properties:
-              All: -DANDRES_644_BOARD
+              All: -DUSE_LAYOUT_FOR_644_BOARD
 
     steps:
       - name: Checkout

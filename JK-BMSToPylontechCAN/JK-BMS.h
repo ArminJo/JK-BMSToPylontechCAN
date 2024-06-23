@@ -99,7 +99,7 @@ void computeUpTimeString();
 void printJKStaticInfo();
 void printJKDynamicInfo();
 void detectAndPrintAlarmInfo();
-#if !defined(DISABLE_MONITORING)
+#if defined(ENABLE_MONITORING)
 void printCSVLine(char aLeadingChar = '\0');
 #endif
 
@@ -190,7 +190,7 @@ struct JKComputedDataStruct {
     int16_t Battery10MilliAmpere;       // Charging is positive discharging is negative
     float BatteryLoadCurrentFloat;      // Ampere
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
-    int32_t BatteryCapacityAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds
+    int32_t BatteryCapacityAsAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds. Pre-computed capacity to compare with accumulator value.
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
 extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display

@@ -97,15 +97,10 @@
  *   --------------- GND
  */
 
-/*
- * Ideas:
- * Balancing time per day / week / month etc.
- */
 #include <Arduino.h>
 
-#define VERSION_EXAMPLE "3.2.0"
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
-#define MILLIS_IN_ONE_SECOND 1000L
+#define VERSION_EXAMPLE "3.2.0"
 
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
@@ -117,54 +112,73 @@
  * Macros for CAN data modifications
  */
 //#define CAN_DATA_MODIFICATION         // Currently enables the function to reduce max current at high SOC level
-//#define USE_CCCV_MODIFY_FUNCTION      // Changes modification to CCCV method my Ngoc: https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/31
+//#define USE_CCCV_MODIFY_FUNCTION      // Changes modification to CCCV method by Ngoc: https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/31
 //#define USE_OWN_MODIFY_FUNCTION       // Use (currently empty) function which must be filled in at bottom of Pylontech_CAN.hpp
 /*
  * Values for standard CAN data modification
  */
 //#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
 //#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
-#if !defined(DO_NOT_SHOW_SHORT_CELL_VOLTAGES)
-#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
-#endif
-
 //#define DEBUG                 // This enables debug output for all files - only for development
 //#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 #if defined(STANDALONE_TEST)
+//#define LCD_PAGES_TEST // Additional automatic tests
+#  if defined(LCD_PAGES_TEST)
+//#define BIG_NUMBER_TEST // Additional automatic tests, especially for rendering of JK_BMS_PAGE_BIG_INFO
+#  endif
 //#define ENABLE_MONITORING
 #  if defined(USE_NO_LCD)
 #undef USE_NO_LCD // LCD is activated for standalone test
 #  endif
 #endif
 
+#if defined(__AVR_ATmega644P__)
+#define USE_LAYOUT_FOR_644_BOARD
+#endif
+
 /*
- * Options to reduce program size
+ * Options to reduce program size / add optional features
  */
-//#define ENABLE_MONITORING // Requires additional 846 bytes program space
-#if defined(ENABLE_MONITORING)
-#  if !defined(MONOTORING_PERIOD_SECONDS)
+#if FLASHEND > 0x7FFF // for more than 32k
+#define ENABLE_MONITORING // Requires additional 858 bytes program space
+#define SERIAL_INFO_PRINT // Requires additional 1684 bytes program space
+#endif
+#define KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET  // Requires additional 80 bytes program space
+
+//#define DO_NOT_SHOW_SHORT_CELL_VOLTAGES // Saves 470 bytes program space
+#if !defined(DO_NOT_SHOW_SHORT_CELL_VOLTAGES)
+#define SHOW_SHORT_CELL_VOLTAGES // Print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Enables display of up to 20 voltages or additional information.
+#endif
+
+#if defined(ENABLE_MONITORING) && !defined(MONOTORING_PERIOD_SECONDS)
 //#define MONOTORING_PERIOD_FAST    // If active, then print CSV line every 2 seconds, else every minute
 #define MONOTORING_PERIOD_SLOW    // If active, then print CSV line every hour, and CSV line every 10 minutes
-#  endif
-#elif FLASHEND <= 0x7FFF // for 32k or less
-#define DISABLE_MONITORING      // Disables writing cell and current values CSV data to serial output. Saves 846 bytes program space. - currently activated to save program space.
 #endif
 
 #if !defined(SERIAL_INFO_PRINT) && !defined(STANDALONE_TEST) && FLASHEND <= 0x7FFF
-#define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space. - currently activated to save program space.
+#define NO_SERIAL_INFO_PRINT    // Disables writing some info to serial output. Saves 974 bytes program space.
 #endif
+
+#if defined(NO_SERIAL_INFO_PRINT)
+#define JK_INFO_PRINT(...)      void();
+#define JK_INFO_PRINTLN(...)    void();
+#else
+#define JK_INFO_PRINT(...)      Serial.print(__VA_ARGS__);
+#define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
+#endif
+
+//#define NO_CAPACITY_35F_EXTENSIONS // Disables generating of frame 0x35F for total capacity. This additional frame is no problem for Deye inverters. Saves 56 bytes program space.
+//#define NO_CAPACITY_379_EXTENSIONS // Disables generating of frame 0x379 for total capacity. This additional frame is no problem for Deye inverters. Saves 24 bytes program space.
+//#define NO_BYD_LIMITS_373_EXTENSIONS // Disables generating of frame 0x373 for cell limits as sent by BYD battery. See https://github.com/dfch/BydCanProtocol/tree/main. This additional frame is no problem for Deye inverters. Saves 200 bytes program space.
+//#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 1628 bytes program space.
+//#define NO_ANALYTICS          // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3856 bytes program space.
+//#define USE_NO_LCD            // Disables the code for the LCD display. Saves 25% program space on a Nano.
+
+//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
 
 #if !defined(ENABLE_LIFEPO4_PLAUSI_WARNING)
 #define SUPPRESS_LIFEPO4_PLAUSI_WARNING     // Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V.
 #endif
-//#define NO_CAPACITY_35F_EXTENSIONS // Disables generating of frame 0x35F for total capacity. This additional frame is no problem for Deye inverters.
-//#define NO_CAPACITY_379_EXTENSIONS // Disables generating of frame 0x379 for total capacity. This additional frame is no problem for Deye inverters.
-//#define NO_BYD_LIMITS_373_EXTENSIONS // Disables generating of frame 0x373 for cell limits as sent by BYD battery. See https://github.com/dfch/BydCanProtocol/tree/main. This additional frame is no problem for Deye inverters.
-//#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 1628 bytes program space.
-//#define NO_ANALYTICS          // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space.
-//#define USE_NO_LCD            // Disables the code for the LCD display. Saves 25% program space on a Nano.
-
-//#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
 
 #if !defined(USE_NO_LCD)
 #define USE_SERIAL_2004_LCD // Parallel or 1604 LCD not yet supported
@@ -188,8 +202,8 @@
 #  endif
 #endif
 
-// sStringBuffer is defined in JK-BMS_LCD.hpp if DISABLE_MONITORING and NO_ANALYTICS are defined
-#if !defined(DISABLE_MONITORING)
+// sStringBuffer is defined in JK-BMS_LCD.hpp if not ENABLE_MONITORING and NO_ANALYTICS are defined
+#if defined(ENABLE_MONITORING)
 char sStringBuffer[100];                 // For cvs lines, "Store computed capacity" line and LCD rows
 #elif !defined(NO_ANALYTICS)
 char sStringBuffer[40];                 // for "Store computed capacity" line, printComputedCapacity() and LCD rows
@@ -198,13 +212,12 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 /*
  * Pin layout, may be adapted to your requirements
  */
-//#define ANDRES_644_BOARD
 #define BUZZER_PIN                             A2 // To signal errors
 #define PAGE_SWITCH_DEBUG_BUTTON_PIN_FOR_INFO   2 // Button at INT0 / D2 for switching LCD pages - definition is not used in program, only for documentation.
 // The standard RX of the Arduino is used for the JK_BMS connection.
 #define JK_BMS_RX_PIN_FOR_INFO                  0 // We use the Serial RX pin - definition is not used in program, only for documentation.
 #if !defined(JK_BMS_TX_PIN)                       // Allow override by global symbol
-#  if defined(ANDRES_644_BOARD)
+#  if defined(USE_LAYOUT_FOR_644_BOARD)
 #define JK_BMS_TX_PIN                          12
 #  else
 #define JK_BMS_TX_PIN                           4
@@ -219,7 +232,7 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #else
 // BMS and CAN communication status LEDs
 #  if !defined(BMS_COMMUNICATION_STATUS_LED_PIN)
-#    if defined(ANDRES_644_BOARD)
+#    if defined(USE_LAYOUT_FOR_644_BOARD)
 #define BMS_COMMUNICATION_STATUS_LED_PIN        14
 #define CAN_COMMUNICATION_STATUS_LED_PIN        15
 #    else
@@ -239,7 +252,7 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 
 //#define TIMING_TEST
 #if defined(TIMING_TEST)
-#  if defined(ANDRES_644_BOARD)
+#  if defined(USE_LAYOUT_FOR_644_BOARD)
 #define TIMING_TEST_PIN                        13
 #  else
 #define TIMING_TEST_PIN                        10 // is SS pin for SPI and must be used as OUTPUT (set by SPI.init())!
@@ -252,7 +265,7 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
  *   SPI: MOSI - 11, MISO - 12, SCK - 13. CS cannot be replaced by constant ground.
  *   I2C: SDA - A4, SCL - A5.
  */
-#if defined(ANDRES_644_BOARD)
+#if defined(USE_LAYOUT_FOR_644_BOARD)
 #define SPI_CS_PIN                              4 // !SS Must be specified before #include "MCP2515_TX.hpp"
 #define SPI_MOSI_PIN_FOR_INFO                   5 // Definition is not used in program, only for documentation.
 #define SPI_MISO_PIN_FOR_INFO                   6 // Definition is not used in program, only for documentation.
@@ -265,7 +278,7 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #define SPI_MISO_PIN_FOR_INFO                  12 // Definition is not used in program, only for documentation.
 #define SPI_SCK_PIN_FOR_INFO                   13 // Definition is not used in program, only for documentation.
 #  endif
-#endif // defined(ANDRES_644_BOARD)
+#endif // defined(USE_LAYOUT_FOR_644_BOARD)
 
 /*
  * Program timing, may be adapted to your requirements
@@ -302,6 +315,8 @@ uint8_t sBeepTimeoutCounter = 0;
 #error NO_BEEP_ON_ERROR and ONE_BEEP_ON_ERROR are both defined, which makes no sense!
 #endif
 
+#define MILLIS_IN_ONE_SECOND 1000L
+
 /*
  * Page button stuff
  *
@@ -325,14 +340,6 @@ void checkButtonPress();
 bool readJK_BMSStatusFrame();
 void processJK_BMSStatusFrame();
 void handleFrameReceiveTimeout();
-
-#if defined(NO_SERIAL_INFO_PRINT)
-#define JK_INFO_PRINT(...)      void();
-#define JK_INFO_PRINTLN(...)    void();
-#else
-#define JK_INFO_PRINT(...)      Serial.print(__VA_ARGS__);
-#define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
-#endif
 
 #include "HexDump.hpp"
 #include "digitalWriteFast.h"
@@ -367,13 +374,13 @@ bool sTimeoutJustdetected = false;          // Is set to true at first detection
  * CAN stuff
  */
 #if !defined(NO_CAPACITY_35F_EXTENSIONS) // SMA Sunny Island inverters
-//#define CAPACITY_35F_EXTENSIONS // Add frame 0x35F for total capacity for SMA Sunny Island inverters, which is no problem for Deye inverters.
+#define CAPACITY_35F_EXTENSIONS // Add frame 0x35F for total capacity for SMA Sunny Island inverters, which is no problem for Deye inverters.
 #endif
 #if !defined(NO_CAPACITY_379_EXTENSIONS) // Luxpower SNA inverters
-//#define CAPACITY_379_EXTENSIONS // Add frame 0x379 for total capacity for Luxpower SNA inverters, which is no problem for Deye inverters.
+#define CAPACITY_379_EXTENSIONS // Add frame 0x379 for total capacity for Luxpower SNA inverters, which is no problem for Deye inverters.
 #endif
 #if !defined(NO_BYD_LIMITS_373_EXTENSIONS) // BYD
-//#define BYD_LIMITS_373_EXTENSIONS // Add frame 0x373 for cell limits as sent by BYD battery, which is no problem for Deye inverters.
+#define BYD_LIMITS_373_EXTENSIONS // Add frame 0x373 for cell limits as sent by BYD battery, which is no problem for Deye inverters.
 #endif
 #include "Pylontech_CAN.hpp" // Must be before #include "MCP2515_TX.hpp"
 #define CAN_BAUDRATE    500000  // 500 kB
@@ -409,7 +416,7 @@ bool sBMSFrameProcessingComplete = false; // True if one status frame was receiv
 #if TIMEOUT_MILLIS_FOR_FRAME_REPLY > MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
 #error "TIMEOUT_MILLIS_FOR_FRAME_REPLY must be smaller than MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS to detect timeouts"
 #endif
-bool sStaticInfoWasSent = false; // Flag to send static info only once after reset.
+bool sInitialActionsPerformed = false; // Flag to send static info only once after reset.
 
 void processReceivedData();
 void printReceivedData();
@@ -423,10 +430,6 @@ void handleOvervoltage();
 #include "LocalDebugLevelStart.h" // no include "LocalDebugLevelEnd.h" required :-)
 
 #if defined(STANDALONE_TEST)
-//#define LCD_PAGES_TEST
-#  if defined(LCD_PAGES_TEST)
-//#define BIG_NUMBER_TEST
-#  endif
 const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x01,
 /*Length of Cell voltages*/
 0x79, 0x30,
@@ -492,14 +495,14 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     // Just to know which program is running on my Arduino
     Serial.println(F("START " __FILE__ "\r\nVersion " VERSION_EXAMPLE " from " __DATE__));
 
-#if defined(ANDRES_644_BOARD)
+#if defined(USE_LAYOUT_FOR_644_BOARD)
     JK_INFO_PRINTLN(F("Settings are for Andres 644 board"));
 #endif
 
-#if defined(DISABLE_MONITORING)
-    JK_INFO_PRINTLN(F("Monitoring disabled"));
-#else
+#if defined(ENABLE_MONITORING)
     JK_INFO_PRINTLN(F("Monitoring enabled"));
+#else
+    JK_INFO_PRINTLN(F("Monitoring disabled"));
 #endif
 
 #if defined(NO_CELL_STATISTICS)
@@ -517,7 +520,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_INFO_PRINTLN(sBatteryESRMilliohm);
 
     findFirstSOCDataPointIndex();
-#if defined(ANDRES_644_BOARD)
+#if defined(USE_LAYOUT_FOR_644_BOARD)
     JK_INFO_PRINT(F("EEPROM SOC data start index="));
     JK_INFO_PRINT(SOCDataPointsInfo.ArrayStartIndex);
     JK_INFO_PRINT(F(" length="));
@@ -738,6 +741,7 @@ void loop() {
     sResponseFrameBytesAreExpected = false; // No response!
     sBMSFrameProcessingComplete = true; // for LCD timeout etc.
     processReceivedData(); // for statistics
+    writeSOCData(); // for analytics tests
     printBMSDataOnLCD(); // for switching between MAX and MIN display
     delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS); // do it simple :-)
 
@@ -912,6 +916,21 @@ void processJK_BMSStatusFrame() {
         JK_INFO_PRINTLN(F("Successfully receiving first BMS status frame after BMS communication timeout"));
     }
     processReceivedData();
+
+    if (!sInitialActionsPerformed) {
+        /*
+         * Do initialization once here
+         */
+        sInitialActionsPerformed = true;
+        initializeComputedData();
+        Serial.println();
+        printJKStaticInfo();
+#if !defined(NO_ANALYTICS)
+        initializeAnalytics();
+        JK_INFO_PRINTLN();
+#endif
+    }
+
     printReceivedData();
 #if !defined(NO_ANALYTICS)
     writeSOCData();
@@ -1013,16 +1032,10 @@ void processReceivedData() {
     sCANDataIsInitialized = true; // One time flag
 }
 
+/*
+ * Called exclusively by processJK_BMSStatusFrame()
+ */
 void printReceivedData() {
-    if (!sStaticInfoWasSent) {
-        // Send static info only once after reset
-        sStaticInfoWasSent = true;
-        initializeComputedData();
-#if !defined(NO_ANALYTICS)
-        initializeAnalytics();
-#endif
-        printJKStaticInfo();
-    }
 #if defined(USE_SERIAL_2004_LCD)
     if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
         // Do not interfere with plotter output
@@ -1070,6 +1083,8 @@ void doStandaloneTest() {
     if (sSerialLCDAvailable) {
         testLCDPages();
         delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
+        testPrintFloatValueRightAlignedOnLCD();
+        delay(2*LCD_MESSAGE_PERSIST_TIME_MILLIS);
 #    if defined(BIG_NUMBER_TEST)
         testBigNumbers();
 #    endif

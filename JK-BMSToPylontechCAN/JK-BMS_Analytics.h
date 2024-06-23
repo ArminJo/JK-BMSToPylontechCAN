@@ -50,14 +50,17 @@ struct SOCDataPointsInfoStruct {
      * Index of next value to be written is ArrayStartIndex + ArrayLength % NUMBER_OF_SOC_DATA_POINTS
      * => if array is full i.e. ArrayLength == NUMBER_OF_SOC_DATA_POINTS, index of next value to be written is ArrayStartIndex.
      */
-    uint16_t ArrayStartIndex;   // Index of first data entry in cyclic SOCDataPointsEEPROMArray. Index of next value to be written if ArrayLength == NUMBER_OF_SOC_DATA_POINTS.
-    uint16_t ArrayLength;       // Length of valid data in Array. Required if not fully written. Maximum is NUMBER_OF_SOC_DATA_POINTS
+    uint16_t ArrayStartIndex; // Index of first data entry in cyclic SOCDataPointsEEPROMArray. Index of next value to be written if ArrayLength == NUMBER_OF_SOC_DATA_POINTS.
+    uint16_t ArrayLength;      // Length of valid data in Array. Required if not fully written. Maximum is NUMBER_OF_SOC_DATA_POINTS
     bool currentlyWritingOnAnEvenPage; // If true SOC_EVEN_EEPROM_PAGE_INDICATION_BIT is set in SOCPercent.
-    uint16_t NumberOfSamples = 0; // For one sample each 2 seconds, we can store up to 36.4 hours here.
-    long AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0; // Serves as accumulator to enable a more smooth graph.
-    long AverageAccumulator10Milliampere = 0; // Serves as accumulator for AverageAmpere
-    long DeltaAccumulator10Milliampere = 0; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180,000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18,000 (100 mAh) after write.
-    long lastWrittenBatteryCapacityAccumulator10Milliampere = 0;
+
+    uint16_t NumberOfSamples; // For one sample each 2 seconds, we can store up to 36.4 hours here.
+    long AverageAccumulatorVoltageDifferenceToEmpty10Millivolt; // Serves as accumulator to enable a more smooth graph.
+    long AverageAccumulator10Milliampere; // Serves as accumulator for AverageAmpere
+    long DeltaAccumulator10Milliampere; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180,000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18,000 (100 mAh) after write.
+    long lastWrittenBatteryCapacityAsAccumulator10Milliampere;
+
+    uint16_t checksumForReboot; // Checksum of NumberOfSamples up to lastWrittenBatteryCapacityAsAccumulator10Milliampere to decide if we can keep this data at reboot
 };
 extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 

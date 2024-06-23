@@ -126,7 +126,7 @@ struct PylontechCANSohSocFrame355Struct {
         uint16_t SOCPercent;
         uint16_t SOHPercent = 100; // fixed 100
 #if defined(CAPACITY_35F_EXTENSIONS)
-//        uint16_t SOCHighDefinition100PPM = 10000; // for SMA Sunny Island inverters
+        uint16_t SOCHighDefinition100PPM = 10000; // for SMA Sunny Island inverters
 #endif
     } FrameData;
     void fillFrame(struct JKReplyStruct *aJKFAllReply) {
@@ -278,7 +278,7 @@ struct PylontechCANBatteryRequesFrame35CStruct {
         if (aJKFAllReply->SOCPercent < SOC_THRESHOLD_FOR_FORCE_CHARGE_REQUEST_I) {
             // ForceChargeRequestI forces the inverter to charge the battery from any available power source regardless of inverter settings
             FrameData.ForceChargeRequestI = 1;
-        } else
+        } else {
             FrameData.ForceChargeRequestI = 0;
         }
 #else

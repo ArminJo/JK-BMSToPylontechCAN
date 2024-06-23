@@ -26,15 +26,17 @@
 #ifndef _JK_BMS_LCD_HPP
 #define _JK_BMS_LCD_HPP
 
+#include "LCDPrintUtils.hpp"
+
 /*
  * LCD hardware stuff
  */
 #define LCD_COLUMNS     20
 #define LCD_ROWS         4
-#define LCD_I2C_ADDRESS 0x27     // Default LCD address is 0x27 for a 20 chars and 4 line / 2004 display
+#define LCD_I2C_ADDRESS LCD_I2C_DEFAULT_ADDRESS // 0x27 Default LCD address for a 20 chars and 4 line / 2004 display
 bool sSerialLCDAvailable;
 
-#if defined(DISABLE_MONITORING) && defined(NO_ANALYTICS)
+#if !defined(ENABLE_MONITORING) && defined(NO_ANALYTICS)
 char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with sprintf_P()
 #endif
 /*
@@ -58,7 +60,6 @@ bool sSerialLCDIsSwitchedOff = false;
 uint16_t sFrameCounterForLCDTAutoOff = 0;
 #  endif
 
-#include "LiquidCrystal_I2C.hpp" // This defines USE_SOFT_I2C_MASTER, if SoftI2CMasterConfig.h is available. Use only the modified version delivered with this program!
 LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 /*
@@ -168,7 +169,6 @@ void printDebugInfoOnLCD() {
 }
 
 #  if !defined(DISPLAY_ALWAYS_ON)
-
 /*
  * Called on button press, BMS communication timeout and new error
  * Always reset timeout counter!
@@ -188,6 +188,7 @@ bool checkAndTurnLCDOn() {
     }
     return false;
 }
+
 /*
  * Display backlight handling
  */
@@ -206,18 +207,6 @@ void doLCDBacklightTimeoutHandling() {
     }
 }
 #  endif
-
-void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint) {
-    for (uint_fast8_t i = 0; i < aNumberOfSpacesToPrint; ++i) {
-        myLCD.print(' ');
-    }
-}
-
-void LCDClearLine(uint8_t aLineNumber) {
-    myLCD.setCursor(0, aLineNumber);
-    LCDPrintSpaces(20);
-    myLCD.setCursor(0, aLineNumber);
-}
 
 void printShortEnableFlagsOnLCD() {
     if (sJKFAllReplyPointer->ChargeIsEnabled) {
@@ -308,70 +297,6 @@ void printAlarmHexOrStateOnLCD() {
 }
 
 /*
- * Print current right aligned as 5 character including sign and trailing "A "
- * -9.99
- * -99.9
- *  -999
- */
-void printCurrent5CharacterRightAlignedOnLCD() {
-    int16_t tBattery10MilliAmpere = JKComputedData.Battery10MilliAmpere;
-    if (tBattery10MilliAmpere >= 0) {
-        myLCD.print(' '); // handle not printed + sign
-    }
-    tBattery10MilliAmpere = abs(tBattery10MilliAmpere); // remove sign for length computation
-    uint8_t tNumberOfDecimalPlaces;
-    if (tBattery10MilliAmpere < 1000) {
-        // less than 10 A (1000 * 10mA)
-        tNumberOfDecimalPlaces = 2; // -9.99
-    } else if (tBattery10MilliAmpere < 10000) {
-        // less than 100 A (10000 * 10mA)
-        tNumberOfDecimalPlaces = 1; // -99.9
-    } else {
-        myLCD.print(' ');           // Handle not printed decimal point . for -999 - Maximum current is 327 A
-        tNumberOfDecimalPlaces = 0; // -999
-    }
-    myLCD.print(JKComputedData.BatteryLoadCurrentFloat, tNumberOfDecimalPlaces);
-    myLCD.print(F("A "));
-}
-
-/*
- * Print 3 characters 2.4 or .45
- */
-void printVoltageDifference3CharactersOnLCD() {
-    int16_t tBatteryToEmptyDifference10Millivolt = JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
-    if (tBatteryToEmptyDifference10Millivolt < 100) {
-        // Print small values as ".43" instead of "0.4"
-        sprintf_P(sStringBuffer, PSTR(".%02d"), tBatteryToEmptyDifference10Millivolt);
-        myLCD.print(sStringBuffer);
-    } else {
-        myLCD.print(tBatteryToEmptyDifference10Millivolt / 100.0, 1);
-    }
-}
-
-/*
- * Print current right aligned as 4 character including sign
- * -9.9
- *  -99
- * -999
- */
-void printCurrent4CharacterRightAlignedOnLCD() {
-    int16_t tBattery10MilliAmpere = JKComputedData.Battery10MilliAmpere;
-    if (tBattery10MilliAmpere >= 0) {
-        myLCD.print(' '); // handle not printed + sign
-    }
-    tBattery10MilliAmpere = abs(tBattery10MilliAmpere); // remove sign for length computation
-    uint8_t tNumberOfDecimalPlaces = 0;
-    if (tBattery10MilliAmpere < 1000) {
-        // less than 10 A (1000 * 10mA)
-        tNumberOfDecimalPlaces = 1; // -9.9
-    } else if (tBattery10MilliAmpere < 10000) {
-        // less than 100 A (10000 * 10mA)
-        myLCD.print(' '); // handle not printed decimal point . for -99
-    }
-    myLCD.print(JKComputedData.BatteryLoadCurrentFloat, tNumberOfDecimalPlaces);
-}
-
-/*
  * We can display only up to 16 cell values on the LCD :-(
  * Print Info in last 3 columns
  *  SOC
@@ -406,7 +331,7 @@ void printCellInfoOnLCD() {
                     myLCD.print(sStringBuffer);
                 } else if (i == 8) {
                     // Print current in the last 4 characters
-                    printCurrent4CharacterRightAlignedOnLCD();
+                    printFloatValueRightAlignedOnLCD(JKComputedData.BatteryLoadCurrentFloat, 4);
                 } else if (i == 12) {
                     // print " A  " or " A B"
                     myLCD.print(F(" A "));
@@ -436,7 +361,7 @@ void printCellInfoOnLCD() {
     if (tNumberOfCellInfoEntries > 0 && tNumberOfCellInfoEntries <= 16) {
         // print voltage difference
         myLCD.setCursor(17, 3);
-        printVoltageDifference3CharactersOnLCD();
+        printFloatValueRightAlignedOnLCD(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 3, true); // true = no leading space
     }
 #else
     if (tNumberOfCellInfoEntries > 12) {
@@ -572,11 +497,11 @@ void printBigInfoOnLCD() {
     }
 
     myLCD.setCursor(tColumn, UNITS_ROW_FOR_BIG_INFO); // 3, 6 or 8
-    myLCD.print('%');
+    myLCD.print('%'); // print "small" percent sign
     /*
-     * Here we can start the power string at column 4, 7 or 9
+     * Here we can start the big number power string at column 4, 7 or 9
      */
-    uint8_t tAvailableColumns = (LCD_COLUMNS - 2) - tColumn;
+    uint8_t tAvailableColumns = (LCD_COLUMNS - 2) - tColumn; // 14, 11, 9. -2 for the trailing W or KW
     char tKiloWattChar = ' ';
     int16_t tBatteryLoadPower = JKComputedData.BatteryLoadPower;
     /*
@@ -589,6 +514,7 @@ void printBigInfoOnLCD() {
     } else {
         sprintf_P(sStringBuffer, PSTR("%d"), JKComputedData.BatteryLoadPower);
     }
+
     /*
      * Then compute maximum possible string length
      */
@@ -643,13 +569,13 @@ void printBigInfoOnLCD() {
      */
     myLCD.setCursor(0, 3);
     myLCD.print(JKComputedData.TemperatureMaximum);
-    myLCD.print(F("\xDF "));
+    myLCD.print(F(DEGREE_SIGN_STRING " "));
 
     myLCD.setCursor(4, 3);
-    printCurrent5CharacterRightAlignedOnLCD();
+    printFloatValueRightAlignedOnLCD(JKComputedData.BatteryLoadCurrentFloat, 5);
+    myLCD.print('A');
 
-    myLCD.setCursor(11, 3);
-    myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
+    printFloatValueRightAlignedOnLCD(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5);
     myLCD.print('V');
 
     myLCD.setCursor(17, 3); // Last 3 characters are the actual states
@@ -701,57 +627,45 @@ void printCANInfoOnLCD() {
          * Voltage, current and maximum temperature in row 3
          */
         myLCD.setCursor(0, 2);
-        // Voltage
-        myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt / 100);
-        myLCD.print('.');
-        myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt % 100);
+// Voltage
+        printFloatValueRightAlignedOnLCD(PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt / 100.0, 5, true);
         myLCD.print(F("V "));
-        // Current
-        int16_t tCurrent100Milliampere = PylontechCANCurrentValuesFrame356.FrameData.Current100Milliampere;
-        myLCD.print(tCurrent100Milliampere / 10);
-        if (tCurrent100Milliampere < 0) {
-            // avoid negative numbers after decimal point
-            tCurrent100Milliampere = -tCurrent100Milliampere;
-        }
-        if (tCurrent100Milliampere < 100) {
-            // Print fraction if value < 100
-            myLCD.print('.');
-            myLCD.print(tCurrent100Milliampere % 10);
-        }
+
+// Current
+        printFloatValueRightAlignedOnLCD(PylontechCANCurrentValuesFrame356.FrameData.Current100Milliampere / 10.0, 5);
         myLCD.print(F("A "));
-        // Temperature
-        myLCD.setCursor(14, 2);
+
+// Temperature, we have only a 1 degree resolution here
         myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Temperature100Millicelsius / 10);
-        if (PylontechCANCurrentValuesFrame356.FrameData.Temperature100Millicelsius < 100) {
-            // Print fraction if value < 100
-            myLCD.print('.');
-            myLCD.print(PylontechCANCurrentValuesFrame356.FrameData.Temperature100Millicelsius % 10);
-        }
-        myLCD.print(F("\xDF" "C "));
+        myLCD.print(F(DEGREE_SIGN_STRING "C "));
 
         /*
          * Request flags in row 4
          */
         myLCD.setCursor(0, 3);
-        // Charge enable
+// Charge enable
         if (PylontechCANBatteryRequestFrame35C.FrameData.ChargeEnable) {
             myLCD.print(F("CH "));
         } else {
             myLCD.print(F("   "));
         }
         if (PylontechCANBatteryRequestFrame35C.FrameData.DischargeEnable) {
-            myLCD.print(F("DC"));
+            myLCD.print(F("DC "));
+        } else {
+            myLCD.print(F("   "));
         }
-        myLCD.setCursor(6, 3);
         if (PylontechCANBatteryRequestFrame35C.FrameData.ForceChargeRequestI) {
-            myLCD.print(F("FORCEI"));
+            myLCD.print(F("FORCEI "));
+        } else {
+            myLCD.print(F("       "));
         }
-        myLCD.setCursor(13, 3);
         if (PylontechCANBatteryRequestFrame35C.FrameData.ForceChargeRequestII) {
             myLCD.print(F("FORCEII"));
+        } else {
+            myLCD.print(F("       "));
         }
 
-        // Currently constant 0
+// Currently constant 0
 //    myLCD.setCursor(10, 3);
 //    if (PylontechCANBatteryRequestFrame35C.FrameData.FullChargeRequest) {
 //        myLCD.print(F("FULL"));
@@ -765,20 +679,17 @@ void printCANInfoOnLCD() {
 void printVoltageCurrentAndPowerOnLCD() {
     myLCD.setCursor(0, 2);
     // Voltage
-    myLCD.print(JKComputedData.BatteryVoltageFloat, 2);
+//    myLCD.print(JKComputedData.BatteryVoltageFloat, 2); // currently requires more programming space
+    printFloatValueRightAlignedOnLCD(JKComputedData.BatteryVoltageFloat, 5, true); // true -> do not print leading space
     myLCD.print(F("V "));
+
     // Current
-    printCurrent5CharacterRightAlignedOnLCD();
+    printFloatValueRightAlignedOnLCD(JKComputedData.BatteryLoadCurrentFloat, 5);
+    myLCD.print('A');
+
     // Power
-    if (JKComputedData.BatteryLoadPower < -10000) {
-        // over 10 kW
-        myLCD.setCursor(13, 2);
-        myLCD.print(JKComputedData.BatteryLoadPower); // requires 6 columns
-    } else {
-        myLCD.setCursor(14, 2);
-        sprintf_P(sStringBuffer, PSTR("%5d"), JKComputedData.BatteryLoadPower); // force use of 5 columns
-        myLCD.print(sStringBuffer);
-    }
+    sprintf_P(sStringBuffer, PSTR("%6d"), JKComputedData.BatteryLoadPower); // force use of 6 columns
+    myLCD.print(sStringBuffer);
     myLCD.print('W');
 }
 
@@ -797,21 +708,21 @@ void printVoltageDifferenceAndTemperature() {
             && abs(JKComputedData.TemperatureSensor1 - JKComputedData.TemperatureSensor2)
                     < (min(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor1) / 4)) {
         tShowBothExternalTemperatures = false;
-        myLCD.print(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 2);
+        printFloatValueRightAlignedOnLCD(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5, true); // true = no leading space
         myLCD.print(F("V "));
     }
     myLCD.print(JKComputedData.TemperaturePowerMosFet);
-    myLCD.print(F("\xDF" "C "));
+    myLCD.print(F(DEGREE_SIGN_STRING "C "));
     if (tShowBothExternalTemperatures) {
-        // show both external sensors
+// show both external sensors
         myLCD.print(JKComputedData.TemperatureSensor1);
-        myLCD.print(F("\xDF" "C "));
+        myLCD.print(F(DEGREE_SIGN_STRING "C "));
         myLCD.print(JKComputedData.TemperatureSensor2);
-        myLCD.print(F("\xDF" "C "));
+        myLCD.print(F(DEGREE_SIGN_STRING "C "));
     } else {
-        // show maximum of the 2 external sensors
+// show maximum of the 2 external sensors
         myLCD.print(max(JKComputedData.TemperatureSensor1, JKComputedData.TemperatureSensor2));
-        myLCD.print(F("\xDF" "C "));
+        myLCD.print(F(DEGREE_SIGN_STRING "C "));
     }
 }
 
@@ -861,12 +772,12 @@ void printAlarmInfoOnLCD() {
             tCellIndexToPrint = JKConvertedCellInfo.IndexOfMaximumCellMillivolt;
             tCellMillivoltToPrint = JKConvertedCellInfo.MaximumCellMillivolt;
         }
-        // print millivolt with fix format 3 character value
+// print millivolt with fix format 3 character value
         sprintf_P(sStringBuffer, PSTR("%2d %3dmV "), tCellIndexToPrint + 1, tCellMillivoltToPrint - 3000);
         myLCD.print(sStringBuffer);
 
     } else if (strlen_P(tLastAlarmString) > LCD_COLUMNS) {
-        // remainder of alarm string
+// remainder of alarm string
         strncpy_P(sStringBuffer, &tLastAlarmString[LCD_COLUMNS], LCD_COLUMNS - LENGTH_OF_UPTIME_STRING); // 11 = Length of uptime string
         sStringBuffer[LCD_COLUMNS - LENGTH_OF_UPTIME_STRING] = '\0';
         myLCD.print(sStringBuffer);
@@ -907,11 +818,9 @@ void printOverwiewOrAlarmInfoOnLCD() {
         myLCD.print(sJKFAllReplyPointer->SOCPercent);
         myLCD.print(F("% "));
 // Remaining capacity
-        myLCD.print(JKComputedData.RemainingCapacityAmpereHour);
+        sprintf_P(sStringBuffer, PSTR("%3d"), JKComputedData.RemainingCapacityAmpereHour);
+        myLCD.print(sStringBuffer);
         myLCD.print(F("Ah "));
-        if (JKComputedData.RemainingCapacityAmpereHour < 100) {
-            myLCD.print(' ');
-        }
 // Last 3 characters are the enable states
         myLCD.setCursor(14, 1);
         myLCD.print(F("En:"));
@@ -955,7 +864,7 @@ void printBMSDataOnLCD() {
     #  endif
         }
 
-        // do not clear alarm info, which is only printed once
+// do not clear alarm info, which is only printed once
         if (!sShowAlarmInsteadOfOverview) {
             myLCD.clear();
         }
@@ -1160,7 +1069,7 @@ void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber, bool aDoNotPrint) {
 void testLCDPages() {
     sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW;
     printBMSDataOnLCD();
-    delay (LCD_MESSAGE_PERSIST_TIME_MILLIS);
+    delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_CELL_INFO;
 // Create symbols character for maximum and minimum
@@ -1173,6 +1082,7 @@ void testLCDPages() {
     printBMSDataOnLCD();
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
+    Serial.println(F("Test alarms"));
     /*
      * Test alarms
      */
@@ -1203,7 +1113,9 @@ void testLCDPages() {
     // reset alarm
     sAlarmIndexToShowOnLCD = INDEX_NO_ALARM;
     sAlarmJustGetsActive = false;
+    sShowAlarmInsteadOfOverview = false;
 
+    Serial.println(F("Test maximum values"));
     /*
      * Check display of maximum values
      */
@@ -1217,9 +1129,10 @@ void testLCDPages() {
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     /*
-     * maximum values at overview
+     * maximum values at Big Info
      */
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+    myLCD.clear();
     bigNumberLCD.begin();
     printBMSDataOnLCD();
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
@@ -1236,6 +1149,7 @@ void testLCDPages() {
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
+    myLCD.clear();
     printBMSDataOnLCD();
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
@@ -1247,8 +1161,9 @@ void testLCDPages() {
 }
 
 void testBigNumbers() {
+    Serial.println(F("Test BigNumbers"));
+
     sLCDDisplayPageNumber = JK_BMS_PAGE_BIG_INFO;
-    myLCD.clear();
 
     for (int j = 0; j < 3; ++j) {
         // Test with 100 %  and 42 %
@@ -1261,6 +1176,7 @@ void testBigNumbers() {
 
         for (int i = 0; i < 5; ++i) {
             delay(2 * LCD_MESSAGE_PERSIST_TIME_MILLIS);
+            myLCD.clear();
             printBMSDataOnLCD();
             JKComputedData.BatteryLoadPower /= 10; // 1234 -> 12
             JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
@@ -1273,6 +1189,7 @@ void testBigNumbers() {
 
         for (int i = 0; i < 5; ++i) {
             delay(2 * LCD_MESSAGE_PERSIST_TIME_MILLIS);
+            myLCD.clear();
             printBMSDataOnLCD();
             JKComputedData.BatteryLoadPower /= 10; // 1234 -> 12
             JKComputedData.BatteryLoadCurrentFloat = JKComputedData.BatteryLoadPower / JKComputedData.BatteryVoltageFloat;
