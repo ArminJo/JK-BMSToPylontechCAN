@@ -34,7 +34,7 @@
 #define LCD_I2C_ADDRESS 0x27     // Default LCD address is 0x27 for a 20 chars and 4 line / 2004 display
 bool sSerialLCDAvailable;
 
-#if defined(DISABLE_MONITORING) && defined(NO_ANALYTICS)
+#if !defined(ENABLE_MONITORING) && defined(NO_ANALYTICS)
 char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with sprintf_P()
 #endif
 /*

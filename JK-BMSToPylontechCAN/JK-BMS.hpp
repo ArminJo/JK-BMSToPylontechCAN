@@ -552,7 +552,7 @@ void printJKCellStatisticsInfo() {
 
 void initializeComputedData() {
     // Initialize capacity accumulator with sensible value
-    JKComputedData.BatteryCapacityAccumulator10MilliAmpere = (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 100)
+    JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere = (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 100)
             * sJKFAllReplyPointer->SOCPercent * JKComputedData.TotalCapacityAmpereHour;
 }
 
@@ -592,12 +592,12 @@ void fillJKComputedData() {
 
     JKComputedData.Battery10MilliAmpere = getCurrent(sJKFAllReplyPointer->Battery10MilliAmpere);
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.Battery10MilliAmpere / 100.0;
-    JKComputedData.BatteryCapacityAccumulator10MilliAmpere += JKComputedData.Battery10MilliAmpere;
+    JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere += JKComputedData.Battery10MilliAmpere;
     if (lastJKReply.SOCPercent == 0 && sJKFAllReplyPointer->SOCPercent == 1) {
         JK_INFO_PRINTLN(F("Reset capacity to 1%"));
         // Reset capacity at transition from 0 to 1
-        JKComputedData.BatteryCapacityAccumulator10MilliAmpere = getOnePercentCapacityAsAccumulator10Milliampere();
-        JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+        JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere = getOnePercentCapacityAsAccumulator10Milliampere();
+        JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
     }
 
 //    Serial.print("Battery10MilliAmpere=0x");
@@ -871,6 +871,9 @@ void printActiveState(bool aIsActive) {
     Serial.print(F(" active"));
 }
 
+/*
+ * Called exclusively once by processJK_BMSStatusFrame()
+ */
 void printJKStaticInfo() {
 
     Serial.println(F("*** BMS INFO ***"));
@@ -918,7 +921,7 @@ extern const char sCSVCaption[] PROGMEM;
 void printJKDynamicInfo() {
     JKReplyStruct *tJKFAllReplyPointer = sJKFAllReplyPointer;
 
-#if !defined(DISABLE_MONITORING)
+#if defined(ENABLE_MONITORING)
 #  if defined(MONOTORING_PERIOD_FAST)
     // Print every dataset, every 2 seconds, and caption every minute
     printCSVLine();
@@ -942,8 +945,8 @@ void printJKDynamicInfo() {
     // Print +CSV line every percent of nominal battery capacity (TotalCapacityAmpereHour) for capacity to voltage graph
     if (abs(
             JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere
-            - JKComputedData.BatteryCapacityAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere()) {
-        JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAccumulator10MilliAmpere;
+            - JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere()) {
+        JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
         printCSVLine('+');
     }
 
@@ -1003,7 +1006,7 @@ void printJKDynamicInfo() {
             Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
         }
 #endif
-#if !defined(DISABLE_MONITORING) && !defined(MONOTORING_PERIOD_FAST)
+#if defined(ENABLE_MONITORING) && !defined(MONOTORING_PERIOD_FAST)
         /*
          * Print CSV caption every 10 minute
          */
@@ -1097,7 +1100,7 @@ void printJKDynamicInfo() {
     }
 }
 
-#if !defined(DISABLE_MONITORING)
+#if defined(ENABLE_MONITORING)
 const char sCSVCaption[] PROGMEM
         = "Uptime[min];Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage[mV];Current[A];Capacity[100mAh];SOC[%]";
 
@@ -1140,7 +1143,7 @@ void setCSVString() {
         dtostrf(JKComputedData.BatteryLoadCurrentFloat, 4, 2, &tCurrentAsFloatString[0]);
         sprintf_P(&sStringBuffer[tBufferIndex], PSTR("%u;%s;%ld;%d"), JKComputedData.BatteryVoltage10Millivolt * 10,
                 tCurrentAsFloatString,
-                JKComputedData.BatteryCapacityAccumulator10MilliAmpere / (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 10), /* 100mAh units*/
+                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere / (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 10), /* 100mAh units*/
                 sJKFAllReplyPointer->SOCPercent);
     }
 }
@@ -1153,7 +1156,7 @@ void printCSVLine(char aLeadingChar) {
     setCSVString();
     Serial.println(sStringBuffer);
 }
-#endif // !defined(DISABLE_MONITORING)
+#endif // defined(ENABLE_MONITORING)
 
 #include "LocalDebugLevelEnd.h"
 #endif // _JK_BMS_HPP

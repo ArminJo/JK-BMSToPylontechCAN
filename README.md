@@ -42,7 +42,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - The voltage in the SOC graph is corrected by the automatically computed ESR to get a smoother voltage curve.
 
 **If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**<br/>
-Enabling the macro `NO_SERIAL_INFO_PRINT` saves program space.
+Look [here](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/JK-BMSToPylontechCAN/JK-BMSToPylontechCAN.ino#L139) for options to reduce program size / add optional features.
 
 **On a MCP2515 / TJA1050 kit for Arduino you must [replace the assembled 8 MHz crystal with a 16 MHz one](https://www.mittns.de/thread/1340-mcp2515-8mhz-auf-16mhz-upgrade/).**
 
@@ -253,17 +253,15 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `DISPLAY_ON_TIME_SECONDS` | 300 | 300 s / 5 min after the last button press, the backlight of the LCD display is switched off. |
 | `DISPLAY_ON_TIME_SECONDS_IF_TIMEOUT` | 180 | 180 s / 3 min after the first timeout / BMS shutdown, the backlight of the LCD display is switched off. |
 | `USE_NO_COMMUNICATION_STATUS_LEDS` | disabled | If activated, the code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output. |
-| `NO_SERIAL_INFO_PRINT` | enabled | Disables writing some info to serial output. Saves 974 bytes program space. |
-| `DISABLE_MONITORING` | enabled | Disables writing cell and current values CSV data to serial output. Saves 534 bytes program space. |
-| `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 16558 bytes program space. |
+| `SERIAL_INFO_PRINT` | disabled | Enables writing some info to serial output. Requires additional 1684 bytes program space. |
+| `ENABLE_MONITORING` | enabled for more than 32k FLASH | Enables writing cell and current values CSV data to serial output. Requires additional 858 bytes program space. |
+| `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 1628 bytes program space. |
 | `NO_ANALYTICS` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
-| `NO_CAPACITY_35F_EXTENSIONS` | disabled | If activated, supress sending of frame 0x35F for total capacity for SMA Sunny Island inverters over CAN. |
-| `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. |
-| `NO_BYD_LIMITS_373_EXTENSIONS` | disabled | If activated, supress sending of frame 0x373 for cell limits as sent by BYD battery over CAN. |
-| `DO_NOT_SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, do not print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Disables display of up to 20 voltages or display of additional information on this page. |
-| `DISABLE_MONITORING` | disabled | If activated, no cell and current values CSV data are written to serial output
-. |
+| `NO_CAPACITY_35F_EXTENSIONS` | disabled | If activated, supress sending of frame 0x35F for total capacity for SMA Sunny Island inverters over CAN. Saves 56 bytes program space. |
+| `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. Saves 24 bytes program space. |
+| `NO_BYD_LIMITS_373_EXTENSIONS` | disabled | If activated, supress sending of frame 0x373 for cell limits as sent by BYD battery over CAN. Saves 200 bytes program space. |
+| `DO_NOT_SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, do not print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Disables display of up to 20 voltages or display of additional information on this page. Saves 470 bytes program space. |
 | | | |
 | `CAN_DATA_MODIFICATION` | disabled | If activated, it currently enables the function to reduce max current at high SOC level. |
 | `MAX_CURRENT_MODIFICATION_LOWER_SOC_`<br/>`THRESHOLD_PERCENT` | 80 | Start SOC for linear reducing maximum current. |
@@ -322,6 +320,7 @@ This program uses the following libraries, which are already included in this re
 ### Version 3.2.0
 - Adaption for ATmega644.
 - Automatic ESR computation only for more than 100 data points.
+- Keep accumulated analytics data at reset.
 
 ### Version 3.1.0
 - Analytics bug fixing.
@@ -385,11 +384,13 @@ See also [here](https://github.com/ArminJo/JK-BMSToPylontechCAN/tree/main/extras
 ```
 START ../src/JK-BMSToPylontechCAN.cpp
 Version 2.0 from Sep  8 2023
-Serial to JK-BMS started with 115200 bit/s!
+Serial to JK-BMS started with 115.200 kbit/s!
 CAN started with 500 kbit/s!
-If you connect debug pin 3 to ground, additional debug data is printed
+Page switching button is at pin PAGE_BUTTON_PIN
+At long press, CAN Info page is entered and additional debug data is printed as long as button is pressed
 2000 ms between 2 BMS requests
 2000 ms between 2 CAN transmissions
+No LCD Backlight timeout
 
 *** BMS INFO ***
 Protocol Version Number=1
@@ -433,6 +434,8 @@ Sleep Wait Time[s]=10
 Dedicated Charge Switch Active=0
 Start Current Calibration State=0
 Battery Actual Capacity[Ah]=115
+
+Reboot detected: keep SOCDataPointsInfo
 
 Total Runtime Minutes=49260 ->   34D05H00M
 *** CELL INFO ***
