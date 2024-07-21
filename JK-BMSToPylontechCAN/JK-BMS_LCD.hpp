@@ -26,31 +26,15 @@
 #ifndef _JK_BMS_LCD_HPP
 #define _JK_BMS_LCD_HPP
 
+#include "JK-BMS_LCD.h"
 #include "LCDPrintUtils.hpp"
 
-/*
- * LCD hardware stuff
- */
-#define LCD_COLUMNS     20
-#define LCD_ROWS         4
-#define LCD_I2C_ADDRESS LCD_I2C_DEFAULT_ADDRESS // 0x27 Default LCD address for a 20 chars and 4 line / 2004 display
 bool sSerialLCDAvailable;
 
 #if !defined(ENABLE_MONITORING) && defined(NO_ANALYTICS)
 char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with sprintf_P()
 #endif
-/*
- * Display timeouts, may be adapted to your requirements
- */
-#  if defined(STANDALONE_TEST)
-#define DISPLAY_ON_TIME_STRING               "30 s"
-#define DISPLAY_ON_TIME_SECONDS              30L // L to avoid overflow at macro processing
-//#define NO_MULTIPLE_BEEPS_ON_TIMEOUT           // Activate it if you do not want multiple beeps
-#define BEEP_ON_TIME_SECONDS_IF_TIMEOUT      10L // 10 s
-#  else
-#define DISPLAY_ON_TIME_STRING              "5 min" // Only for display on LCD
-#define DISPLAY_ON_TIME_SECONDS             300L // 5 minutes. L to avoid overflow at macro processing
-#  endif
+
 
 //#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
 #  if !defined(DISPLAY_ALWAYS_ON)
@@ -74,41 +58,11 @@ LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_2); 
 const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // char 1: top block for maximum cell voltage marker
 const uint8_t bigNumbersBottomBlock[8] PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F }; // char 2: bottom block for minimum cell voltage marker
 
-/*
- * LCD display pages
- */
-#define JK_BMS_PAGE_OVERVIEW            0 // is selected in case of BMS alarm message
-#define JK_BMS_PAGE_CELL_INFO           1
-#if defined(NO_CELL_STATISTICS)
-#define JK_BMS_PAGE_BIG_INFO            2
-#define JK_BMS_PAGE_CAN_INFO            3 // Enter on long press
-#define JK_BMS_PAGE_CAPACITY_INFO       4
-#else
-#define JK_BMS_PAGE_CELL_STATISTICS     2
-#define CELL_STATISTICS_COUNTER_MASK 0x04 // must be a multiple of 2 and determines how often one page (min or max) is displayed.
-#define JK_BMS_PAGE_BIG_INFO            3
-#define JK_BMS_PAGE_CAN_INFO            4 // Enter on long press
-#define JK_BMS_PAGE_CAPACITY_INFO       5
-#endif
-
-// Switch to start page after 10 seconds of JK_BMS_PAGE_CAPACITY_INFO. 10 seconds to allow EEROM clearing by long press.
-#define JK_BMS_PAGE_CAPACITY_INFO_PAGE_TIMEOUT_MILLIS  10000
 uint32_t sLastPageChangeMillis;
-#define CELL_CAPACITY_COUNTER_VOLTAGE   0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
 
-#define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
-#define JK_BMS_DEBUG_PAGE_MAX           JK_BMS_PAGE_CAPACITY_INFO
-#define JK_BMS_START_PAGE               JK_BMS_PAGE_BIG_INFO
 //uint8_t sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
 uint8_t sLCDDisplayPageNumber = JK_BMS_START_PAGE; // Start with Big Info page
 uint8_t sToggleDisplayCounter;            // counter for cell statistics page to determine max or min page and for capacity page
-
-void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber, bool aDoNotPrint = false);
-
-void printBMSDataOnLCD();
-void printCANInfoOnLCD();
-void LCDPrintSpaces(uint8_t aNumberOfSpacesToPrint);
-void LCDClearLine(uint8_t aLineNumber);
 
 void setupLCD() {
 
@@ -151,7 +105,13 @@ void printDebugInfoOnLCD() {
     if (sSerialLCDAvailable) {
 #  if !defined(DISPLAY_ALWAYS_ON)
         myLCD.setCursor(0, 0);
+#    if defined(DISPLAY_ON_TIME_STRING)
         myLCD.print(F("Screen timeout " DISPLAY_ON_TIME_STRING));
+#    else
+        myLCD.print(F("Screen timeout "));
+        myLCD.print(DISPLAY_ON_TIME_STRING / 60);
+        myLCD.print(F(" min"));
+#    endif
 #  endif
         myLCD.setCursor(0, 1);
         myLCD.print(F("Long press = debug"));

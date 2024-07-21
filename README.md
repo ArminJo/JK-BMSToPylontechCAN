@@ -197,6 +197,8 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 - KiCad8 schematics and PCB layout for ATmega644 compiled with [MightyCore](https://github.com/MCUdude/MightyCore) and 2 BMS connectors by Andé Meier.
 [![PCB layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BMS-CAN_PCB_top_v0.1.png)](https://github.com/dremeier/Arduino-JK-BMS-To-Pylontech-CAN-PCB)
 
+![644 board](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/644Board.jpg)
+
 - EasyEda schematics and PCB layout by Ngoc Dang Dinh.
 [![Minimal layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/EasyEda_shematics_by_Ngoc_Dang_Dinh.png)](https://easyeda.com/editor#id=0d1a2556b7634c8bbd22e9c0474cd401)
 
@@ -236,6 +238,7 @@ This will give you 1.5 kB more program space, without any disadvantages. Even A6
 
 # Compile options / macros for this software
 To customize the software to different requirements, there are some compile options / macros available.<br/>
+These macros must be defined in your program before the line `#include "JK-BMS.hpp"` to take effect.<br/>
 Modify them by enabling / disabling them, or change the values if applicable.
 
 | Name | Default value | Description |
@@ -247,6 +250,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `BEEP_TIMEOUT_SECONDS` | 60 | 1 minute, every 2 seconds. |
 | `MULTIPLE_BEEPS_WITH_TIMEOUT` | enabled | If error was detected, beep for 60 s. |
 | `SUPPRESS_LIFEPO4_PLAUSI_WARNING` | disabled | Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V. |
+| `ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD` | disabled | Enables switching to Overview page and showing over- and undervoltage data. |
 | `MAXIMUM_NUMBER_OF_CELLS` | 24 | Maximum number of cell info which can be converted. Saves RAM. |
 | `USE_NO_LCD` | disabled | Disables the code for the LCD display. Saves 25% program space on a Nano. |
 | `DISPLAY_ALWAYS_ON` | disabled | If activated, the display backlight is always on. This disables the value of `DISPLAY_ON_TIME_SECONDS`. |
@@ -262,15 +266,19 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. Saves 24 bytes program space. |
 | `NO_BYD_LIMITS_373_EXTENSIONS` | disabled | If activated, supress sending of frame 0x373 for cell limits as sent by BYD battery over CAN. Saves 200 bytes program space. |
 | `DO_NOT_SHOW_SHORT_CELL_VOLTAGES` | disabled | If activated, do not print 3 digits cell voltage (value - 3.0 V) on Cell Info page. Disables display of up to 20 voltages or display of additional information on this page. Saves 470 bytes program space. |
-| | | |
+
+The next macros enables and controls the build in CAN data modification function.
+
+| Name | Default value | Description |
+|-|-|-|
 | `CAN_DATA_MODIFICATION` | disabled | If activated, it currently enables the function to reduce max current at high SOC level. |
 | `MAX_CURRENT_MODIFICATION_LOWER_SOC_`<br/>`THRESHOLD_PERCENT` | 80 | Start SOC for linear reducing maximum current. |
 | `MAX_CURRENT_MODIFICATION_MIN_CURRENT_`<br/>`TENTHS_OF_AMPERE` | 50 | Value of current at 100 % SOC. Units are 100 mA! |
 
 There may be some some more options like `BUTTON_DEBOUNCING_MILLIS`, which are only for very special requirements.
 
-The CSV data has the caption:
-`Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage,Current;SOC;Balancing`<br/>
+The CSV data printed, if `ENABLE_MONITORING` is enabled, has the caption:
+`"Uptime[min];Cell_1;Cell_2;Cell_3;Cell_4;Cell_5;Cell_6;Cell_7;Cell_8;Cell_9;Cell_10;Cell_11;Cell_12;Cell_13;Cell_14;Cell_15;Cell_16;Voltage[mV];Current[A];Capacity[100mAh];SOC[%]`<br/>
 Example data: `CSV: 270;262;271;271;271;269;270;271;266;266;266;266;265;262;265;265;5228;-22.56;71;1`
 <br/>
 
@@ -317,6 +325,9 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 3.2.1
+- New macro ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD.
+
 ### Version 3.2.0
 - Adaption for ATmega644.
 - Automatic ESR computation only for more than 100 data points.

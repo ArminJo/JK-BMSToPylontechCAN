@@ -100,7 +100,7 @@
 #include <Arduino.h>
 
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
-#define VERSION_EXAMPLE "3.2.0"
+#define VERSION_EXAMPLE "3.2.1"
 
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.

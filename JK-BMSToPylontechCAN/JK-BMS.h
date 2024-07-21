@@ -72,10 +72,6 @@ extern bool sAlarmJustGetsActive;
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
 
-#if !defined(USE_NO_LCD)
-extern const char *sAlarmStringForLCD;
-#endif
-
 int16_t getJKTemperature(uint16_t aJKRAWTemperature);
 int16_t getCurrent(uint16_t aJKRAWCurrent);
 

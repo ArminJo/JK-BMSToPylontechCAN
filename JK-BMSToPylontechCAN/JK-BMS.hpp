@@ -37,6 +37,9 @@
 #include <Arduino.h>
 
 #include "JK-BMS.h"
+#if !defined(USE_NO_LCD)
+#include "JK-BMS_LCD.h" // for sLCDDisplayPageNumber and JK_BMS_PAGE_OVERVIEW
+#endif
 
 JKLastReplyStruct lastJKReply;
 
@@ -100,7 +103,9 @@ const char CellUndervoltage[] PROGMEM = "Cell undervoltage";                // B
 const char _309AProtection[] PROGMEM = "309_A protection";                  // Byte 1.4,
 const char _309BProtection[] PROGMEM = "309_B protection";                  // Byte 1.5,
 
-// For displaying specific info for this alarm
+//#define ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD // Enables switching to Overview page and showing over- and undervoltage data.
+#define MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED    0x0C00
+// Required for displaying specific info for this alarms
 #define INDEX_OF_CHARGING_OVERVOLTAGE_ALARM                 2
 #define MASK_OF_CHARGING_OVERVOLTAGE_ALARM_UNSWAPPED        0x0800
 #define INDEX_OF_DISCHARGING_UNDERVOLTAGE_ALARM             3
@@ -449,7 +454,8 @@ void fillJKConvertedCellInfo() {
 // Here, we demand 2 minutes of balancing as minimum
     if (tCellStatisticsSum > 60) {
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-            CellStatistics.CellMinimumPercentageArray[i] = ((uint32_t) (CellStatistics.CellMinimumArray[i] * 100UL)) / tCellStatisticsSum;
+            CellStatistics.CellMinimumPercentageArray[i] = ((uint32_t) (CellStatistics.CellMinimumArray[i] * 100UL))
+                    / tCellStatisticsSum;
         }
     }
 
@@ -485,7 +491,8 @@ void fillJKConvertedCellInfo() {
 // Here, we demand 2 minutes of balancing as minimum
     if (tCellStatisticsSum > 60) {
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-            CellStatistics.CellMaximumPercentageArray[i] = ((uint32_t) (CellStatistics.CellMaximumArray[i] * 100UL)) / tCellStatisticsSum;
+            CellStatistics.CellMaximumPercentageArray[i] = ((uint32_t) (CellStatistics.CellMaximumArray[i] * 100UL))
+                    / tCellStatisticsSum;
         }
     }
     if (tDoDaylyScaling) {
@@ -530,7 +537,8 @@ void printJKCellStatisticsInfo() {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMinimumPercentageArray[i], CellStatistics.CellMinimumArray[i]);
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMinimumPercentageArray[i],
+                CellStatistics.CellMinimumArray[i]);
         Serial.print(tStringBuffer);
     }
     Serial.println();
@@ -540,7 +548,8 @@ void printJKCellStatisticsInfo() {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMaximumPercentageArray[i], CellStatistics.CellMaximumArray[i]);
+        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMaximumPercentageArray[i],
+                CellStatistics.CellMaximumArray[i]);
         Serial.print(tStringBuffer);
     }
     Serial.println();
@@ -618,7 +627,8 @@ void fillJKComputedData() {
     if (sJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
         CellStatistics.BalancingCount++;
         sprintf_P(sBalancingTimeString, PSTR("%3uD%02uH%02uM"), (uint16_t) (CellStatistics.BalancingCount / (60 * 24 * 30UL)),
-                (uint16_t) ((CellStatistics.BalancingCount / (60 * 30)) % 24), (uint16_t) (CellStatistics.BalancingCount / 30) % 60);
+                (uint16_t) ((CellStatistics.BalancingCount / (60 * 30)) % 24),
+                (uint16_t) (CellStatistics.BalancingCount / 30) % 60);
     }
 #endif // NO_CELL_STATISTICS
 }
@@ -791,7 +801,7 @@ void detectAndPrintAlarmInfo() {
 
 #if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
     if (tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord == NO_ALARM_WORD_CONTENT) {
-        sNoAlarmCounter++; // overflow does not really matter here
+        sNoAlarmCounter++; // integer overflow does not really matter here
         // sNoAlarmCounter == 1800 - Allow consecutive same alarms after 1 hour of no alarm
         if (sNoAlarmCounter
                 == (SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS * MILLIS_IN_ONE_SECOND) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
@@ -817,7 +827,14 @@ void detectAndPrintAlarmInfo() {
                 sLastActiveAlarmsAsWord = tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
 #endif
 #if defined(USE_SERIAL_2004_LCD)
+#  if defined(ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD)
                 sPrintAlarmInfoOnlyOnce = true; // This forces a switch to Alarm page
+#  else
+                if((tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord & MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED)
+                        || sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
+                    sPrintAlarmInfoOnlyOnce = true; // This forces display on Alarm page
+                }
+#  endif
 #endif
             sAlarmJustGetsActive = true; // This forces the beep
 #if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
@@ -974,7 +991,8 @@ void printJKDynamicInfo() {
         /*
          * Print cell statistics only if balancing count changed and is big enough for reasonable info
          */
-        if (CellStatistics.LastPrintedBalancingCount != CellStatistics.BalancingCount && CellStatistics.BalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
+        if (CellStatistics.LastPrintedBalancingCount
+                != CellStatistics.BalancingCount&& CellStatistics.BalancingCount > MINIMUM_BALANCING_COUNT_FOR_DISPLAY) {
             CellStatistics.LastPrintedBalancingCount = CellStatistics.BalancingCount;
             Serial.println(F("*** CELL STATISTICS ***"));
             Serial.print(F("Total balancing time="));

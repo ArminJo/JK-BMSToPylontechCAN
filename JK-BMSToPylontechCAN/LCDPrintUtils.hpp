@@ -36,8 +36,6 @@
 #define STR(x) STR_HELPER(x)
 #endif
 
-#define LCD_I2C_DEFAULT_ADDRESS 0x27     // Default LCD address is 0x27 for a I2C adaptor with PCF8574
-
 #define DEGREE_SIGN_STRING "\xDF"
 
 #if !defined(LCD_COLUMNS)
@@ -104,7 +102,8 @@ uint8_t getNumberOfDecimalsFor32BitValues(uint32_t a32BitValue) {
 }
 /*
  * !!! We internally use uint16_t, for bigger values (> 65,536 or < -65,536) we have an overflow.
- *
+ * @param aNoLeadingSpaceForPositiveValues - Normally each positive value has a leading space as placeholder for the minus sign.
+ *   If we know, that values are always positive, this space can be omitted by aNoLeadingSpaceForPositiveValues == true.
  * @param aNumberOfCharactersToPrint - The characters to be used for the most negative value to show.
  *   I.e. 4 => max negative value is "-999" max positive value is " 999".
  *   Values below 10 and -10 are displayed as floats with decimal point " 9.9" and "-9.9".
