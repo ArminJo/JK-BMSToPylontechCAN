@@ -103,6 +103,9 @@ const char CellUndervoltage[] PROGMEM = "Cell undervoltage";                // B
 const char _309AProtection[] PROGMEM = "309_A protection";                  // Byte 1.4,
 const char _309BProtection[] PROGMEM = "309_B protection";                  // Byte 1.5,
 
+/*
+ * Since over and undervoltage is indicated by O or U in state info, it is not necessary to switch to Overview page
+ */
 //#define ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD // Enables switching to Overview page and showing over- and undervoltage data.
 #define MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED    0x0C00
 // Required for displaying specific info for this alarms
@@ -824,14 +827,18 @@ void detectAndPrintAlarmInfo() {
             if(sLastActiveAlarmsAsWord == tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord){
                 sDoAlarmOrTimeoutBeep = true; // do only one beep for recurring alarms
             } else {
+                /*
+                 * At least one alarm is active and it is not the last alarm already processed
+                 */
                 sLastActiveAlarmsAsWord = tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
 #endif
 #if defined(USE_SERIAL_2004_LCD)
 #  if defined(ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD)
                 sPrintAlarmInfoOnlyOnce = true; // This forces a switch to Alarm page
 #  else
-                if((tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord & MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED)
+                if((tJKFAllReplyPointer->AlarmUnion.AlarmsAsWord & ~MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED)
                         || sLCDDisplayPageNumber == JK_BMS_PAGE_OVERVIEW) {
+                    // Other than over  / undervoltage alarm bit is active
                     sPrintAlarmInfoOnlyOnce = true; // This forces display on Alarm page
                 }
 #  endif

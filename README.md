@@ -204,7 +204,6 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 
 - EasyEda [schematics](https://easyeda.com/editor#id=809cb7e913b5453f9d324c442df66a4e) and [PCB layout](https://easyeda.com/editor#id=005061dbeb414870bc63ab052561ddf4) by rooftopsolarsa/WannaBeSolarSparky from [this](https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/27) discussion. The status LEDs are missing in the schematic and button2 is no longer required.
 
-
 <br/>
 
 # Board pinout diagrams
