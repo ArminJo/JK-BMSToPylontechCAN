@@ -120,16 +120,22 @@ Also usable as connection schematic.
  <br/>
 
 # Connection schematic
-The standard **RX** of the Arduino is used for the JK_BMS connection.<br/>
+The standard **RX** of the Arduino is used for the JK-BMS connection.<br/>
 A **schottky diode** is inserted into the RX line to allow programming the AVR with the JK-BMS still connected and switched on.
 Keep in mind that programming will fail if JK-BMS is connected and switched off.<br/>
 The standard **TX** of the Arduino is used for Serial.print() for monitoring and debugging. The short **request to JK-BMS is sent by `SoftwareSerialTX` using pin 4**.<br/>
 If you use the cable from the separate RS485 adapter of the JK-BMS and follow the labeling on the board, you have to **swap the lines for RX and TX (pin 4)** on the Uno / Nano.
 
+**Troubleshooting BMS receive problems**<br/>
+Since the RX pin of the Nano is also connected to the TX pin of the USB converter chip (CH340 or similar),
+it can be difficult for the JK-BMS TX output to pull it properly down.<br/>
+This results in not receiving any data from the BMS despite the connection.<br/>
+In this case, first try to remove the diode and second connect a pull down at the Nano RX.<br/>
+Depending on the USB converter chip, this pull down can be in the range from 680 Ohm to 1 kOhm.
+
 **Power** is taken from an **USB power supply** connected to the Nano. Current is 40 mA for a dark 2004 display and 55 mA for a bright one.<br/>
 Optionally, power can be taken from the second battery (>6.4 V), but then you may require an external 5V regulator. My built in regulator broke 2 times (with LCD connected).<br/>
 Or use the complete battery voltage for Nano supply and a buck converters for around 48 to 60 volt. But my test converter had an idle current of 6 mA (0.3 W), so I decided to stay with the USB power supply.
-
 
 On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid alarm. `Lithium Mode` for Pylontech CAN is `0` or `PYLON`.
 
@@ -143,12 +149,16 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
                                   |                   |
   __________ Schottky diode   ____|____           ____|____             _________
- |        TX|>---|<|-- RX -->|RX Vin   |<- SPI ->|   5V    |           |         |
- |        RX|<-------- TX --<|4  Uno/  |         | MCP2515 |           |         |
- |  JK-BMS  |                |   Nano  |         |   CAN   |<-- CAN -->|  DEYE   |
- |          |<------- GND -->|         |<- GND ->|         |           |         |
- |__________|                |_________|         |_________|           |_________|
+ |        TX|>--|<|-o- RX -->|RX Vin   |<- SPI ->|   5V    |           |         |
+ |        RX|<------|- TX --<|4  Uno/  |         | MCP2515 |           |         |
+ |  JK-BMS  |      .-. opt.  |   Nano  |         |   CAN   |<-- CAN -->|  DEYE   |
+ |          |   1k | | pull  |         |         |         |           |         |
+ |          |      '-' down  |         |         |         |           |         |
+ |__________|<------o- GND ->|_________|<- GND ->|_________|           |_________|
 
+An optional pull down may be required at the RX pin of the Nano,
+to compensate for the load of the USB chip (CH340 or similar) at this pin.
+Depending on the USB chip, the pull down can be down to 680 Ohm.
 
 
 # Connection diagram for JK-BMS GPS / UART-TTL socket (4 Pin, JST 1.25mm pitch)
@@ -159,7 +169,7 @@ On the Deye, connect cable before setting `Battery Mode` to `Lithium`, to avoid 
  |________________|
    |   |   |
    |   |   --|<|-- RX of Uno / Nano
-   |   ----------- D4 (or other pin, if specified)
+   |   ----------- D4 (or other pin, if specified differently)
    --------------- GND
 
 
