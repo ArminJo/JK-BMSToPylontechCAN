@@ -153,6 +153,8 @@ void printFloatValueRightAlignedOnLCD(float aFloatValue, uint8_t aNumberOfCharac
 }
 
 void testPrintFloatValueRightAlignedOnLCD() {
+    Serial.println(F("testPrintFloatValueRightAlignedOnLCD: 1."));
+
     myLCD.clear();
     float tTestValue = 123.45;
     printFloatValueRightAlignedOnLCD(tTestValue, 6);
@@ -187,6 +189,7 @@ void testPrintFloatValueRightAlignedOnLCD() {
     // Result="-.1234-.123-.12-.1-0"
 
     delay(4000);
+    Serial.println(F("testPrintFloatValueRightAlignedOnLCD: 2."));
 
     myLCD.clear();
     tTestValue = 123.45;
@@ -223,6 +226,8 @@ void testPrintFloatValueRightAlignedOnLCD() {
     // Result=".12344.1234.123.12.1"
 
     delay(4000);
+    Serial.println(F("testPrintFloatValueRightAlignedOnLCD: End"));
+
 }
 
 #if defined(LOCAL_DEBUG)

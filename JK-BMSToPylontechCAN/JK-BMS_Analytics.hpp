@@ -38,6 +38,7 @@
 
 #include "JK-BMS_Analytics.h"
 
+// This block must be located after the includes of other *.hpp files
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 //#define LOCAL_TRACE // This enables trace output only for this file - only for development
 #include "LocalDebugLevelStart.h"
@@ -68,7 +69,7 @@ uint16_t computeSOCDataPointsInfoChecksum() {
     do {
         tChecksum += *tPointer++;
     } while (tPointer < &SOCDataPointsInfo.checksumForReboot);
-    DEBUG_PRINT(F("CS="));
+    DEBUG_PRINT(F("SOCDataPointsInfoChecksum="));
     DEBUG_PRINTLN(SOCDataPointsInfo.checksumForReboot);
     return tChecksum;
 }
@@ -89,11 +90,11 @@ void initializeAnalytics() {
         memset(&SOCDataPointsInfo.NumberOfSamples, 0, 14);
         // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
         SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
-                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
+                JK_BMS_1.JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
         JK_INFO_PRINT(tComputedChecksum);
         JK_INFO_PRINT(F(" != "));
         JK_INFO_PRINT(SOCDataPointsInfo.checksumForReboot);
-        JK_INFO_PRINT(F(" -> clear"));
+        JK_INFO_PRINT(F(" -> Break detected: clear"));
     } else {
         JK_INFO_PRINT(F("Reboot detected: keep"));
     }
@@ -102,7 +103,7 @@ void initializeAnalytics() {
 #else
     // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
     SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
-            JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
+            JK_BMS_1.JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
 #endif
 }
 /*
@@ -137,6 +138,8 @@ void findFirstSOCDataPointIndex() {
     uint16_t tSOCDataPointsArrayLength = NUMBER_OF_SOC_DATA_POINTS; // value if SOC jump was found
 
     bool tStartPageIsEvenFlag;
+    DEBUG_PRINTLN(F("Search for even/odd toggling"));
+
     for (uint16_t i = 0; i < NUMBER_OF_SOC_DATA_POINTS - 1; ++i) {
         uint8_t tSOCPercent = eeprom_read_byte(&SOCDataPointsEEPROMArray[i].SOCPercent);
         DEBUG_PRINT(F("tSOCPercent=0x"));
@@ -270,7 +273,7 @@ void readAndPrintSOCData() {
 
             if (i == 0) {
                 // Initialize start value of capacity with a reasonable value
-                tCurrentCapacity100MilliampereHour = (tCurrentSOCDataPoint.SOCPercent * JKComputedData.TotalCapacityAmpereHour)
+                tCurrentCapacity100MilliampereHour = (tCurrentSOCDataPoint.SOCPercent * JK_BMS_1.JKComputedData.TotalCapacityAmpereHour)
                         / 10;
                 tCurrentCapacityAmpereHour = tCurrentCapacity100MilliampereHour / 10;
             }
@@ -279,7 +282,7 @@ void readAndPrintSOCData() {
              * Check for transition from 1 to 2 in order to reset capacity (before adding the delta) to the value of 1%
              */
             if (tLastSOCPercent == 1 && tCurrentSOCDataPoint.SOCPercent == 2) {
-                tCurrentCapacity100MilliampereHour = JKComputedData.TotalCapacityAmpereHour / 10; // * 10 / 100
+                tCurrentCapacity100MilliampereHour = JK_BMS_1.JKComputedData.TotalCapacityAmpereHour / 10; // * 10 / 100
                 tMinimumSOCData.CapacityAmpereHour = 0; // Set minimum to 0
             }
             tLastSOCPercent = tCurrentSOCDataPoint.SOCPercent;
@@ -424,9 +427,9 @@ void readAndPrintSOCData() {
                     }
 
                     Serial.print(F(" Empty_voltage_"));
-                    Serial.print(JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 1);
+                    Serial.print(JK_BMS_1.JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 1);
                     Serial.print('_');
-                    Serial.print(swap(sJKFAllReplyPointer->CellUndervoltageProtectionMillivolt) / 1000.0, 2);
+                    Serial.print(swap(JK_BMS_1.JKAllReplyPointer->CellUndervoltageProtectionMillivolt) / 1000.0, 2);
                     Serial.println(F("V:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0"));
                 }
 
@@ -493,27 +496,27 @@ void writeSOCData() {
      * This can happen at the start of the system, when there was no full 0% to 100% capacity cycle
      * and the BMS has not yet learned the correct capacity for 100%.
      */
-    SOCDataPointsInfo.DeltaAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere; // Can hold values of +/-11930 Ah
-    SOCDataPointsInfo.AverageAccumulator10Milliampere += JKComputedData.Battery10MilliAmpere;
+    SOCDataPointsInfo.DeltaAccumulator10Milliampere += JK_BMS_1.JKComputedData.Battery10MilliAmpere; // Can hold values of +/-11930 Ah
+    SOCDataPointsInfo.AverageAccumulator10Milliampere += JK_BMS_1.JKComputedData.Battery10MilliAmpere;
     SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt +=
-            JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
+            JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt;
     SOCDataPointsInfo.NumberOfSamples++; // For one sample each 2 seconds, we can store up to 36.4 hours here.
     TRACE_PRINT(F("#Samples="));
     TRACE_PRINT(SOCDataPointsInfo.NumberOfSamples);
     TRACE_PRINT(F(", 10mA="));
-    TRACE_PRINT(JKComputedData.Battery10MilliAmpere);
+    TRACE_PRINT(JK_BMS_1.JKComputedData.Battery10MilliAmpere);
     TRACE_PRINT(F(", DeltaAcc10mA="));
     TRACE_PRINTLN(SOCDataPointsInfo.DeltaAccumulator10Milliampere);
 
-    auto tCurrentSOCPercent = sJKFAllReplyPointer->SOCPercent;
+    auto tCurrentSOCPercent = JK_BMS_1.JKAllReplyPointer->SOCPercent;
     /*
      * Check for transition from 0 to 1, where we can reset residual capacity
      */
-    if (lastJKReply.SOCPercent == 0 && tCurrentSOCPercent == 1) {
+    if (JK_BMS_1.lastJKReply.SOCPercent == 0 && tCurrentSOCPercent == 1) {
 //        Serial.println(F("SOC 0 -> 1 -> reset residual capacity"));
         SOCDataPointsInfo.DeltaAccumulator10Milliampere = 0; // Reset residual capacity
         SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
-                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere; // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
+                JK_BMS_1.JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere; // Reset to computed value based on SOCPercent and TotalCapacityAmpereHour
     }
 
     uint16_t tSOCDataPointsArrayNextWriteIndex = (SOCDataPointsInfo.ArrayStartIndex + SOCDataPointsInfo.ArrayLength)
@@ -537,8 +540,8 @@ void writeSOCData() {
             || (tLastWrittenSOCPercent == 1 && tCurrentSOCPercent != 1))
             && abs(
                     SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere
-                            - JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere)
-                    > getOnePercentCapacityAsAccumulator10Milliampere();
+                            - JK_BMS_1.JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere)
+                    > JK_BMS_1.getOnePercentCapacityAsAccumulator10Milliampere();
 
     if (tExtraCapacityChangedMoreThan1Percent) {
         JK_INFO_PRINTLN(F("Write data for extra capacity"));
@@ -652,10 +655,10 @@ void writeSOCData() {
         SOCDataPointsInfo.AverageAccumulatorVoltageDifferenceToEmpty10Millivolt = 0;
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
-                JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
+                JK_BMS_1.JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
 #if defined(ENABLE_MONITORING)
         // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
-        printCSVLine('#');
+        JK_BMS_1.printCSVLine('#');
         Serial.println();
 #endif
     }

@@ -1,5 +1,5 @@
 /*
-SoftwareSerialTX.h (from SoftSerial.h) - 
+SoftwareSerialTX.h (from SoftSerial.h) -
 Multi-instance software serial library for Arduino/Wiring
 -- Transmit-only imoplementation
 -- reduce footprint in code memory and RAM compared to SoftwareSerial
@@ -31,7 +31,7 @@ http://arduiniana.org.
 
 class SoftwareSerialTX
 {
-private:
+public:
   // per object data
   uint8_t _transmitBitMask;
   volatile uint8_t *_transmitPortRegister;
@@ -45,8 +45,8 @@ private:
   static uint16_t subtract_cap(uint16_t num, uint16_t sub);
 #endif
 
-public:
   // public methods
+  SoftwareSerialTX();
   SoftwareSerialTX(uint8_t transmitPin);
   void begin(long speed);
   size_t write(uint8_t byte);

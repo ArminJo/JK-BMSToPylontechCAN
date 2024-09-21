@@ -100,7 +100,7 @@
 #include <Arduino.h>
 
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
-#define VERSION_EXAMPLE "3.2.1"
+#define VERSION_EXAMPLE "4.0.0"
 
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
@@ -122,7 +122,9 @@
 //#define DEBUG                 // This enables debug output for all files - only for development
 //#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 #if defined(STANDALONE_TEST)
-//#define LCD_PAGES_TEST // Additional automatic tests
+//#define ALARM_TIMEOUT_TEST
+#define BEEP_TIMEOUT_SECONDS        20L     // 20 beeps
+//#define LCD_PAGES_TEST // LCD pages layout tests
 #  if defined(LCD_PAGES_TEST)
 //#define BIG_NUMBER_TEST // Additional automatic tests, especially for rendering of JK_BMS_PAGE_BIG_INFO
 #  endif
@@ -214,13 +216,15 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
  */
 #define BUZZER_PIN                             A2 // To signal errors
 #define PAGE_SWITCH_DEBUG_BUTTON_PIN_FOR_INFO   2 // Button at INT0 / D2 for switching LCD pages - definition is not used in program, only for documentation.
-// The standard RX of the Arduino is used for the JK_BMS connection.
+// The standard RX of the Arduino is used for the JK_BMS_1 connection.
 #define JK_BMS_RX_PIN_FOR_INFO                  0 // We use the Serial RX pin - definition is not used in program, only for documentation.
 #if !defined(JK_BMS_TX_PIN)                       // Allow override by global symbol
 #  if defined(USE_LAYOUT_FOR_644_BOARD)
 #define JK_BMS_TX_PIN                          12
+#define JK_BMS_TX_PIN_2                        12 // use same pin for tests
 #  else
 #define JK_BMS_TX_PIN                           4
+#define JK_BMS_TX_PIN_2                         5
 #  endif
 #endif
 
@@ -294,6 +298,8 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #define SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS          "2" // Only for display on LCD
 #define SECONDS_BETWEEN_CAN_FRAME_SEND                  "2" // Only for display on LCD
 #endif
+uint32_t sMillisOfLastRequestedJKDataFrame = -MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS; // Initial value to start first request immediately
+bool sResponseFrameBytesAreExpected = false; // If true, request was recently sent
 
 /*
  * Error beep behavior
@@ -302,13 +308,22 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
  */
 //#define NO_BEEP_ON_ERROR              // If activated, Do not beep on error or timeout.
 //#define ONE_BEEP_ON_ERROR             // If activated, only beep once if error was detected.
+//#define BEEP_TIMEOUT_SECONDS    10L   // 10 seconds, Maximum is 254 seconds = 4 min 14 s
 #define SUPPRESS_CONSECUTIVE_SAME_ALARMS // If activated, recurring alarms are suppressed, e.g. undervoltage alarm tends to come and go in a minute period
-#define BEEP_TIMEOUT_SECONDS        60L // 1 minute, Maximum is 254 seconds = 4 min 14 s
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+uint16_t sLastActiveAlarmsAsWord;   // Used to disable new alarm beep on recurring of same alarm
+bool sPrintAlarmInfoOnlyOnce = false; // This forces display on Alarm page
+#define SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS    3600 // Allow consecutive same alarms after 1 hour of no alarm
+uint16_t sNoConsecutiveAlarmTimeoutCounter; // Counts no alarms in order to reset suppression of consecutive alarms.
+#endif
 #if !defined(NO_BEEP_ON_ERROR) && !defined(ONE_BEEP_ON_ERROR)
 #define MULTIPLE_BEEPS_WITH_TIMEOUT     // If activated, beep for 1 minute if error was detected. Timeout is disabled if debug is active.
 #endif
-bool sDoAlarmOrTimeoutBeep = false;     // If true, we do an error beep at the end of the loop
-#  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT)  // Beep one minute
+bool sAlarmOrTimeoutBeepActive = false;     // If true, we do an error beep at each end of the loop until beep timeout
+#if defined(MULTIPLE_BEEPS_WITH_TIMEOUT)  // Beep one minute
+#  if !defined(BEEP_TIMEOUT_SECONDS)
+#define BEEP_TIMEOUT_SECONDS        60L     // 1 minute, Maximum is 254 seconds = 4 min 14 s
+#  endif
 uint8_t sBeepTimeoutCounter = 0;
 #endif
 #if defined(NO_BEEP_ON_ERROR) && defined(ONE_BEEP_ON_ERROR)
@@ -316,6 +331,16 @@ uint8_t sBeepTimeoutCounter = 0;
 #endif
 
 #define MILLIS_IN_ONE_SECOND 1000L
+
+/*
+ * Function declarations
+ */
+void printReceivedData();
+bool isVCCTooHighSimple();
+void handleOvervoltage();
+void handleBeep();
+void processJK_BMSStatusFrame();
+void handleFrameReceiveTimeout();
 
 /*
  * Page button stuff
@@ -334,41 +359,24 @@ volatile bool sPageButtonJustPressed = false;
 void handlePageButtonPress(bool aButtonToggleState);        // The button press callback function sets just a flag.
 EasyButton PageSwitchButtonAtPin2(&handlePageButtonPress);  // Button is connected to INT0
 #define LONG_PRESS_BUTTON_DURATION_MILLIS   1000
-bool sDebugModeActivated = false; // Is activated on long press
+bool sCommunicationDebugModeActivated = false; // Is true for JK_BMS_PAGE_CAN_INFO
 void checkButtonPress();
 
-bool readJK_BMSStatusFrame();
-void processJK_BMSStatusFrame();
-void handleFrameReceiveTimeout();
-
-#include "HexDump.hpp"
 #include "digitalWriteFast.h"
 
 /*
- * Software serial for JK-BMS stuff
+ * JK-BMS communication stuff
  */
 #if !defined(MAXIMUM_NUMBER_OF_CELLS)
 #define MAXIMUM_NUMBER_OF_CELLS     24 // Maximum number of cell info which can be converted. Must be before #include "JK-BMS.hpp".
 #endif
 #include "JK-BMS.hpp"
 
-/*
- * Software serial for JK-BMS request frame sending
- */
-#include "SoftwareSerialTX.h"
-/*
- * Use a 115200 baud software serial for the short request frame.
- * If available, we also can use a second hardware serial here :-).
- */
-SoftwareSerialTX TxToJKBMS(JK_BMS_TX_PIN);
-bool sResponseFrameBytesAreExpected = false;   // If true, request was recently sent so now check for serial input of response frame
-uint32_t sMillisOfLastRequestedJKDataFrame = -MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS; // Initial value to start first request immediately
-/*
- * BMS communication timeout
- */
-uint32_t sMillisOfLastReceivedByte = 0;     // For timeout detection
-bool sJKBMSFrameHasTimeout;                 // True, as long as BMS timeout persists.
-bool sTimeoutJustdetected = false;          // Is set to true at first detection of timeout and reset by beep timeout
+JK_BMS JK_BMS_1;
+//#define HANDLE_MULTIPLE_BMS
+#if defined(HANDLE_MULTIPLE_BMS)
+JK_BMS JK_BMS_2;
+#endif
 
 /*
  * CAN stuff
@@ -403,29 +411,16 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 /*
  * Optional LCD stuff
  */
-#if !defined(USE_NO_LCD)
+#if defined(USE_SERIAL_2004_LCD)
 #include "JK-BMS_LCD.hpp"
 #endif
-
-bool sBMSFrameProcessingComplete = false; // True if one status frame was received and processed or timeout happened. Then we can do a sleep at the end of the loop.
 
 /*
  * Miscellaneous
  */
-#define TIMEOUT_MILLIS_FOR_FRAME_REPLY                  100 // I measured 26 ms between request end and end of received 273 byte result
-#if TIMEOUT_MILLIS_FOR_FRAME_REPLY > MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
-#error "TIMEOUT_MILLIS_FOR_FRAME_REPLY must be smaller than MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS to detect timeouts"
-#endif
 bool sInitialActionsPerformed = false; // Flag to send static info only once after reset.
 
-void processReceivedData();
-void printReceivedData();
-bool isVCCTooHighSimple();
-void handleOvervoltage();
-
-/*
- * Must be after all .hpp includes
- */
+// This block must be located after the includes of other *.hpp files
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 #include "LocalDebugLevelStart.h" // no include "LocalDebugLevelEnd.h" required :-)
 
@@ -458,6 +453,7 @@ const uint8_t TestJKReplyStatusFrame[] PROGMEM = { /* Header*/0x4E, 0x57, 0x01, 
         0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x51, 0xC2 };
 
 void doStandaloneTest();
+void initializeEEPROMForTest();
 #endif
 
 /*
@@ -558,8 +554,13 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     /*
      * 115200 baud soft serial to JK-BMS. For serial from BMS we use the hardware Serial RX.
      */
-    TxToJKBMS.begin(115200);
-    Serial.println(F("Serial to JK-BMS started with 115.200 kbit/s!"));
+    JK_BMS_1.init(JK_BMS_TX_PIN);
+#if defined(HANDLE_MULTIPLE_BMS)
+    JK_BMS_2.init(JK_BMS_TX_PIN_2);
+    Serial.println(F("Serial to JK-BMS 1 + 2 started with 115.200 kbit/s at pins " STR(JK_BMS_TX_PIN) " + " STR(JK_BMS_TX_PIN_2)));
+#else
+    Serial.println (F("Serial to JK-BMS started with 115.200 kbit/s at pin " STR(JK_BMS_TX_PIN)));
+#endif
 #if defined(USE_SERIAL_2004_LCD)
     if (sSerialLCDAvailable) {
         myLCD.setCursor(0, 2);
@@ -625,124 +626,59 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     Serial.println(F("Standalone test. Use fixed demo data"));
     Serial.println();
     memcpy_P(JKReplyFrameBuffer, TestJKReplyStatusFrame, sizeof(TestJKReplyStatusFrame));
-    sReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
-    printJKReplyFrameBuffer();
+    JK_BMS_1.ReplyFrameBufferIndex = sizeof(TestJKReplyStatusFrame) - 1;
+    JK_BMS_1.printJKReplyFrameBuffer();
     Serial.println();
-    processReceivedData(); // sets sCANDataIsInitialized to true
+    sResponseFrameBytesAreExpected = false; // Enable CAN data sending
+    JK_BMS_1.processReceivedData(); // sets sCANDataIsInitialized to true
     printReceivedData();
     /*
      * Copy complete reply and computed values for change determination
      */
-    lastJKReply.SOCPercent = sJKFAllReplyPointer->SOCPercent;
-    lastJKReply.AlarmUnion.AlarmsAsWord = sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
-    lastJKReply.BMSStatus.StatusAsWord = sJKFAllReplyPointer->BMSStatus.StatusAsWord;
-    lastJKReply.SystemWorkingMinutes = sJKFAllReplyPointer->SystemWorkingMinutes;
+    JK_BMS_1.lastJKReply.SOCPercent = JK_BMS_1.JKAllReplyPointer->SOCPercent;
+    JK_BMS_1.lastJKReply.AlarmUnion.AlarmsAsWord = JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmsAsWord;
+    JK_BMS_1.lastJKReply.BMSStatus.StatusAsWord = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsWord;
+    JK_BMS_1.lastJKReply.SystemWorkingMinutes = JK_BMS_1.JKAllReplyPointer->SystemWorkingMinutes;
 
 //    if (true) {
     // first value is still written by processReceivedData
     if (SOCDataPointsInfo.ArrayLength > 250) {
         Serial.println(F("EEPROM for standalone test is already initialized"));
     } else {
-        // If EEPROM empty, fill in some values
-        int8_t tIncrement = -1;
-        Serial.println();
-        Serial.println();
-        Serial.println(F("Now write initial data to EEPROM"));
-        Serial.print(F("SOC="));
-        Serial.println(sJKFAllReplyPointer->SOCPercent);
-        Serial.print(F("JKComputedData.Battery10MilliAmpere="));
-        Serial.println(JKComputedData.Battery10MilliAmpere);
-        Serial.print(F("JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt="));
-        Serial.println(JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt);
-
-        for (int i = 0; i < 260; ++i) { // force buffer wrap around
-            sJKFAllReplyPointer->SOCPercent += tIncrement;
-            writeSOCData(); // write too EEPROM here.
-
-            // change accumulated value
-            JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt += tIncrement * 4;
-
-            Serial.print(sJKFAllReplyPointer->SOCPercent);
-            Serial.print(F(", "));
-
-            // Test negative values
-            if (sJKFAllReplyPointer->SOCPercent == 2 && tIncrement < 0) {
-                JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = -10; // -100 mV
-                Serial.print(F(" -100 mV "));
-            }
-
-            /*
-             * Generate EEPROM data by calling writeSOCData(); multiple times for each SOC value
-             */
-            for (int j = 0; j < (i + 4) * 2; ++j) { // 320 corresponds to 2 Ah
-                // accumulate values
-                writeSOCData();
-                lastJKReply.SOCPercent = sJKFAllReplyPointer->SOCPercent; // for transition detection from 0 to 1
-            }
-
-            // Manage 0% and 100 %
-            if (sJKFAllReplyPointer->SOCPercent == 0 || sJKFAllReplyPointer->SOCPercent == 100) {
-                if (sJKFAllReplyPointer->SOCPercent == 100) {
-                    // Add additional capacity after 100%
-                    for (int j = 0; j < 8000; ++j) {
-                        writeSOCData();
-                    }
-                } else {
-                    // set difference voltage to 0
-                    JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = 0;
-                }
-                // reverse values at 0 and 100
-                JKComputedData.Battery10MilliAmpere = -JKComputedData.Battery10MilliAmpere;
-                tIncrement = -tIncrement;
-            }
-        }
-        Serial.println();
-        findFirstSOCDataPointIndex();
-        Serial.print(F("EEPROM SOC data start index="));
-        Serial.print(SOCDataPointsInfo.ArrayStartIndex);
-        Serial.print(F(" length="));
-        Serial.print(SOCDataPointsInfo.ArrayLength);
-        Serial.print(F(", even="));
-        Serial.println(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+        initializeEEPROMForTest();
     }
 
     doStandaloneTest();
 #endif
 }
 
+#if defined(HANDLE_MULTIPLE_BMS)
+JK_BMS *sCurrentBMS = &JK_BMS_1;
+#else
+JK_BMS *const sCurrentBMS = &JK_BMS_1;
+#endif
 void loop() {
 
     checkButtonPress();
+#if defined(LOCAL_DEBUG)
+    sCommunicationDebugModeActivated = true;
+#endif
 
     /*
-     * Request status frame every 2 seconds
+     * Request status frame every 2 seconds and check for response
      */
     if (millis() - sMillisOfLastRequestedJKDataFrame >= MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
         sMillisOfLastRequestedJKDataFrame = millis(); // set for next check
-        /*
-         * Flush input buffer and send request to JK-BMS
-         */
-        while (Serial.available()) {
-            Serial.read();
-        }
-#if defined(TIMING_TEST)
-        digitalWriteFast(TIMING_TEST_PIN, HIGH);
-#endif
-        requestJK_BMSStatusFrame(&TxToJKBMS, sDebugModeActivated); // 1.85 ms
-#if defined(TIMING_TEST)
-        digitalWriteFast(TIMING_TEST_PIN, LOW);
-#endif
+        sCurrentBMS->RequestStatusFrame(sCommunicationDebugModeActivated);
         sResponseFrameBytesAreExpected = true; // Enable check for serial input of response
-        initJKReplyFrameBuffer();
-        sMillisOfLastReceivedByte = millis(); // initialize reply timeout
     }
 
 #if defined(STANDALONE_TEST)
-    sResponseFrameBytesAreExpected = false; // No response!
-    sBMSFrameProcessingComplete = true; // for LCD timeout etc.
-    processReceivedData(); // for statistics
+    JK_BMS_1.processReceivedData(); // call it multiple times for statistics
     writeSOCData(); // for analytics tests
     printBMSDataOnLCD(); // for switching between MAX and MIN display
+    fillAllCANData(&JK_BMS_1);
+    sCANDataIsInitialized = true; // One time flag
     delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS); // do it simple :-)
 
 #  if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
@@ -753,46 +689,93 @@ void loop() {
     delay(20); // do it simple :-)
 #  endif
 
-#else
-    /*
-     * Get reply from BMS and check timeout
-     */
+#  if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)
+    if (sSerialLCDAvailable) {
+        doLCDBacklightTimeoutHandling();
+    }
+#  endif
+#  if !defined(NO_BEEP_ON_ERROR) // Beep enabled
+    handleBeep(); // Alarm / beep handling
+#  endif
+#else // defined(STANDALONE_TEST)
+
     if (sResponseFrameBytesAreExpected) {
-        if (Serial.available()) {
-#  if defined(TIMING_TEST)
-            digitalWriteFast(TIMING_TEST_PIN, HIGH);
-#  endif
-            if (readJK_BMSStatusFrame()) {
-                /*
-                 * Frame completely received, now process it
-                 */
-                sBMSFrameProcessingComplete = true;
-                TURN_BMS_STATUS_LED_ON;
-                processJK_BMSStatusFrame(); // Process the complete receiving of the status frame and set the appropriate flags
-                TURN_BMS_STATUS_LED_OFF;
-            }
-#  if defined(TIMING_TEST)
-            digitalWriteFast(TIMING_TEST_PIN, LOW);
-#  endif
+        uint8_t tBMSCommunicationReturnCode = sCurrentBMS->checkForReplyFromBMSOrTimeout();
+        /*
+         * Check for reply from BMS or timeout
+         */
+        if (tBMSCommunicationReturnCode != JK_BMS_RECEIVE_ONGOING) {
+            sResponseFrameBytesAreExpected = false;
 
-        } else if (millis() - sMillisOfLastReceivedByte >= TIMEOUT_MILLIS_FOR_FRAME_REPLY) {
-            /*
-             * Here we have requested response frame, but serial was not available fore a longer time => timeout at receiving
-             */
-            sBMSFrameProcessingComplete = true; // Do frame complete handling like beep anyway
-            sResponseFrameBytesAreExpected = false; // Do not try to receive more response bytes
-
-            if (!sJKBMSFrameHasTimeout) {
-                /*
-                 * Do this only once per timeout
-                 */
-                sJKBMSFrameHasTimeout = true;
-                sTimeoutJustdetected = true; // This forces the beep
+            if (sCurrentBMS->TimeoutJustDetected) {
                 handleFrameReceiveTimeout();
             }
+
+            /*
+             * Process BMS reply
+             */
+            if (tBMSCommunicationReturnCode == JK_BMS_RECEIVE_FINISHED) {
+                TURN_BMS_STATUS_LED_ON;
+                /*
+                 * First compute some internal variables
+                 */
+                sCurrentBMS->processReceivedData();
+                processJK_BMSStatusFrame(); // Process the complete receiving of the status frame
+
+#  if defined(HANDLE_MULTIPLE_BMS)
+                if (sCurrentBMS->NumberOfBMS == 1) {
+                    TURN_BMS_STATUS_LED_OFF;
+                    // Process 2. BMS
+                    delay(MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS / 2); // a hack
+                    sCurrentBMS = &JK_BMS_2;
+                    sCurrentBMS->RequestStatusFrame(sCommunicationDebugModeActivated);
+                    sResponseFrameBytesAreExpected = true; // Enable check for serial input of response
+
+                } else {
+                    /*
+                     * Fill CAN data after both BMS are processed
+                     */
+                    fillAllCANData(sCurrentBMS);
+                    sCANDataIsInitialized = true; // One time flag
+
+                    sCurrentBMS = &JK_BMS_1; // switch back to first BMS
+                }
+#  else
+                /*
+                 * Fill CAN data
+                 */
+                fillAllCANData(sCurrentBMS);
+                sCANDataIsInitialized = true; // One time flag
+
+                processJK_BMSStatusFrame();// Process the complete receiving of the status frame
+
+#  endif
+                TURN_BMS_STATUS_LED_OFF;
+                sCommunicationDebugModeActivated = false; // Reset flag here.
+            }
+
+            /*******************************************************************
+             * Do this once after each complete status frame or timeout or error
+             *******************************************************************/
+            /*
+             * Check for overvoltage
+             */
+            while (isVCCTooHighSimple()) {
+                handleOvervoltage();
+            }
+
+#  if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)
+            if (sSerialLCDAvailable) {
+                doLCDBacklightTimeoutHandling();
+            }
+#  endif
+
+#  if !defined(NO_BEEP_ON_ERROR) // Beep enabled
+            handleBeep(); // Alarm / beep handling
+#  endif
         }
     }
-#endif // !defined(STANDALONE_TEST)
+#endif // defined(STANDALONE_TEST)
 
     /*
      * Send CAN frame independently of the period of JK-BMS data requests,
@@ -805,173 +788,155 @@ void loop() {
     Serial.print(F("sCANDataIsInitialized="));
     Serial.print(sCANDataIsInitialized);
     Serial.print(F(" BMSIsStarting="));
-    Serial.print(JKComputedData.BMSIsStarting);
+    Serial.print(sCurrentBMS->JKComputedData.BMSIsStarting);
     Serial.print(F(", sResponseFrameBytesAreExpected="));
     Serial.println(sResponseFrameBytesAreExpected);
 #endif
-    if (sCANDataIsInitialized && !JKComputedData.BMSIsStarting && !sResponseFrameBytesAreExpected
+    if (sCANDataIsInitialized && !sCurrentBMS->JKComputedData.BMSIsStarting && !sResponseFrameBytesAreExpected
             && millis() - sMillisOfLastCANFrameSent >= MILLISECONDS_BETWEEN_CAN_FRAME_SEND) {
         sMillisOfLastCANFrameSent = millis();
 
         TURN_CAN_STATUS_LED_ON;
-        if (sDebugModeActivated) {
+        if (sCommunicationDebugModeActivated) {
             Serial.println(F("Send CAN"));
         }
-        sendAllCANFrames(sDebugModeActivated);
+        sendAllCANFrames(sCommunicationDebugModeActivated);
         TURN_CAN_STATUS_LED_OFF;
     }
+}
 
-    /**********************************************************
-     * Do this once after each complete status frame or timeout
-     **********************************************************/
-    if (sBMSFrameProcessingComplete) {
-        sDebugModeActivated = false; // reset flag here. It may be set again at start of next loop.
+void handleBeep() {
+    bool tDoBeep = false;
 
+#if defined(SUPPRESS_CONSECUTIVE_SAME_ALARMS)
+    if (!sCurrentBMS->AlarmActive) {
         /*
-         * Check for overvoltage
+         * Check for 1 hour of no alarm, then reset suppression of same alarm
          */
-        while (isVCCTooHighSimple()) {
-            handleOvervoltage();
+        sNoConsecutiveAlarmTimeoutCounter++; // integer overflow does not really matter here
+        if (sNoConsecutiveAlarmTimeoutCounter
+                == (SUPPRESS_CONSECUTIVE_SAME_ALARMS_TIMEOUT_SECONDS * MILLIS_IN_ONE_SECOND)
+                        / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+            sLastActiveAlarmsAsWord = NO_ALARM_WORD_CONTENT; // Reset LastActiveAlarmsAsWord
         }
+    }
 
-#if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)
-        if (sSerialLCDAvailable) {
-            doLCDBacklightTimeoutHandling();
-        }
-#endif
-
-        /*
-         * Check for BMS alarm flags
-         */
-        if (sAlarmJustGetsActive || sTimeoutJustdetected) {
-            sDoAlarmOrTimeoutBeep = true;
-#if defined(MULTIPLE_BEEPS_WITH_TIMEOUT)
+    if (sCurrentBMS->AlarmJustGetsActive) {
+        sNoConsecutiveAlarmTimeoutCounter = 0; // initialize timeout counter
+        // If new alarm is equal old one, beep only once
+        if (sLastActiveAlarmsAsWord == sCurrentBMS->JKAllReplyPointer->AlarmUnion.AlarmsAsWord) {
+            // do only one beep for recurring alarms
+            sCurrentBMS->AlarmJustGetsActive = false; // avoid evaluation below
+            tDoBeep = true; // Beep only once in this loop
         } else {
-            sBeepTimeoutCounter = 0;
+            /*
+             * Here at least one alarm is active and it is NOT the last alarm processed
+             */
+            sLastActiveAlarmsAsWord = sCurrentBMS->JKAllReplyPointer->AlarmUnion.AlarmsAsWord;
+        }
+    }
 #endif
+    /*
+     * Check for BMS alarm flags
+     */
+    if (sCurrentBMS->AlarmJustGetsActive || sCurrentBMS->TimeoutJustDetected) {
+        sCurrentBMS->AlarmJustGetsActive = false;
+        sCurrentBMS->TimeoutJustDetected = false;
+#if defined(ONE_BEEP_ON_ERROR)
+        tDoBeep = true; // Beep only once in this loop
+#else
+        sAlarmOrTimeoutBeepActive = true; // enable beep until beep timeout
+#endif
+#if defined(MULTIPLE_BEEPS_WITH_TIMEOUT)
+        sBeepTimeoutCounter = 0;
+#endif
+    }
+    if (!(sCurrentBMS->AlarmActive || sCurrentBMS->JKBMSFrameHasTimeout)) {
+        sAlarmOrTimeoutBeepActive = false; // No more error, stop beeping
+    }
+
+    /*
+     * Is beep requested for this loop ?
+     */
+#if !defined(ONE_BEEP_ON_ERROR)
+    if (sAlarmOrTimeoutBeepActive) {
+        tDoBeep = true; // Beep only once in this loop
+    }
+#endif
+    if (tDoBeep) {
+#if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) // Beep one minute
+        sBeepTimeoutCounter++; // incremented at each frame request
+        if (sBeepTimeoutCounter == (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
+            JK_INFO_PRINTLN(F("Timeout reached, suppress consecutive error beeps"));
+            sAlarmOrTimeoutBeepActive = false; // disable further alarm beeps
+        } else
+#endif
+        {
+            tone(BUZZER_PIN, 2200);
+            tone(BUZZER_PIN, 2200, 50);
+            delay(200);
+            tone(BUZZER_PIN, 2200, 50);
+            delay(200); // to avoid tone interrupts waking us up from sleep
         }
-
-        /*
-         * Alarm / beep handling
-         */
-#if !defined(NO_BEEP_ON_ERROR)      // Beep enabled
-
-#  if defined(ONE_BEEP_ON_ERROR)    // Beep once
-        if (sDoAlarmOrTimeoutBeep) {
-            sAlarmJustGetsActive = false; // disable further alarm beeps
-            sTimeoutJustdetected = false; // disable further timeout beeps
-        }
-#  endif
-
-        if (sDoAlarmOrTimeoutBeep) {
-            sDoAlarmOrTimeoutBeep = false;
-#  if defined(MULTIPLE_BEEPS_WITH_TIMEOUT) // Beep one minute
-            sBeepTimeoutCounter++; // incremented at each frame request
-            if (sBeepTimeoutCounter == (BEEP_TIMEOUT_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
-                JK_INFO_PRINTLN(F("Timeout reached, suppress consecutive error beeps"));
-                sAlarmJustGetsActive = false; // disable further alarm beeps
-                sTimeoutJustdetected = false; // disable further timeout beeps
-            } else
-#  endif
-            {
-                tone(BUZZER_PIN, 2200);
-                tone(BUZZER_PIN, 2200, 50);
-                delay(200);
-                tone(BUZZER_PIN, 2200, 50);
-                delay(200); // to avoid tone interrupts waking us up from sleep
-            }
-        }
-#endif // NO_BEEP_ON_ERROR
-
-        sBMSFrameProcessingComplete = false; // prepare for next loop
-
-    } // if (sBMSFrameProcessingComplete)
+    }
 }
 
 /*
- * Process the complete receiving of the status frame and set the appropriate flags
+ * Process the complete receiving of the status frame
+ * Print data on LCD and Serial
+ * Do initial actions like printing static values after boot
+ * Print received buffer, if debug enabled
  */
 void processJK_BMSStatusFrame() {
-    if (sDebugModeActivated) {
+    if (sCommunicationDebugModeActivated) {
         /*
-         * Do it once at every debug start
+         * Print received buffer, if debug enabled
          */
-        if (sReplyFrameBufferIndex == 0) {
+        if (sCurrentBMS->ReplyFrameBufferIndex == 0) {
             Serial.println(F("sReplyFrameBufferIndex is 0"));
         } else {
-            Serial.print(sReplyFrameBufferIndex + 1);
-            Serial.println(F(" bytes received"));
-            printJKReplyFrameBuffer();
+            sCurrentBMS->printJKReplyFrameBuffer();
         }
-        Serial.println();
     }
-
-    if (sJKBMSFrameHasTimeout) {
-        // First response frame after timeout :-)
-        sJKBMSFrameHasTimeout = false;
-        sTimeoutJustdetected = false;
-#if defined(USE_SERIAL_2004_LCD) && !defined(DISPLAY_ALWAYS_ON)
-        checkAndTurnLCDOn(); // Reason is printed anyway :-)
-#endif
-        JK_INFO_PRINTLN(F("Successfully receiving first BMS status frame after BMS communication timeout"));
-    }
-    processReceivedData();
 
     if (!sInitialActionsPerformed) {
         /*
          * Do initialization once here
          */
+#  if defined(HANDLE_MULTIPLE_BMS)
+        // Print static info for both BMS
+        if (sCurrentBMS->NumberOfBMS == 2) {
+            sInitialActionsPerformed = true;
+        }
+#  else
         sInitialActionsPerformed = true;
-        initializeComputedData();
+
+#  endif
         Serial.println();
-        printJKStaticInfo();
+        sCurrentBMS->printJKStaticInfo();
 #if !defined(NO_ANALYTICS)
+#  if defined(HANDLE_MULTIPLE_BMS)
+        if (sCurrentBMS->NumberOfBMS == 1) {
+            initializeAnalytics();
+        }
+#  else
         initializeAnalytics();
+
+#  endif
         JK_INFO_PRINTLN();
 #endif
     }
 
     printReceivedData();
 #if !defined(NO_ANALYTICS)
-    writeSOCData();
-#endif
-    /*
-     * Copy complete reply and computed values for change determination
-     */
-    lastJKReply.SOCPercent = sJKFAllReplyPointer->SOCPercent;
-    lastJKReply.AlarmUnion.AlarmsAsWord = sJKFAllReplyPointer->AlarmUnion.AlarmsAsWord;
-    lastJKReply.BMSStatus.StatusAsWord = sJKFAllReplyPointer->BMSStatus.StatusAsWord;
-    lastJKReply.SystemWorkingMinutes = sJKFAllReplyPointer->SystemWorkingMinutes;
-}
-
-/*
- * Reads all bytes of the requested frame into buffer and prints errors
- * Sets sResponseFrameBytesAreExpected to false, if frame was complete and manages other flags too
- * @return true if frame was completely received
- */
-bool readJK_BMSStatusFrame() {
-    sMillisOfLastReceivedByte = millis();
-    uint8_t tReceiveResultCode = readJK_BMSStatusFrameByte();
-    if (tReceiveResultCode == JK_BMS_RECEIVE_FINISHED) {
-        /*
-         * All JK-BMS status frame data received
-         */
-        sResponseFrameBytesAreExpected = false; // Do not try to receive more response bytes
-        return true;
-
-    } else if (tReceiveResultCode != JK_BMS_RECEIVE_OK) {
-        /*
-         * Error here
-         */
-        Serial.print(F("Receive error="));
-        Serial.print(tReceiveResultCode);
-        Serial.print(F(" at index"));
-        Serial.println(sReplyFrameBufferIndex);
-        sResponseFrameBytesAreExpected = false; // Do not try to receive more response bytes
-        sBMSFrameProcessingComplete = true; // In case of error, we do not call processJK_BMSStatusFrame(), so set flag here.
-        printJKReplyFrameBuffer();
+#  if defined(HANDLE_MULTIPLE_BMS)
+    if (sCurrentBMS->NumberOfBMS == 1) {
+        writeSOCData();
     }
-    return false;
+#  else
+    writeSOCData();
+#  endif
+#endif
 }
 
 /*
@@ -980,13 +945,17 @@ bool readJK_BMSStatusFrame() {
  */
 void handleFrameReceiveTimeout() {
     Serial.print(F("Receive timeout"));
+#if defined(HANDLE_MULTIPLE_BMS)
+    Serial.print(F(" at BMS "));
+    Serial.print(sCurrentBMS->NumberOfBMS);
+#endif
 
-    if (sReplyFrameBufferIndex != 0) {
+    if (sCurrentBMS->ReplyFrameBufferIndex != 0) {
         // Print bytes received so far
         Serial.print(F(" at ReplyFrameBufferIndex="));
-        Serial.print(sReplyFrameBufferIndex);
-        if (sReplyFrameBufferIndex != 0) {
-            printJKReplyFrameBuffer();
+        Serial.print(sCurrentBMS->ReplyFrameBufferIndex);
+        if (sCurrentBMS->ReplyFrameBufferIndex != 0) {
+            sCurrentBMS->printJKReplyFrameBuffer();
         }
     }
     Serial.println();
@@ -1008,30 +977,6 @@ void handleFrameReceiveTimeout() {
 #endif
 }
 
-void processReceivedData() {
-    /*
-     * Set the static pointer to the start of the reply data which depends on the number of cell voltage entries
-     * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize + the variable length cell data 3 bytes per cell, (CellInfoSize is contained in JKReplyFrameBuffer[12])
-     */
-    sJKFAllReplyPointer = reinterpret_cast<JKReplyStruct*>(&JKReplyFrameBuffer[JK_BMS_FRAME_HEADER_LENGTH + 2
-            + JKReplyFrameBuffer[JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH]]);
-
-    fillJKConvertedCellInfo();
-    /*
-     * Print newline, if SOC changed
-     */
-    if (sJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent) {
-        Serial.println();
-    }
-    fillJKComputedData();
-
-    computeUpTimeString();
-    detectAndPrintAlarmInfo(); // UpTimeString is used here
-
-    fillAllCANData(sJKFAllReplyPointer);
-    sCANDataIsInitialized = true; // One time flag
-}
-
 /*
  * Called exclusively by processJK_BMSStatusFrame()
  */
@@ -1039,11 +984,11 @@ void printReceivedData() {
 #if defined(USE_SERIAL_2004_LCD)
     if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
         // Do not interfere with plotter output
-        printJKDynamicInfo(); // Prints newline before SOC[%]=
+        sCurrentBMS->printJKDynamicInfo(); // Prints newline before SOC[%]=
     }
     printBMSDataOnLCD();
 #else
-    printJKDynamicInfo();
+    sCurrentBMS->printJKDynamicInfo();
 #endif
 }
 
@@ -1067,18 +1012,104 @@ void checkButtonPress() {
      */
     if (sPageButtonJustPressed) {
         sPageButtonJustPressed = false;
-        sDebugModeActivated = true; // Is set to false in loop
+        sCommunicationDebugModeActivated = true; // Is set to false in loop
         Serial.println(F("One time debug print just activated"));
     } else if (PageSwitchButtonAtPin2.readDebouncedButtonState()) {
         // Button is still pressed
-        sDebugModeActivated = true; // Is set to false in loop
+        sCommunicationDebugModeActivated = true; // Is set to false in loop
     }
 #endif // defined(USE_SERIAL_2004_LCD)
 }
 
 #if defined(STANDALONE_TEST)
+void initializeEEPROMForTest() {
+    // If EEPROM empty, fill in some values
+    int8_t tIncrement = -1;
+    Serial.println();
+    Serial.println();
+    Serial.println(F("Now write initial data to EEPROM"));
+    Serial.print(F("SOC="));
+    Serial.println(JK_BMS_1.JKAllReplyPointer->SOCPercent);
+    Serial.print(F("JKComputedData.Battery10MilliAmpere="));
+    Serial.println(JK_BMS_1.JKComputedData.Battery10MilliAmpere);
+    Serial.print(F("JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt="));
+    Serial.println(JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt);
+
+    for (int i = 0; i < 260; ++i) { // force buffer wrap around
+        JK_BMS_1.JKAllReplyPointer->SOCPercent += tIncrement;
+        writeSOCData(); // write too EEPROM here.
+
+        // change accumulated value
+        JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt += tIncrement * 4;
+
+        Serial.print(JK_BMS_1.JKAllReplyPointer->SOCPercent);
+        Serial.print(F(", "));
+
+        // Test negative values
+        if (JK_BMS_1.JKAllReplyPointer->SOCPercent == 2 && tIncrement < 0) {
+            JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = -10; // -100 mV
+            Serial.print(F(" -100 mV "));
+        }
+
+        /*
+         * Generate EEPROM data by calling writeSOCData(); multiple times for each SOC value
+         */
+        for (int j = 0; j < (i + 4) * 2; ++j) { // 320 corresponds to 2 Ah
+            // accumulate values
+            writeSOCData();
+            JK_BMS_1.lastJKReply.SOCPercent = JK_BMS_1.JKAllReplyPointer->SOCPercent; // for transition detection from 0 to 1
+        }
+
+        // Manage 0% and 100 %
+        if (JK_BMS_1.JKAllReplyPointer->SOCPercent == 0 || JK_BMS_1.JKAllReplyPointer->SOCPercent == 100) {
+            if (JK_BMS_1.JKAllReplyPointer->SOCPercent == 100) {
+                // Add additional capacity after 100%
+                for (int j = 0; j < 8000; ++j) {
+                    writeSOCData();
+                }
+            } else {
+                // set difference voltage to 0
+                JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt = 0;
+            }
+            // reverse values at 0 and 100
+            JK_BMS_1.JKComputedData.Battery10MilliAmpere = -JK_BMS_1.JKComputedData.Battery10MilliAmpere;
+            tIncrement = -tIncrement;
+        }
+    }
+    Serial.println();
+    findFirstSOCDataPointIndex();
+    Serial.print(F("EEPROM SOC data start index="));
+    Serial.print(SOCDataPointsInfo.ArrayStartIndex);
+    Serial.print(F(" length="));
+    Serial.print(SOCDataPointsInfo.ArrayLength);
+    Serial.print(F(", even="));
+    Serial.println(SOCDataPointsInfo.currentlyWritingOnAnEvenPage);
+}
+
+/*
+ * Assume, that MULTIPLE_BEEPS_WITH_TIMEOUT is active
+ */
+void testAlarmTimeout() {
+    Serial.println(F("Test alarm timeout"));
+    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = true;
+    JK_BMS_1.detectAndPrintAlarmInfo(); // this sets the LCD alarm string and flags
+    Serial.println(F("Test alarm timeout. You should hear " STR(BEEP_TIMEOUT_SECONDS) " double beeps"));
+    for (int i = 0; i < BEEP_TIMEOUT_SECONDS + 10; ++i) {
+        handleBeep();
+        delay(100);
+    }
+    // reset alarm
+    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = false;
+    JK_BMS_1.detectAndPrintAlarmInfo(); // this sets the LCD alarm string and flags
+    Serial.println(F("End of test alarm timeout"));
+
+}
+
 void doStandaloneTest() {
 
+#  if defined(ALARM_TIMEOUT_TEST)
+     testAlarmTimeout();
+#endif
 #  if defined(LCD_PAGES_TEST)
     if (sSerialLCDAvailable) {
         testLCDPages();

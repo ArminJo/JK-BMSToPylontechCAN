@@ -51,20 +51,20 @@ struct PylontechCANAliveFrame305Struct PylontechCANAliveFrame305;
 
 void modifyCANData(); // user function, which currently enables the function to reduce max current at high SOC level
 
-void fillAllCANData(struct JKReplyStruct *aJKFAllReply) {
-    PylontechCANBatteryLimitsFrame351.fillFrame(aJKFAllReply);
-    PylontechCANSohSocFrame355.fillFrame(aJKFAllReply);
-    PylontechCANBatteryRequestFrame35C.fillFrame(aJKFAllReply);
-    PylontechCANErrorsWarningsFrame359.fillFrame(aJKFAllReply);
-    PylontechCANCurrentValuesFrame356.fillFrame(aJKFAllReply);
+void fillAllCANData(JK_BMS *aJK_BMS_Ptr) {
+    PylontechCANBatteryLimitsFrame351.fillFrame(aJK_BMS_Ptr);
+    PylontechCANSohSocFrame355.fillFrame(aJK_BMS_Ptr);
+    PylontechCANBatteryRequestFrame35C.fillFrame(aJK_BMS_Ptr);
+    PylontechCANErrorsWarningsFrame359.fillFrame(aJK_BMS_Ptr);
+    PylontechCANCurrentValuesFrame356.fillFrame(aJK_BMS_Ptr);
 #if defined(CAPACITY_35F_EXTENSIONS)
-    PylontechCANSMACapacityFrame35F.fillFrame(aJKFAllReply);
+    PylontechCANSMACapacityFrame35F.fillFrame(aJK_BMS_Ptr);
 #endif
 #if defined(CAPACITY_379_EXTENSIONS)
-    PylontechCANLuxpowerCapacityFrame379.fillFrame(aJKFAllReply);
+    PylontechCANLuxpowerCapacityFrame379.fillFrame(aJK_BMS_Ptr);
 #endif
 #if defined(BYD_LIMITS_373_EXTENSIONS)
-    BYDCANCellLimitsFrame373.fillFrame(aJKFAllReply);
+    BYDCANCellLimitsFrame373.fillFrame(aJK_BMS_Ptr);
 #endif
 #if defined(CAN_DATA_MODIFICATION)
     modifyCANData();
@@ -157,13 +157,14 @@ void sendAllCANFrames(bool aDebugModeActive) {
 
 #if !defined(USE_OWN_MODIFY_FUNCTION) && !defined(USE_CCCV_MODIFY_FUNCTION)
 void modifyCANData() {
-    if (sJKFAllReplyPointer->SOCPercent >= MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT) {
+    if (JK_BMS_1.JKAllReplyPointer->SOCPercent >= MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT) {
         /*
          * Reduce max current linear from 100% at MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD (80%) SOC
          * to MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE (1A) at 100% SOC
          */
-        PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = map(sJKFAllReplyPointer->SOCPercent,
-        MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT, 100,
+        PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = map(
+                JK_BMS_1.JKAllReplyPointer->SOCPercent,
+                MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT, 100,
                 PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere,
                 MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE);
     }
@@ -211,11 +212,11 @@ void modifyCANData() {
                 return;
             } else {
                 PylontechCANBatteryRequestFrame35C.FrameData.ChargeEnable =
-                        sJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive;
+                        JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive;
             }
             StartChargeTime = millis(); // Store starting time for charge
             // Get the proper charging current: either BMS limit or using 0.3C
-            Computed_Current_limits_100mA = min(swap(sJKFAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10,
+            Computed_Current_limits_100mA = min(swap(JK_BMS_1.JKAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10,
                     JKComputedData.TotalCapacityAmpereHour * CHARGING_CURRENT_PER_CAPACITY);
             Serial.print(F("Charging check: >Selected Current:"));
             Serial.println(Computed_Current_limits_100mA);
@@ -320,9 +321,9 @@ void resetCharge() {
     ChargeTryEffort = 0;
     // recover the charging limits
     if (PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere
-            != swap(sJKFAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10) {
+            != swap(JK_BMS_1.JKAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10) {
         PylontechCANBatteryLimitsFrame351.FrameData.BatteryChargeCurrentLimit100Milliampere = swap(
-                sJKFAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10;
+                JK_BMS_1.JKAllReplyPointer->ChargeOvercurrentProtectionAmpere) * 10;
     }
 }
 
@@ -336,15 +337,15 @@ uint8_t ReachChargeLimit() {
     uint16_t Charge_MilliVolt_limit = 0;
     if ((millis() - LastCheckTime) < CHARGE_STATUS_REFRESH_INTERVAL) return 0;
     // first check over voltage
-    if (sJKFAllReplyPointer->BatteryType == 0) { //LFP battery
+    if (JK_BMS_1.JKAllReplyPointer->BatteryType == 0) { //LFP battery
         Charge_MilliVolt_limit = 3450;
-    } else if (sJKFAllReplyPointer->BatteryType == 1) { //Lithium ion
+    } else if (JK_BMS_1.JKAllReplyPointer->BatteryType == 1) { //Lithium ion
         Charge_MilliVolt_limit = 4200;
     }
     // check SOC First
-    return (sJKFAllReplyPointer->SOCPercent >= MAX_SOC_BULK_CHARGE_THRESHOLD_PERCENT) ? 1 : 0;
+    return (JK_BMS_1.JKAllReplyPointer->SOCPercent >= MAX_SOC_BULK_CHARGE_THRESHOLD_PERCENT) ? 1 : 0;
     Serial.print(F("Battery type:"));
-    Serial.println(sJKFAllReplyPointer->BatteryType);
+    Serial.println(JK_BMS_1.JKAllReplyPointer->BatteryType);
     if ((JKConvertedCellInfo.MaximumCellMillivolt * 1.02) > Charge_MilliVolt_limit) {
         Serial.print(F("Status check::"));
         Serial.println((JKConvertedCellInfo.MaximumCellMillivolt * 1.02) - Charge_MilliVolt_limit);

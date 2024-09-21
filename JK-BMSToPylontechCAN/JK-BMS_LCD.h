@@ -1,7 +1,7 @@
 /*
- *  JK-BMS_LCD.hpp
+ *  JK-BMS_LCD.h
  *
- *  Contains LCD related variables and functions
+ *  Contains declarations for LCD related variables and functions
  *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com

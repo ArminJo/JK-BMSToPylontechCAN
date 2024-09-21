@@ -1,7 +1,7 @@
 /*
  * JK-BMS.h
  *
- * Definitions of the data structures used by JK-BMS and the converter
+ * Definitions of the JK-BMS class and the data structures used by JK-BMS and the converter
  *
  *  We use 6 Structures:
  *  1. JKReplyStruct - the main reply structure, containing raw BMS reply data Big Endian, which must be swapped.
@@ -50,30 +50,10 @@
 #define JK_FRAME_START_BYTE_1   0x57
 #define JK_FRAME_END_BYTE       0x68
 
-void requestJK_BMSStatusFrame(SoftwareSerialTX *aSerial, bool aDebugModeActive = false);
-
-void initJKReplyFrameBuffer();
-void printJKReplyFrameBuffer();
-
-#define JK_BMS_RECEIVE_OK           0
-#define JK_BMS_RECEIVE_FINISHED     1
-#define JK_BMS_RECEIVE_ERROR        2
-uint8_t readJK_BMSStatusFrameByte();
-void fillJKComputedData();
-void initializeComputedData();
-
-extern uint16_t sReplyFrameBufferIndex;            // Index of next byte to write to array, thus starting with 0.
 extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
-extern struct JKReplyStruct *sJKFAllReplyPointer;
-extern bool sJKBMSFrameHasTimeout; // For sending CAN data
-extern bool sPrintAlarmInfoOnlyOnce;
-extern bool sAlarmJustGetsActive;
 
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
-
-int16_t getJKTemperature(uint16_t aJKRAWTemperature);
-int16_t getCurrent(uint16_t aJKRAWCurrent);
 
 uint8_t swap(uint8_t aByte);
 uint16_t swap(uint16_t aWordToSwapBytes);
@@ -91,17 +71,9 @@ void myPrintSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintIntAsFloatSwap(const __FlashStringHelper *aPGMString, int16_t a16BitValue);
 void myPrintlnSwap(const __FlashStringHelper *aPGMString, uint32_t a32BitValue);
 
-void computeUpTimeString();
-void printJKStaticInfo();
-void printJKDynamicInfo();
-void detectAndPrintAlarmInfo();
-#if defined(ENABLE_MONITORING)
-void printCSVLine(char aLeadingChar = '\0');
-#endif
-
 struct JKCellInfoStruct {
     uint16_t CellMillivolt;
-#if !defined(USE_NO_LCD)
+#if defined(USE_SERIAL_2004_LCD)
     uint8_t VoltageIsMinMaxOrBetween; // One of VOLTAGE_IS_MINIMUM, VOLTAGE_IS_MAXIMUM or VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM
 #endif
 };
@@ -116,8 +88,6 @@ struct JKConvertedCellInfoStruct {
     uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
     uint16_t RoundedAverageCellMillivolt;
 };
-extern struct JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
-void fillJKConvertedCellInfo();
 
 #define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
 #define VOLTAGE_IS_MINIMUM                      1
@@ -129,12 +99,12 @@ void fillJKConvertedCellInfo();
  * To identify runaway cells
  */
 struct CellStatisticsStruct {
-uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS]; // Count of cell minimums
-uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
-uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS]; // Percentage of cell minimums
-uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
-uint32_t BalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
-uint32_t LastPrintedBalancingCount; // For printing with printJKDynamicInfo()
+    uint16_t CellMinimumArray[MAXIMUM_NUMBER_OF_CELLS]; // Count of cell minimums
+    uint16_t CellMaximumArray[MAXIMUM_NUMBER_OF_CELLS];
+    uint8_t CellMinimumPercentageArray[MAXIMUM_NUMBER_OF_CELLS]; // Percentage of cell minimums
+    uint8_t CellMaximumPercentageArray[MAXIMUM_NUMBER_OF_CELLS];
+    uint32_t BalancingCount;            // Count of active balancing in SECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS (2 seconds) units
+    uint32_t LastPrintedBalancingCount; // For printing with printJKDynamicInfo()
 };
 
 #define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
@@ -145,6 +115,11 @@ uint32_t LastPrintedBalancingCount; // For printing with printJKDynamicInfo()
 #define JK_BMS_FRAME_CELL_INFO_LENGTH           2 // 1 byte +1 for token 0x79
 #define JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH  (JK_BMS_FRAME_HEADER_LENGTH + 1) // +1 for token 0x79
 #define MINIMAL_JK_BMS_FRAME_LENGTH             19
+
+#define TIMEOUT_MILLIS_FOR_FRAME_REPLY                  100 // I measured 26 ms between request end and end of received 273 byte result
+#if TIMEOUT_MILLIS_FOR_FRAME_REPLY > MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
+#error "TIMEOUT_MILLIS_FOR_FRAME_REPLY must be smaller than MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS to detect timeouts"
+#endif
 
 /*
  * All 16 and 32 bit values are stored byte swapped, i.e. MSB is stored in lower address.
@@ -189,10 +164,8 @@ struct JKComputedDataStruct {
     int32_t BatteryCapacityAsAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds. Pre-computed capacity to compare with accumulator value.
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
 };
-extern struct JKComputedDataStruct JKComputedData;        // All derived converted and computed data useful for display
 
 #define AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE   (3600L * 100 * MILLIS_IN_ONE_SECOND / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
-int32_t getOnePercentCapacityAsAccumulator10Milliampere();
 
 struct JKLastPrintedDataStruct {
     int16_t TemperaturePowerMosFet;     // Degree Celsius
@@ -202,7 +175,6 @@ struct JKLastPrintedDataStruct {
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     int32_t BatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every 1%
 };
-extern struct JKLastPrintedDataStruct JKLastPrintedData;
 
 /*
  * Only for documentation
@@ -247,6 +219,13 @@ union BMSStatusUnion {
 
 #define NUMBER_OF_DEFINED_ALARM_BITS    14
 #define NO_ALARM_WORD_CONTENT         0x00
+#define MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED    0x0C00
+// Required for displaying specific info for this alarms
+#define INDEX_OF_CHARGING_OVERVOLTAGE_ALARM                 2
+#define MASK_OF_CHARGING_OVERVOLTAGE_ALARM_UNSWAPPED        0x0800
+#define INDEX_OF_DISCHARGING_UNDERVOLTAGE_ALARM             3
+#define MASK_OF_DISCHARGING_UNDERVOLTAGE_ALARM_UNSWAPPED    0x0400
+#define INDEX_NO_ALARM                                      0xFF
 
 struct JKReplyStruct {
     uint8_t TokenTemperaturePowerMosFet;    // 0x80
@@ -276,11 +255,11 @@ struct JKReplyStruct {
     union {
         uint16_t AlarmsAsWord;
         struct {
-            uint8_t AlarmsHighByte;
-            uint8_t AlarmsLowByte;
+            uint8_t AlarmsHighByte;                 // This is the low byte of AlarmsAsWord, but it was sent as high byte of alarms
+            uint8_t AlarmsLowByte;                  // This is the high byte of AlarmsAsWord, but it was sent as low byte of alarms
         } AlarmBytes;
         struct {
-            // High byte of alarms, but low byte of AlarmsAsWord
+            // High byte of alarms sent, but low byte of AlarmsAsWord
             bool Sensor2OvertemperatureAlarm :1;    // 0x0100
             bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
             bool CellOvervoltageAlarm :1;           // 0x0400
@@ -290,7 +269,7 @@ struct JKReplyStruct {
             bool Reserved1Alarm :1;                 // Two highest bits are reserved
             bool Reserved2Alarm :1;                 // 0x8000
 
-            // Low byte of alarms, but high byte of AlarmsAsWord
+            // Low byte of alarms sent, but high byte of AlarmsAsWord
             bool LowCapacityAlarm :1;               // 0x0001
             bool PowerMosFetOvertemperatureAlarm :1;
             bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
@@ -460,7 +439,7 @@ struct JKLastReplyStruct {
     union {                                     // 0x8B
         uint16_t AlarmsAsWord;
         struct {
-            // High byte of alarms
+            // High byte of alarms sent
             bool Sensor2OvertemperatureAlarm :1;    // 0x0100
             bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
             bool CellOvervoltageAlarm :1;           // 0x0400
@@ -470,7 +449,7 @@ struct JKLastReplyStruct {
             bool Reserved1Alarm :1;                 // Two highest bits are reserved
             bool Reserved2Alarm :1;
 
-            // Low byte of alarms
+            // Low byte of alarms sent
             bool LowCapacityAlarm :1;               // 0x0001
             bool PowerMosFetOvertemperatureAlarm :1;
             bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
@@ -501,4 +480,114 @@ struct JKLastReplyStruct {
     uint32_t SystemWorkingMinutes;              // Minutes 0xB6
 };
 
+/*
+ * Return codes for uint8_t returns
+ */
+#define JK_BMS_RECEIVE_ONGOING          0 // No requested or ongoing receiving
+#define JK_BMS_RECEIVE_FINISHED     1
+#define JK_BMS_RECEIVE_TIMEOUT      2
+#define JK_BMS_RECEIVE_ERROR        3 // Received byte was not plausible
+
+#if defined(HANDLE_MULTIPLE_BMS)
+extern uint8_t NumbersOfBMSInstances; // The number of the BMS classes instantiated.
+#endif
+
+class JK_BMS {
+public:
+    JK_BMS();
+    void init(uint8_t aTxPinNumber);
+    void requestJK_BMSStatusFrame( bool aDebugModeActive);
+    void RequestStatusFrame(bool aDebugModeActive);
+    uint8_t readJK_BMSStatusFrameByte();
+    uint8_t checkForReplyFromBMSOrTimeout();
+
+    void printJKReplyFrameBuffer();
+
+    /*
+     * Processing functions
+     */
+    void fillJKComputedData();
+    void fillJKConvertedCellInfo();
+    void computeUpTimeString();
+    void processReceivedData();
+
+    /*
+     * Print functions
+     */
+    void printEnabledState(bool aIsEnabled);
+    void printActiveState(bool aIsActive);
+
+#if defined(ENABLE_MONITORING)
+    void setCSVString();
+    void printCSVLine(char aLeadingChar = '\0');
+#endif
+#if !defined(NO_CELL_STATISTICS)
+    void printJKCellStatisticsInfo();
+#endif
+    void printJKCellInfoOverview();
+    void printJKCellInfo();
+    void printVoltageProtectionInfo();
+    void printTemperatureProtectionInfo();
+    void printBatteryInfo();
+    void printBMSInfo();
+    void printMiscellaneousInfo();
+    void detectAndPrintAlarmInfo();
+
+    void printJKStaticInfo();
+    void printJKDynamicInfo();
+
+    int32_t getOnePercentCapacityAsAccumulator10Milliampere();
+    int16_t getJKTemperature(uint16_t aJKRAWTemperature);
+    int16_t getCurrent(uint16_t aJKRAWCurrent);
+
+    /*
+     * Flags for interface
+     */
+    bool TimeoutJustDetected = false; // Is set to true at first detection of timeout and reset by beep timeout or receiving of a frame
+    bool JKBMSFrameHasTimeout;                 // True, as long as BMS timeout persists.
+    /*
+     * sAlarmJustGetsActive is set and reset by detectAndPrintAlarmInfo() and reset by checkButtonPressForLCD() and beep handling.
+     * Can also be set to true if 2 alarms are active and one of them gets inactive. If true, beep (with optional timeout) is generated.
+     */
+    bool AlarmJustGetsActive = false; // True if alarm bits changed and any alarm is still active. False if alarm bits changed and no alarm is active.
+    bool AlarmActive = false; // True as long as any alarm is still active. False if no alarm is active.
+#if defined(USE_SERIAL_2004_LCD)
+    uint8_t AlarmIndexToShowOnLCD = INDEX_NO_ALARM; // Index of current alarm to show with Alarm / Overview page. Set by detectAndPrintAlarmInfo() and reset on page switch.
+#endif
+
+    /*
+     * Size of reply is 291 bytes for 16 cells. sizeof(JKReplyStruct) is 221.
+     */
+    uint16_t ReplyFrameLength;                 // Received length of frame
+    uint16_t ReplyFrameBufferIndex = 0;     // Index of next byte to write to array, except for last byte received. Starting with 0.
+
+    /*
+     * BMS communication timeout
+     */
+    uint32_t MillisOfLastReceivedByte = 0;     // For timeout detection
+
+    /*
+     * Use a 115200 baud software serial for the short request frame.
+     * If available, we also can use a second hardware serial here :-).
+     */
+    SoftwareSerialTX TxToJKBMS;
+
+#if defined(HANDLE_MULTIPLE_BMS)
+    uint8_t NumberOfBMS; // The number of the BMS this class is used for. Starting with 1.
+#endif
+
+    /*
+     * The JKFrameAllDataStruct starts behind the header + cell data header 0x79 + CellInfoSize
+     * + the variable length cell data 3 bytes per cell, (CellInfoSize is contained in JKReplyFrameBuffer[12])
+     */
+    JKReplyStruct *JKAllReplyPointer = reinterpret_cast<JKReplyStruct*>(&JKReplyFrameBuffer[JK_BMS_FRAME_HEADER_LENGTH + 2 + 48]); // assume 16 cells
+    JKLastReplyStruct lastJKReply;
+    JKComputedDataStruct JKComputedData;            // All derived converted and computed data useful for display
+    JKLastPrintedDataStruct JKLastPrintedData;      // For detecting changes for printing
+    JKConvertedCellInfoStruct JKConvertedCellInfo;  // The converted little endian cell voltage data
+#if !defined(NO_CELL_STATISTICS)
+    struct CellStatisticsStruct CellStatistics;
+#endif //NO_CELL_STATISTICS
+
+};
 #endif // _JK_BMS_H

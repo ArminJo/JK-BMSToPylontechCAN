@@ -31,6 +31,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Supports sending of total capayity for **SMA** and **Luxpower** inverters.
 - Optional linear **reducing maximum current above 80% SOC** (values can be adapted to your needs).
+- Support for more than one BMS (experimental).
 - Display of BMS information, Cell voltages, statistics and alarms on a locally attached **serial 2004 LCD**.
 - Page button for switching **5 LCD display pages**.
 - Debug output and extra **CAN info** and **Capacity info page** on long press of button.
@@ -40,6 +41,8 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Serial.print() function is still available for monitoring and debugging.
 - SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
 - The voltage in the SOC graph is corrected by the automatically computed ESR to get a smoother voltage curve.
+
+<br/>
 
 **If the Aduino IDE complains about more than 100% of program storage space, burn the Uno Bootloader on your Nano, if not already done, and select the Uno as board. The Arduino Nano board definition has a [wrong "upload.maximum_size" value](https://github.com/arduino/ArduinoCore-avr/pull/546).**<br/>
 Look [here](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/JK-BMSToPylontechCAN/JK-BMSToPylontechCAN.ino#L139) for options to reduce program size / add optional features.
@@ -111,6 +114,13 @@ The same (raw) data without ESR correction of voltage.
 
 <br/>
 
+# Youtube video of JK-BMS doing wrong computing of capacity.
+I discharged the battery for 10 minutes with 45A, which gives 7.5Ah. But the JK-BMS shows a capacity loss of 12.1 Ah (50.7 - 38.6)!
+The SOC went from 40 % to 30 %, which corresponds also to 12.5 Ah for a total battery capacity of 125 Ah.
+
+[![Youtube video of JK-BMS doing wrong computing of capacity](https://i.ytimg.com/vi/tDN8iFr98JA/hqdefault.jpg)](https://www.youtube.com/watch?v=tDN8iFr98JA)
+
+<br/>
 
 # Example on Wokwi
 Also usable as connection schematic.
@@ -334,6 +344,9 @@ This program uses the following libraries, which are already included in this re
 - Growatt SPH6000
 
 # Revision History
+### Version 4.0.0
+- JK_BMS communication and print functions are now contained in the JK_BMS class.
+
 ### Version 3.2.1
 - New macro ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD.
 

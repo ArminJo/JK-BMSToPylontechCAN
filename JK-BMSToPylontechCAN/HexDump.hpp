@@ -108,10 +108,10 @@ void printMemoryHexDump(uint8_t *aMemory, uint16_t aNumberOfBytesToPrint, uint8_
                  */
                 Serial.print(F("  "));
                 for (uint_fast8_t i = 0; i < aBytesPerLine; i++) {
-                    unsigned char tCharacterToPrint = aMemory[tIndex + i];
+                    uint8_t tCharacterToPrint = aMemory[tIndex + i];
 //            if(isalnum(tIndex+i)){ // requires 40 bytes more program space
                     if (' ' <= tCharacterToPrint && tCharacterToPrint <= '~') {
-                        Serial.print(tCharacterToPrint);
+                        Serial.print((char)tCharacterToPrint);
                     } else if (tCharacterToPrint != 0x00 && tCharacterToPrint != 0xFF) {
                         // for non printable characters except 0 and FF
                         Serial.print('.');
