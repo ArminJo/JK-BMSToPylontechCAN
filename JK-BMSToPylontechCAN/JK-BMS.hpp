@@ -36,6 +36,12 @@
 
 #include <Arduino.h>
 
+#if defined(HANDLE_MULTIPLE_BMS)
+#  if !defined(NUMBER_OF_SUPPORTED_BMS)
+#define NUMBER_OF_SUPPORTED_BMS 2
+#  endif
+#endif
+
 #include "JK-BMS.h"
 #include "HexDump.hpp" // include sources for printBufferHex()
 
@@ -46,10 +52,6 @@
  */
 #include "SoftwareSerialTX.h"
 #else
-#endif
-
-#if defined(HANDLE_MULTIPLE_BMS)
-uint8_t NumbersOfBMSInstances = 0; // The number of the BMS classes instantiated.
 #endif
 
 // This block must be located after the includes of other *.hpp files
@@ -108,10 +110,16 @@ const char *const JK_BMSAlarmStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-JK_BMS::JK_BMS() {
 #if defined(HANDLE_MULTIPLE_BMS)
-    NumbersOfBMSInstances++;
-    NumberOfBMS = NumbersOfBMSInstances;
+JK_BMS *JK_BMS::BMSArray[NUMBER_OF_SUPPORTED_BMS];
+uint8_t JK_BMS::sBMS_ArrayNextIndex = 0;
+#endif
+
+JK_BMS::JK_BMS() { // @suppress("Class members should be properly initialized")
+#if defined(HANDLE_MULTIPLE_BMS)
+    BMSArray[sBMS_ArrayNextIndex] = this;
+    sBMS_ArrayNextIndex++;
+    NumberOfThisBMS = sBMS_ArrayNextIndex;
 #endif
 }
 
@@ -134,7 +142,7 @@ void JK_BMS::requestJK_BMSStatusFrame(bool aDebugModeActive) {
         Serial.println();
 #if defined(HANDLE_MULTIPLE_BMS)
         Serial.print(F("Send requestFrame to BMS "));
-        Serial.println(NumberOfBMS);
+        Serial.println(NumberOfThisBMS);
 #else
         Serial.println(F("Send requestFrame to BMS"));
 #endif
@@ -167,7 +175,7 @@ void JK_BMS::RequestStatusFrame(bool aDebugModeActive) {
      * Copy last complete reply and computed values for change determination
      */
     lastJKReply.SOCPercent = JKAllReplyPointer->SOCPercent;
-    lastJKReply.AlarmUnion.AlarmsAsWord = JKAllReplyPointer->AlarmUnion.AlarmsAsWord;
+    lastJKReply.BatteryAlarmFlags.AlarmsAsWord = JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord;
     lastJKReply.BMSStatus.StatusAsWord = JKAllReplyPointer->BMSStatus.StatusAsWord;
     lastJKReply.SystemWorkingMinutes = JKAllReplyPointer->SystemWorkingMinutes;
 
@@ -264,7 +272,13 @@ uint8_t JK_BMS::checkForReplyFromBMSOrTimeout() {
              * All JK-BMS status frame data received
              */
             if (JKBMSFrameHasTimeout) {
+#if defined(HANDLE_MULTIPLE_BMS)
+                JK_INFO_PRINT(F("Successfully receiving first BMS "));
+                JK_INFO_PRINT(NumberOfThisBMS);
+                JK_INFO_PRINTLN(F(" frame after communication timeout"));
+#else
                 JK_INFO_PRINTLN(F("Successfully receiving first BMS frame after communication timeout"));
+#endif
                 // First successful response frame after timeout :-)
                 JKBMSFrameHasTimeout = false;
                 TimeoutJustDetected = false;
@@ -330,8 +344,8 @@ void JK_BMS::printJKReplyFrameBuffer() {
     uint8_t *tBufferAddress = JKReplyFrameBuffer;
     Serial.print(ReplyFrameBufferIndex + 1);
 #if defined(HANDLE_MULTIPLE_BMS)
-        Serial.print(F(" bytes received from BMS "));
-        Serial.println(NumberOfBMS);
+    Serial.print(F(" bytes received from BMS "));
+    Serial.println(NumberOfThisBMS);
 #else
         Serial.println(F(" bytes received"));
 #endif
@@ -383,6 +397,76 @@ int16_t JK_BMS::getJKTemperature(uint16_t aJKRAWTemperature) {
 int32_t JK_BMS::getOnePercentCapacityAsAccumulator10Milliampere() {
     return (AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE / 100) * JKComputedData.TotalCapacityAmpereHour;
 }
+
+#if defined(HANDLE_MULTIPLE_BMS)
+bool JK_BMS::getAnyAlarm() {
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        if (JK_BMS::BMSArray[i]->AlarmActive) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool JK_BMS::getAnyTimeout() {
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        if (JK_BMS::BMSArray[i]->JKBMSFrameHasTimeout) {
+            return true;
+        }
+    }
+    return false;
+}
+
+uint16_t JK_BMS::getSumOfChargeOvercurrentProtectionAmpere() {
+    uint16_t tChargeOvercurrentProtectionAmpereSum = 0;
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        tChargeOvercurrentProtectionAmpereSum += JK_BMS::BMSArray[i]->JKComputedData.ChargeOvercurrentProtectionAmpere;
+    }
+    return tChargeOvercurrentProtectionAmpereSum;
+}
+
+uint16_t JK_BMS::getSumOfDischargeOvercurrentProtectionAmpere() {
+    uint16_t tDischargeOvercurrentProtectionAmpereSum = 0;
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        tDischargeOvercurrentProtectionAmpereSum += JK_BMS::BMSArray[i]->JKComputedData.DischargeOvercurrentProtectionAmpere;
+    }
+    return tDischargeOvercurrentProtectionAmpereSum;
+}
+
+int16_t JK_BMS::getSumOfBattery10MilliAmpere() {
+    int16_t tBattery10MilliAmpereSum = 0;
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        tBattery10MilliAmpereSum += JK_BMS::BMSArray[i]->JKComputedData.Battery10MilliAmpere;
+    }
+    return tBattery10MilliAmpereSum;
+}
+
+uint16_t JK_BMS::getSumOfTotalCapacityAmpereHour() {
+    int16_t tTotalCapacityAmpereHourSum = 0;
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        tTotalCapacityAmpereHourSum += JK_BMS::BMSArray[i]->JKComputedData.TotalCapacityAmpereHour;
+    }
+    return tTotalCapacityAmpereHourSum;
+}
+
+union BatteryAlarmFlagsUnion JK_BMS::getOredBatteryAlarmFlags(){
+    union BatteryAlarmFlagsUnion tBatteryAlarmFlags;
+    tBatteryAlarmFlags.AlarmsAsWord = 0;
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        tBatteryAlarmFlags.AlarmsAsWord |= JK_BMS::BMSArray[i]->JKComputedData.AlarmsAsWord;
+    }
+    return tBatteryAlarmFlags;
+}
+
+union BMSStatusUnion JK_BMS::getOredBMSStatusFlags(){
+    union BMSStatusUnion tBMSStatusFlags;
+    tBMSStatusFlags.StatusAsWord = 0;
+    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
+        tBMSStatusFlags.StatusAsWord |= JK_BMS::BMSArray[i]->JKComputedData.StatusAsWord;
+    }
+    return tBMSStatusFlags;
+}
+#endif
 
 // Identity function to avoid swapping if accidentally called
 uint8_t swap(uint8_t aByte) {
@@ -488,7 +572,7 @@ void JK_BMS::fillJKConvertedCellInfo() {
 
     for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
         tJKCellInfoReplyPointer++;                                  // Skip Cell number
-        uint8_t tHighByte = *tJKCellInfoReplyPointer++;             // Copy CellMillivolt
+        uint8_t tHighByte = *tJKCellInfoReplyPointer++;                                  // Copy CellMillivolt
         tVoltage = tHighByte << 8 | *tJKCellInfoReplyPointer++;
         JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt = tVoltage;
         if (tVoltage > 0) {
@@ -510,24 +594,24 @@ void JK_BMS::fillJKConvertedCellInfo() {
     JKConvertedCellInfo.RoundedAverageCellMillivolt = (tMillivoltSum + (tNumberOfNonNullCellInfo / 2)) / tNumberOfNonNullCellInfo;
 
 #if !defined(NO_CELL_STATISTICS) && defined(USE_SERIAL_2004_LCD)
-    /*
-     * Mark and count minimum and maximum cell voltages
-     */
-    for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
-        if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMinimumMillivolt) {
-            JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MINIMUM;
-            if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
-                CellStatistics.CellMinimumArray[i]++; // count for statistics
+        /*
+         * Mark and count minimum and maximum cell voltages
+         */
+        for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
+            if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMinimumMillivolt) {
+                JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MINIMUM;
+                if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                    CellStatistics.CellMinimumArray[i]++; // count for statistics
+                }
+            } else if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMaximumMillivolt) {
+                JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MAXIMUM;
+                if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                    CellStatistics.CellMaximumArray[i]++;
+                }
+            } else {
+                JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM;
             }
-        } else if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMaximumMillivolt) {
-            JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MAXIMUM;
-            if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
-                CellStatistics.CellMaximumArray[i]++;
-            }
-        } else {
-            JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM;
         }
-    }
 #endif
 
 #if !defined(NO_CELL_STATISTICS)
@@ -606,8 +690,8 @@ void JK_BMS::fillJKConvertedCellInfo() {
 #endif // NO_CELL_STATISTICS
 
 #if defined(LOCAL_DEBUG)
-    Serial.print(tNumberOfCellInfo);
-    Serial.println(F(" cell voltages processed"));
+        Serial.print(tNumberOfCellInfo);
+        Serial.println(F(" cell voltages processed"));
 #endif
 // During JK-BMS startup all cell voltages are sent as zero for around 6 seconds
     if (tNumberOfNonNullCellInfo < tNumberOfCellInfo && !JKComputedData.BMSIsStarting) {
@@ -728,6 +812,12 @@ void JK_BMS::fillJKComputedData() {
                 (uint16_t) (CellStatistics.BalancingCount / 30) % 60);
     }
 #endif // NO_CELL_STATISTICS
+#if defined(HANDLE_MULTIPLE_BMS)
+    JKComputedData.ChargeOvercurrentProtectionAmpere = swap(JKAllReplyPointer->ChargeOvercurrentProtectionAmpere);
+    JKComputedData.DischargeOvercurrentProtectionAmpere = swap(JKAllReplyPointer->DischargeOvercurrentProtectionAmpere);
+    JKComputedData.AlarmsAsWord = swap(JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord);
+    JKComputedData.StatusAsWord = swap(JKAllReplyPointer->BMSStatus.StatusAsWord);
+#endif
 }
 
 void JK_BMS::printJKCellInfoOverview() {
@@ -762,8 +852,8 @@ void JK_BMS::printJKCellInfo() {
         Serial.print('=');
         Serial.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt);
 #if defined(LOCAL_TRACE)
-        Serial.print(F("|0x"));
-        Serial.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt, HEX);
+            Serial.print(F("|0x"));
+            Serial.print(JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt, HEX);
 #endif
         Serial.print(F(" mV, "));
         if (i < 8) {
@@ -876,13 +966,14 @@ void JK_BMS::printMiscellaneousInfo() {
 
     myPrintlnSwap(F("Balance Starting Cell Voltage[mV]="), tJKFAllReplyPointer->BalancingStartMillivolt);
     myPrintlnSwap(F("Balance Triggering Voltage Difference[mV]="), tJKFAllReplyPointer->BalancingStartDifferentialMillivolt);
-    Serial.println();
+
     myPrintlnSwap(F("Current Calibration[mA]="), tJKFAllReplyPointer->CurrentCalibrationMilliampere);
     myPrintlnSwap(F("Sleep Wait Time[s]="), tJKFAllReplyPointer->SleepWaitingTimeSeconds);
-    Serial.println();
+
     myPrintln(F("Dedicated Charge Switch Active="), tJKFAllReplyPointer->DedicatedChargerSwitchIsActive);
     myPrintln(F("Start Current Calibration State="), tJKFAllReplyPointer->StartCurrentCalibration);
     myPrintlnSwap(F("Battery Actual Capacity[Ah]="), tJKFAllReplyPointer->ActualBatteryCapacityAmpereHour);
+
     Serial.println();
 }
 
@@ -899,8 +990,8 @@ void JK_BMS::detectAndPrintAlarmInfo() {
     /*
      * Do it only once per change
      */
-    if (tJKAllReplyPointer->AlarmUnion.AlarmsAsWord != lastJKReply.AlarmUnion.AlarmsAsWord) {
-        if (tJKAllReplyPointer->AlarmUnion.AlarmsAsWord == NO_ALARM_WORD_CONTENT) {
+    if (tJKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord != lastJKReply.BatteryAlarmFlags.AlarmsAsWord) {
+        if (tJKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord == NO_ALARM_WORD_CONTENT) {
             Serial.println(F("All alarms are cleared now"));
             AlarmActive = false;
         } else {
@@ -909,7 +1000,7 @@ void JK_BMS::detectAndPrintAlarmInfo() {
             /*
              * Print alarm info
              */
-            uint16_t tAlarms = swap(tJKAllReplyPointer->AlarmUnion.AlarmsAsWord);
+            uint16_t tAlarms = swap(tJKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord);
             Serial.println(F("*** ALARM FLAGS ***"));
             Serial.print(sUpTimeString); // print uptime to have a timestamp for the alarm
             Serial.print(F(": Alarm bits=0x"));
@@ -925,7 +1016,7 @@ void JK_BMS::detectAndPrintAlarmInfo() {
                     Serial.print(tAlarmMask, BIN);
                     Serial.print(F(" -> "));
 #if defined(USE_SERIAL_2004_LCD)
-                    AlarmIndexToShowOnLCD = i;
+                        AlarmIndexToShowOnLCD = i;
 #endif
                     Serial.println(
                             reinterpret_cast<const __FlashStringHelper*>((char*) (pgm_read_word(&JK_BMSAlarmStringsArray[i]))));
@@ -961,10 +1052,10 @@ void JK_BMS::printJKStaticInfo() {
 
 #if defined(HANDLE_MULTIPLE_BMS)
     Serial.print(F("*** BMS "));
-    Serial.print(NumberOfBMS);
+    Serial.print(NumberOfThisBMS);
     Serial.println(F(" INFO ***"));
 #else
-    Serial.println(F("*** BMS INFO ***"));
+        Serial.println(F("*** BMS INFO ***"));
 #endif
     printBMSInfo();
 
@@ -1033,8 +1124,8 @@ void JK_BMS::printJKDynamicInfo() {
 #  endif
 // Print +CSV line every percent of nominal battery capacity (TotalCapacityAmpereHour) for capacity to voltage graph
     if (abs(
-            JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere
-            - JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere()) {
+                    JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere
+                    - JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere) > getOnePercentCapacityAsAccumulator10Milliampere()) {
         JKLastPrintedData.BatteryCapacityAccumulator10MilliAmpere = JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
         printCSVLine('+');
     }
@@ -1097,10 +1188,10 @@ void JK_BMS::printJKDynamicInfo() {
         }
 #endif
 #if defined(ENABLE_MONITORING) && !defined(MONOTORING_PERIOD_FAST)
-        /*
-         * Print CSV caption every 10 minute
-         */
-        Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
+            /*
+             * Print CSV caption every 10 minute
+             */
+            Serial.println(reinterpret_cast<const __FlashStringHelper*>(sCSVCaption));
 #endif
     } // Print it every ten minutes
 
@@ -1109,8 +1200,8 @@ void JK_BMS::printJKDynamicInfo() {
      * Print only if temperature changed more than 1 degree
      */
 #if defined(LOCAL_DEBUG)
-    Serial.print(F("TokenTemperaturePowerMosFet=0x"));
-    Serial.println(JKAllReplyPointer->TokenTemperaturePowerMosFet, HEX);
+        Serial.print(F("TokenTemperaturePowerMosFet=0x"));
+        Serial.println(JKAllReplyPointer->TokenTemperaturePowerMosFet, HEX);
 #endif
     if (abs(JKComputedData.TemperaturePowerMosFet - JKLastPrintedData.TemperaturePowerMosFet) > 2
             || abs(JKComputedData.TemperatureSensor1 - JKLastPrintedData.TemperatureSensor1) > 2

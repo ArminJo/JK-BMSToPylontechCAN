@@ -196,7 +196,7 @@ void printShortEnableFlagsOnLCD() {
  */
 void printShortStateOnLCD() {
 
-    if (JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm) {
+    if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.ChargeOvervoltageAlarm) {
         myLCD.print('O');
     } else if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
         myLCD.print('C');
@@ -204,7 +204,7 @@ void printShortStateOnLCD() {
         myLCD.print(' ');
     }
 
-    if (JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm) {
+    if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.DischargeUndervoltageAlarm) {
         myLCD.print('U');
     } else if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive) {
         myLCD.print('D');
@@ -242,13 +242,13 @@ void printLongStateOnLCD() {
  * or state, if no alarm or under or overvoltage alarm, which is printed also in state
  */
 void printAlarmHexOrStateOnLCD() {
-    if ((JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmsAsWord
+    if ((JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord
             & ~(MASK_OF_CHARGING_OVERVOLTAGE_ALARM_UNSWAPPED | MASK_OF_DISCHARGING_UNDERVOLTAGE_ALARM_UNSWAPPED)) == 0) {
         myLCD.setCursor(17, 3); // Last 3 characters are the actual states
         printShortStateOnLCD();
     } else {
         myLCD.setCursor(16, 3); // Last 4 characters are the actual HEX alarm bits
-        uint16_t tAlarms = swap(JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmsAsWord);
+        uint16_t tAlarms = swap(JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord);
         if (tAlarms < 0x100) {
             myLCD.print(F("0x"));
             if (tAlarms < 0x10) {
@@ -697,7 +697,11 @@ void printVoltageDifferenceAndTemperature() {
 void printTimeoutMessageOnLCD() {
     myLCD.clear();
     myLCD.setCursor(0, 0);
-    myLCD.print(F("Receive timeout "));
+    myLCD.print(F("Receive timeout ")); // 16 char
+#if defined(HANDLE_MULTIPLE_BMS)
+    myLCD.print(F("at "));
+    myLCD.print(sCurrentBMS->NumberOfThisBMS); // 4 char
+#endif
     myLCD.setCursor(LCD_COLUMNS - LENGTH_OF_UPTIME_STRING, 1);
     myLCD.print(sUpTimeString);
     myLCD.setCursor(0, 2);
@@ -820,7 +824,7 @@ void printBMSDataOnLCD() {
          */
         if (JK_BMS_1.AlarmJustGetsActive) {
 #  if !defined(ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD)
-            if (JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmsAsWord
+            if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord
                     & ~MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED) {
                 // Other than over  / undervoltage alarm bit is active
 #  endif
@@ -1061,27 +1065,27 @@ void testLCDPages() {
     /*
      * Test alarms
      */
-    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = true;
+    JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.ChargeOvervoltageAlarm = true;
     JK_BMS_1.detectAndPrintAlarmInfo(); // this sets the LCD alarm string
     printBMSDataOnLCD();
-    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm = false;
+    JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.ChargeOvervoltageAlarm = false;
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
-    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm = true;
+    JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.DischargeUndervoltageAlarm = true;
     JK_BMS_1.detectAndPrintAlarmInfo(); // this sets the LCD alarm string
     printBMSDataOnLCD();
-    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm = false;
+    JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.DischargeUndervoltageAlarm = false;
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 
     /*
      * PowerMosFetOvertemperatureAlarm
      */
-    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = true;
+    JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.PowerMosFetOvertemperatureAlarm = true;
     JK_BMS_1.JKComputedData.TemperaturePowerMosFet = 90;
     JK_BMS_1.JKComputedData.TemperatureSensor1 = 25;
     JK_BMS_1.detectAndPrintAlarmInfo(); // this sets the LCD alarm string
     printBMSDataOnLCD();
-    JK_BMS_1.JKAllReplyPointer->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
+    JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.PowerMosFetOvertemperatureAlarm = false;
     JK_BMS_1.JKComputedData.TemperaturePowerMosFet = 33;
     delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
 

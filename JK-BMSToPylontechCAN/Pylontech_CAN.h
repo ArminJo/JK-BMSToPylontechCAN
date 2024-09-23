@@ -2,6 +2,8 @@
  * Pylontech_CAN.h
  *
  * Definitions for the CAN frames to send as Pylon protocol.
+ * For multiple BMS current and capacity are added, flags are OR'ed.
+ *
  * TODO The generated output does not correspond to the logs below and
  * published at https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
  *
@@ -109,11 +111,21 @@ struct PylontechCANBatteryLimitsFrame351Struct {
     } FrameData;
     void fillFrame(JK_BMS *aJK_BMS_Ptr) {
         FrameData.BatteryChargeOvervoltage100Millivolt = aJK_BMS_Ptr->JKComputedData.BatteryFullVoltage10Millivolt / 10;
-        FrameData.BatteryChargeCurrentLimit100Milliampere = swap(aJK_BMS_Ptr->JKAllReplyPointer->ChargeOvercurrentProtectionAmpere)
-                * 10;
-        FrameData.BatteryDischargeCurrentLimit100Milliampere = swap(
-                aJK_BMS_Ptr->JKAllReplyPointer->DischargeOvercurrentProtectionAmpere) * 10;
+
         FrameData.BatteryDischarge100Millivolt = aJK_BMS_Ptr->JKComputedData.BatteryEmptyVoltage10Millivolt / 10;
+#if defined(HANDLE_MULTIPLE_BMS)
+        /*
+         * Use sum of current limits
+         */
+        FrameData.BatteryChargeCurrentLimit100Milliampere = JK_BMS::getSumOfChargeOvercurrentProtectionAmpere() * 10;
+        FrameData.BatteryDischargeCurrentLimit100Milliampere = JK_BMS::getSumOfDischargeOvercurrentProtectionAmpere() * 10;
+#else
+    FrameData.BatteryChargeCurrentLimit100Milliampere = swap(aJK_BMS_Ptr->JKAllReplyPointer->ChargeOvercurrentProtectionAmpere)
+            * 10;
+    FrameData.BatteryDischargeCurrentLimit100Milliampere = swap(
+            aJK_BMS_Ptr->JKAllReplyPointer->DischargeOvercurrentProtectionAmpere) * 10;
+#endif
+
     }
 };
 
@@ -147,7 +159,11 @@ struct PylontechCANCurrentValuesFrame356Struct {
     } FrameData;
     void fillFrame(JK_BMS *aJK_BMS_Ptr) {
         FrameData.Voltage10Millivolt = aJK_BMS_Ptr->JKComputedData.BatteryVoltage10Millivolt;
+#if defined(HANDLE_MULTIPLE_BMS)
+        FrameData.Current100Milliampere = JK_BMS::getSumOfBattery10MilliAmpere() / 10;
+#else
         FrameData.Current100Milliampere = aJK_BMS_Ptr->JKComputedData.Battery10MilliAmpere / 10;
+#endif
         FrameData.Temperature100Millicelsius = aJK_BMS_Ptr->JKComputedData.TemperatureMaximum * 10;
     }
 };
@@ -204,40 +220,44 @@ struct PylontechCANErrorsWarningsFrame359Struct {
         uint8_t Token2 = 0x4E;              // 'N'
     } FrameData;
     void fillFrame(JK_BMS *aJK_BMS_Ptr) {
-        struct JKReplyStruct *tJKFAllReply = aJK_BMS_Ptr->JKAllReplyPointer;
+#if defined(HANDLE_MULTIPLE_BMS)
+        union BatteryAlarmFlagsUnion tBatteryAlarmFlags = JK_BMS::getOredBatteryAlarmFlags();
+#else
+        union BatteryAlarmFlagsUnion tBatteryAlarmFlags = aJK_BMS_Ptr->JKAllReplyPointer->BatteryAlarmFlags;
+#endif
         /*
          * Pylon has no battery over voltage alarm but cell over voltage warning and error
          * We (mis)use the battery alarms as cell warnings
          */
         // Byte 0
-        FrameData.CellOvervoltageError = tJKFAllReply->AlarmUnion.AlarmBits.CellOvervoltageAlarm;
-        FrameData.CellUndervoltageError = tJKFAllReply->AlarmUnion.AlarmBits.CellUndervoltageAlarm;
-        FrameData.CellOvertemperatureError = tJKFAllReply->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm
-                || tJKFAllReply->AlarmUnion.AlarmBits.Sensor1Or2OvertemperatureAlarm;
-        FrameData.CellUndertemperatureError = tJKFAllReply->AlarmUnion.AlarmBits.Sensor1Or2UndertemperatureAlarm;
-        FrameData.DischargeOvercurrentError = tJKFAllReply->AlarmUnion.AlarmBits.DischargeOvercurrentAlarm;
+        FrameData.CellOvervoltageError = tBatteryAlarmFlags.AlarmBits.CellOvervoltageAlarm;
+        FrameData.CellUndervoltageError = tBatteryAlarmFlags.AlarmBits.CellUndervoltageAlarm;
+        FrameData.CellOvertemperatureError = tBatteryAlarmFlags.AlarmBits.PowerMosFetOvertemperatureAlarm
+                || tBatteryAlarmFlags.AlarmBits.Sensor1Or2OvertemperatureAlarm;
+        FrameData.CellUndertemperatureError = tBatteryAlarmFlags.AlarmBits.Sensor1Or2UndertemperatureAlarm;
+        FrameData.DischargeOvercurrentError = tBatteryAlarmFlags.AlarmBits.DischargeOvercurrentAlarm;
 
         // Byte 1
-        FrameData.ChargeOvercurrentError = tJKFAllReply->AlarmUnion.AlarmBits.ChargeOvercurrentAlarm;
-        FrameData.SystemError = tJKFAllReply->BMSStatus.StatusBits.BatteryDown;
+        FrameData.ChargeOvercurrentError = tBatteryAlarmFlags.AlarmBits.ChargeOvercurrentAlarm;
+        FrameData.SystemError = aJK_BMS_Ptr->JKAllReplyPointer->BMSStatus.StatusBits.BatteryDown;
 //        if (tJKFAllReply->SOCPercent < 5) {
 //            FrameData.SystemError = 1;
 //        }
 
         // Byte 2
         // (mis)use the battery alarms as cell warnings for Pylon
-        FrameData.CellHighVoltageWarning = tJKFAllReply->AlarmUnion.AlarmBits.ChargeOvervoltageAlarm;
-        FrameData.CellLowVoltageWarning = tJKFAllReply->AlarmUnion.AlarmBits.DischargeUndervoltageAlarm;
+        FrameData.CellHighVoltageWarning = tBatteryAlarmFlags.AlarmBits.ChargeOvervoltageAlarm;
+        FrameData.CellLowVoltageWarning = tBatteryAlarmFlags.AlarmBits.DischargeUndervoltageAlarm;
         // Use the same values as for error here
-        FrameData.CellHighTemperatureWarning = tJKFAllReply->AlarmUnion.AlarmBits.PowerMosFetOvertemperatureAlarm
-                || tJKFAllReply->AlarmUnion.AlarmBits.Sensor1Or2OvertemperatureAlarm;
-        FrameData.CellLowTemperatureWarning = tJKFAllReply->AlarmUnion.AlarmBits.Sensor1Or2UndertemperatureAlarm;
-        FrameData.DischargeHighCurrentWarning = tJKFAllReply->AlarmUnion.AlarmBits.DischargeOvercurrentAlarm;
+        FrameData.CellHighTemperatureWarning = tBatteryAlarmFlags.AlarmBits.PowerMosFetOvertemperatureAlarm
+                || tBatteryAlarmFlags.AlarmBits.Sensor1Or2OvertemperatureAlarm;
+        FrameData.CellLowTemperatureWarning = tBatteryAlarmFlags.AlarmBits.Sensor1Or2UndertemperatureAlarm;
+        FrameData.DischargeHighCurrentWarning = tBatteryAlarmFlags.AlarmBits.DischargeOvercurrentAlarm;
 
         // Byte 3
         // Use the same values as for error here
-        FrameData.ChargeHighCurrentWarning = tJKFAllReply->AlarmUnion.AlarmBits.ChargeOvercurrentAlarm;
-        FrameData.SystemError = tJKFAllReply->BMSStatus.StatusBits.BatteryDown;
+        FrameData.ChargeHighCurrentWarning = tBatteryAlarmFlags.AlarmBits.ChargeOvercurrentAlarm;
+        FrameData.SystemError = aJK_BMS_Ptr->JKAllReplyPointer->BMSStatus.StatusBits.BatteryDown;
 
 //        if (tJKFAllReply->SOCPercent < 10) {
 //            FrameData.SystemWarning = 1;
@@ -292,8 +312,15 @@ struct PylontechCANBatteryRequesFrame35CStruct {
         } else {
             FrameData.ForceChargeRequestII = 0;
         }
+
+#if defined(HANDLE_MULTIPLE_BMS)
+        union BMSStatusUnion tBMSStatusFlags = JK_BMS::getOredBMSStatusFlags();
+        FrameData.DischargeEnable = tBMSStatusFlags.StatusBits.ChargeMosFetActive;
+        FrameData.ChargeEnable = tBMSStatusFlags.StatusBits.DischargeMosFetActive;
+#else
         FrameData.DischargeEnable = tJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
         FrameData.ChargeEnable = tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
+#endif
     }
 };
 
@@ -330,8 +357,12 @@ struct PylontechCANSMACapacityFrame35FStruct {
         struct JKReplyStruct *tJKFAllReply = aJK_BMS_Ptr->JKAllReplyPointer;
         FrameData.SoftwareVersionLowByte = tJKFAllReply->SoftwareVersionNumber[1];
         FrameData.SoftwareVersionHighByte = tJKFAllReply->SoftwareVersionNumber[0];
+#if defined(HANDLE_MULTIPLE_BMS)
+        FrameData.CapacityAmpereHour = JK_BMS::getSumOfTotalCapacityAmpereHour();
+#else
         FrameData.CapacityAmpereHour = aJK_BMS_Ptr->JKComputedData.TotalCapacityAmpereHour;
-    }
+#endif
+}
 };
 
 /*
