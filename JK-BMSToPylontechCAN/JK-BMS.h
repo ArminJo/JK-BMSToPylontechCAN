@@ -50,7 +50,7 @@
 #define JK_FRAME_START_BYTE_1   0x57
 #define JK_FRAME_END_BYTE       0x68
 
-extern uint8_t JKReplyFrameBuffer[350];            // The raw big endian data as received from JK BMS
+extern uint8_t JKReplyFrameBuffer[350]; // The raw big endian data as received from JK BMS
 
 extern char sUpTimeString[12]; // "1000D23H12M" is 11 bytes long
 extern bool sUpTimeStringMinuteHasChanged;
@@ -107,7 +107,7 @@ struct CellStatisticsStruct {
     uint32_t LastPrintedBalancingCount; // For printing with printJKDynamicInfo()
 };
 
-#define MINIMUM_BALANCING_COUNT_FOR_DISPLAY         60 //  120 seconds / 2 minutes of balancing
+#define MINIMUM_BALANCING_COUNT_FOR_DISPLAY     60 //  120 seconds / 2 minutes of balancing
 #endif // NO_CELL_STATISTICS
 
 #define JK_BMS_FRAME_HEADER_LENGTH              11
@@ -116,7 +116,7 @@ struct CellStatisticsStruct {
 #define JK_BMS_FRAME_INDEX_OF_CELL_INFO_LENGTH  (JK_BMS_FRAME_HEADER_LENGTH + 1) // +1 for token 0x79
 #define MINIMAL_JK_BMS_FRAME_LENGTH             19
 
-#define TIMEOUT_MILLIS_FOR_FRAME_REPLY                  100 // I measured 26 ms between request end and end of received 273 byte result
+#define TIMEOUT_MILLIS_FOR_FRAME_REPLY          100 // I measured 26 ms between request end and end of received 273 byte result
 #if TIMEOUT_MILLIS_FOR_FRAME_REPLY > MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS
 #error "TIMEOUT_MILLIS_FOR_FRAME_REPLY must be smaller than MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS to detect timeouts"
 #endif
@@ -151,7 +151,7 @@ struct JKComputedDataStruct {
     int16_t TemperatureMaximum;         // Computed value
 
     uint16_t TotalCapacityAmpereHour;
-    uint16_t RemainingCapacityAmpereHour; // Computed value
+    uint16_t RemainingCapacityAmpereHour;   // Computed value
     uint16_t BatteryFullVoltage10Millivolt; // Computed by BMS! Is ActualNumberOfCellInfoEntries *  CellOvervoltageProtectionMillivolt
     uint16_t BatteryEmptyVoltage10Millivolt;
     uint16_t BatteryVoltage10Millivolt;
@@ -163,6 +163,12 @@ struct JKComputedDataStruct {
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     int32_t BatteryCapacityAsAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds. Pre-computed capacity to compare with accumulator value.
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
+#if defined(HANDLE_MULTIPLE_BMS)
+    uint16_t ChargeOvercurrentProtectionAmpere;
+    uint16_t DischargeOvercurrentProtectionAmpere;
+    uint16_t AlarmsAsWord;
+    uint16_t StatusAsWord;
+#endif
 };
 
 #define AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE   (3600L * 100 * MILLIS_IN_ONE_SECOND / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
@@ -176,17 +182,14 @@ struct JKLastPrintedDataStruct {
     int32_t BatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every 1%
 };
 
-/*
- * Only for documentation
- */
 union BMSStatusUnion {
     uint16_t StatusAsWord;
     struct {
-        uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
-        bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
-        bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
-        bool BalancerActive :1;                 // 0x04
-        bool BatteryDown :1;                    // 0x08
+        uint8_t ReservedStatusHighByte; // This is the low byte of StatusAsWord, but it was sent as high byte of status
+        bool ChargeMosFetActive :1;     // 0x01 // Is disabled e.g. on over current or temperature
+        bool DischargeMosFetActive :1;  // 0x02 // Is disabled e.g. on over current or temperature
+        bool BalancerActive :1;         // 0x04
+        bool BatteryDown :1;            // 0x08
         uint8_t ReservedStatus :4;
     } StatusBits;
 };
@@ -227,6 +230,35 @@ union BMSStatusUnion {
 #define MASK_OF_DISCHARGING_UNDERVOLTAGE_ALARM_UNSWAPPED    0x0400
 #define INDEX_NO_ALARM                                      0xFF
 
+union BatteryAlarmFlagsUnion {                  // 0x8B
+    uint16_t AlarmsAsWord;
+    struct {
+        // High byte of alarms sent
+        bool Sensor2OvertemperatureAlarm :1;    // 0x0100
+        bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
+        bool CellOvervoltageAlarm :1;           // 0x0400
+        bool CellUndervoltageAlarm :1;
+        bool _309_A_ProtectionAlarm :1;         // 0x1000
+        bool _309_B_ProtectionAlarm :1;
+        bool Reserved1Alarm :1;                 // Two highest bits are reserved
+        bool Reserved2Alarm :1;
+
+        // Low byte of alarms sent
+        bool LowCapacityAlarm :1;               // 0x0001
+        bool PowerMosFetOvertemperatureAlarm :1;
+        bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
+        bool DischargeUndervoltageAlarm :1;
+        bool Sensor1Or2OvertemperatureAlarm :1; // 0x0010 - Affects the charging/discharging MosFet state, not the enable flags
+        /*
+         * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
+         * Retry is done after "OCPR Time(S)"
+         */
+        bool ChargeOvercurrentAlarm :1; // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
+        bool DischargeOvercurrentAlarm :1; // 0x0040 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
+        bool CellVoltageDifferenceAlarm :1;     // 0x0080
+    } AlarmBits;
+};
+
 struct JKReplyStruct {
     uint8_t TokenTemperaturePowerMosFet;    // 0x80
     uint16_t TemperaturePowerMosFet;        // 99 = 99 degree Celsius, 100 = 100, 101 = -1, 140 = -40
@@ -251,52 +283,10 @@ struct JKReplyStruct {
     uint8_t TokenNumberOfBatteryCells;      // 0x8A
     uint16_t NumberOfBatteryCells;
     uint8_t TokenBatteryAlarm;              // 0x8B
-
-    union {
-        uint16_t AlarmsAsWord;
-        struct {
-            uint8_t AlarmsHighByte;                 // This is the low byte of AlarmsAsWord, but it was sent as high byte of alarms
-            uint8_t AlarmsLowByte;                  // This is the high byte of AlarmsAsWord, but it was sent as low byte of alarms
-        } AlarmBytes;
-        struct {
-            // High byte of alarms sent, but low byte of AlarmsAsWord
-            bool Sensor2OvertemperatureAlarm :1;    // 0x0100
-            bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
-            bool CellOvervoltageAlarm :1;           // 0x0400
-            bool CellUndervoltageAlarm :1;          // 0x0800
-            bool _309_A_ProtectionAlarm :1;         // 0x1000
-            bool _309_B_ProtectionAlarm :1;
-            bool Reserved1Alarm :1;                 // Two highest bits are reserved
-            bool Reserved2Alarm :1;                 // 0x8000
-
-            // Low byte of alarms sent, but high byte of AlarmsAsWord
-            bool LowCapacityAlarm :1;               // 0x0001
-            bool PowerMosFetOvertemperatureAlarm :1;
-            bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
-            bool DischargeUndervoltageAlarm :1; // 0x0008 Discharging undervoltage forces SOC to 0 and a few seconds later switches off discharge mosfet
-            bool Sensor1Or2OvertemperatureAlarm :1; // 0x0010 - Affects the charging/discharging MosFet state, not the enable flags
-            /*
-             * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
-             * Retry is done after "OCPR Time(S)"
-             */
-            bool ChargeOvercurrentAlarm :1; // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
-            bool DischargeOvercurrentAlarm :1; // 0x0040 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
-            bool CellVoltageDifferenceAlarm :1;     // 0x0080
-        } AlarmBits;
-    } AlarmUnion;
+    union BatteryAlarmFlagsUnion BatteryAlarmFlags;
 
     uint8_t TokenBatteryStatus;                     // 0x8C
-    union {
-        uint16_t StatusAsWord;
-        struct {
-            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
-            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
-            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
-            bool BalancerActive :1;                 // 0x04
-            bool BatteryDown :1;                    // 0x08
-            uint8_t ReservedStatus :4;
-        } StatusBits;
-    } BMSStatus;
+    union BMSStatusUnion BMSStatus;
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
     uint16_t BatteryOvervoltageProtection10Millivolt; // 1000 to 15000 BMS computed: # of cells * CellOvervoltageProtectionMillivolt
@@ -436,67 +426,24 @@ struct JKReplyStruct {
  */
 struct JKLastReplyStruct {
     uint8_t SOCPercent;                         // 0-100% 0x85
-    union {                                     // 0x8B
-        uint16_t AlarmsAsWord;
-        struct {
-            // High byte of alarms sent
-            bool Sensor2OvertemperatureAlarm :1;    // 0x0100
-            bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
-            bool CellOvervoltageAlarm :1;           // 0x0400
-            bool CellUndervoltageAlarm :1;
-            bool _309_A_ProtectionAlarm :1;         // 0x1000
-            bool _309_B_ProtectionAlarm :1;
-            bool Reserved1Alarm :1;                 // Two highest bits are reserved
-            bool Reserved2Alarm :1;
-
-            // Low byte of alarms sent
-            bool LowCapacityAlarm :1;               // 0x0001
-            bool PowerMosFetOvertemperatureAlarm :1;
-            bool ChargeOvervoltageAlarm :1;         // 0x0004 This happens quite often, if battery charging is approaching 100 %
-            bool DischargeUndervoltageAlarm :1;
-            bool Sensor1Or2OvertemperatureAlarm :1; // 0x0010 - Affects the charging/discharging MosFet state, not the enable flags
-            /*
-             * Set with delay of (Dis)ChargeOvercurrentDelaySeconds / "OCP Delay(S)" seconds initially or on retry.
-             * Retry is done after "OCPR Time(S)"
-             */
-            bool ChargeOvercurrentAlarm :1; // 0x0020 - Set with delay of ChargeOvercurrentDelaySeconds seconds initially or on retry
-            bool DischargeOvercurrentAlarm :1; // 0x0040 - Set with delay of DischargeOvercurrentDelaySeconds seconds initially or on retry
-            bool CellVoltageDifferenceAlarm :1;     // 0x0080
-        } AlarmBits;
-    } AlarmUnion;
-
-    union {                                         // 0x8C
-        uint16_t StatusAsWord;
-        struct {
-            uint8_t ReservedStatusHighByte;         // This is the low byte of StatusAsWord, but it was sent as high byte of status
-            bool ChargeMosFetActive :1;             // 0x01 // Is disabled e.g. on over current or temperature
-            bool DischargeMosFetActive :1;          // 0x02 // Is disabled e.g. on over current or temperature
-            bool BalancerActive :1;                 // 0x04
-            bool BatteryDown :1;                    // 0x08
-            uint8_t ReservedStatus :4;
-        } StatusBits;
-    } BMSStatus;
-
+    union BatteryAlarmFlagsUnion BatteryAlarmFlags;
+    union BMSStatusUnion BMSStatus;
     uint32_t SystemWorkingMinutes;              // Minutes 0xB6
 };
 
 /*
  * Return codes for uint8_t returns
  */
-#define JK_BMS_RECEIVE_ONGOING          0 // No requested or ongoing receiving
+#define JK_BMS_RECEIVE_ONGOING      0 // No requested or ongoing receiving
 #define JK_BMS_RECEIVE_FINISHED     1
 #define JK_BMS_RECEIVE_TIMEOUT      2
 #define JK_BMS_RECEIVE_ERROR        3 // Received byte was not plausible
-
-#if defined(HANDLE_MULTIPLE_BMS)
-extern uint8_t NumbersOfBMSInstances; // The number of the BMS classes instantiated.
-#endif
 
 class JK_BMS {
 public:
     JK_BMS();
     void init(uint8_t aTxPinNumber);
-    void requestJK_BMSStatusFrame( bool aDebugModeActive);
+    void requestJK_BMSStatusFrame(bool aDebugModeActive);
     void RequestStatusFrame(bool aDebugModeActive);
     uint8_t readJK_BMSStatusFrameByte();
     uint8_t checkForReplyFromBMSOrTimeout();
@@ -544,13 +491,13 @@ public:
      * Flags for interface
      */
     bool TimeoutJustDetected = false; // Is set to true at first detection of timeout and reset by beep timeout or receiving of a frame
-    bool JKBMSFrameHasTimeout;                 // True, as long as BMS timeout persists.
+    bool JKBMSFrameHasTimeout;        // True, as long as BMS timeout persists.
     /*
      * sAlarmJustGetsActive is set and reset by detectAndPrintAlarmInfo() and reset by checkButtonPressForLCD() and beep handling.
      * Can also be set to true if 2 alarms are active and one of them gets inactive. If true, beep (with optional timeout) is generated.
      */
     bool AlarmJustGetsActive = false; // True if alarm bits changed and any alarm is still active. False if alarm bits changed and no alarm is active.
-    bool AlarmActive = false; // True as long as any alarm is still active. False if no alarm is active.
+    bool AlarmActive = false;         // True as long as any alarm is still active. False if no alarm is active.
 #if defined(USE_SERIAL_2004_LCD)
     uint8_t AlarmIndexToShowOnLCD = INDEX_NO_ALARM; // Index of current alarm to show with Alarm / Overview page. Set by detectAndPrintAlarmInfo() and reset on page switch.
 #endif
@@ -558,13 +505,13 @@ public:
     /*
      * Size of reply is 291 bytes for 16 cells. sizeof(JKReplyStruct) is 221.
      */
-    uint16_t ReplyFrameLength;                 // Received length of frame
-    uint16_t ReplyFrameBufferIndex = 0;     // Index of next byte to write to array, except for last byte received. Starting with 0.
+    uint16_t ReplyFrameLength;              // Received length of frame
+    uint16_t ReplyFrameBufferIndex;         // Index of next byte to write to array, except for last byte received. Starting with 0.
 
     /*
      * BMS communication timeout
      */
-    uint32_t MillisOfLastReceivedByte = 0;     // For timeout detection
+    uint32_t MillisOfLastReceivedByte;      // For timeout detection
 
     /*
      * Use a 115200 baud software serial for the short request frame.
@@ -573,7 +520,18 @@ public:
     SoftwareSerialTX TxToJKBMS;
 
 #if defined(HANDLE_MULTIPLE_BMS)
-    uint8_t NumberOfBMS; // The number of the BMS this class is used for. Starting with 1.
+    uint8_t NumberOfThisBMS; // The number of the BMS this class is used for. Starting with 1. => Is index of next BMS in list :-).
+    static uint8_t sBMS_ArrayNextIndex;     // = number of the BMS classes instantiated.
+    static JK_BMS *BMSArray[NUMBER_OF_SUPPORTED_BMS];
+    static bool getAnyAlarm();
+    static bool getAnyTimeout();
+    static uint16_t getSumOfChargeOvercurrentProtectionAmpere();
+    static uint16_t getSumOfDischargeOvercurrentProtectionAmpere();
+    static int16_t getSumOfBattery10MilliAmpere();
+    static uint16_t getSumOfTotalCapacityAmpereHour();
+    static union BatteryAlarmFlagsUnion getOredBatteryAlarmFlags();
+    static union BMSStatusUnion getOredBMSStatusFlags();
+
 #endif
 
     /*
@@ -588,6 +546,6 @@ public:
 #if !defined(NO_CELL_STATISTICS)
     struct CellStatisticsStruct CellStatistics;
 #endif //NO_CELL_STATISTICS
-
 };
+
 #endif // _JK_BMS_H

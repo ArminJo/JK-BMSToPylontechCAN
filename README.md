@@ -31,7 +31,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Supports sending of total capayity for **SMA** and **Luxpower** inverters.
 - Optional linear **reducing maximum current above 80% SOC** (values can be adapted to your needs).
-- Support for more than one BMS (experimental).
+- Support for **multiple BMS**.
 - Display of BMS information, Cell voltages, statistics and alarms on a locally attached **serial 2004 LCD**.
 - Page button for switching **5 LCD display pages**.
 - Debug output and extra **CAN info** and **Capacity info page** on long press of button.
@@ -115,8 +115,10 @@ The same (raw) data without ESR correction of voltage.
 <br/>
 
 # Youtube video of JK-BMS doing wrong computing of capacity.
-I discharged the battery for 10 minutes with 45A, which gives 7.5Ah. But the JK-BMS shows a capacity loss of 12.1 Ah (50.7 - 38.6)!
-The SOC went from 40 % to 30 %, which corresponds also to 12.5 Ah for a total battery capacity of 125 Ah.
+I discharged the battery for 10 minutes with 45A, which gives **7.5 Ah** capacity loss.<br/>
+Start of 10 minutes period is left screenshot with time of ...**21M40S** and Capacity **50.7 Ah**, end of period is right screenshot with time of ...**31M40S** and Capacity **38.6 Ah**.<br/>
+These 2 values correspond to a **capacity loss of 12.1 Ah** (50.7 Ah - 38.6 Ah)!<br/>
+SOC went from 40 % to 30 %, which at least corresponds to 12.5 Ah for a total battery capacity of 125 Ah.
 
 [![Youtube video of JK-BMS doing wrong computing of capacity](https://i.ytimg.com/vi/tDN8iFr98JA/hqdefault.jpg)](https://www.youtube.com/watch?v=tDN8iFr98JA)
 
@@ -178,10 +180,29 @@ Depending on the USB chip, the pull down can be down to 680 Ohm.
  |GND  RX  TX VBAT|
  |________________|
    |   |   |
-   |   |   --|<|-- RX of Uno / Nano
-   |   ----------- D4 (or other pin, if specified differently)
-   --------------- GND
+   |   |   o-|<|-- RX of Uno / Nano
+   |   o---------- D4 (or other pin, if specified differently)
+   o-------------- GND
 
+
+# Using an abitrary PNP transistor instead of a diode between BMS TX and Nano RX,
+#   to support weak TX outputs and multiple BMS connected to one Nano RX.
+  ___ ________ ___
+ |                |
+ | O   O   O   O  |
+ |GND  RX  TX VBAT|
+ |________________|
+   |   |   |
+   |   |   |      o GND
+   |   |   |      |
+   |   |   |    |/  C
+   |   |   o----|       Any PNP will work!
+   |   |     B  |<
+   |   |          | E
+   |   |          o-- RX of Uno / Nano
+   |   o------------- D4 (or other pin, if specified differently)
+   o----------------- GND
+   
 
 # Automatic brightness control for 2004 LCD
    5V O------o------o
@@ -194,7 +215,7 @@ Depending on the USB chip, the pull down can be down to 680 Ohm.
              o----|
                   |>
                     |
-                    O To anode of LCD backlight
+                    o To anode of LCD backlight
 
 Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 

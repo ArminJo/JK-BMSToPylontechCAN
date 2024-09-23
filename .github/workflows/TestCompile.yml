@@ -28,7 +28,7 @@ jobs:
           - arduino:avr:nano
           - arduino:avr:uno
           - arduino:avr:uno|STANDALONE_TEST
-          - arduino:avr:uno|LOCAL_DEBUG
+          - arduino:avr:uno|DEBUG
           - arduino:avr:uno|DISPLAY_ALWAYS_ON
           - arduino:avr:uno|USE_NO_LCD
           - MightyCore:avr:644
@@ -38,9 +38,9 @@ jobs:
             build-properties:
               All: -DSTANDALONE_TEST
 
-          - arduino-boards-fqbn: arduino:avr:uno|LOCAL_DEBUG
+          - arduino-boards-fqbn: arduino:avr:uno|DEBUG
             build-properties:
-              All: -DLOCAL_DEBUG
+              All: -DDEBUG
 
           - arduino-boards-fqbn: arduino:avr:uno|DISPLAY_ALWAYS_ON
             build-properties:
