@@ -36,7 +36,7 @@
 extern bool sSerialLCDAvailable;
 
 #if !defined(ENABLE_MONITORING) && defined(NO_ANALYTICS)
-extern char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with sprintf_P()
+extern char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with snprintf_P()
 #endif
 /*
  * Display timeouts, may be adapted to your requirements

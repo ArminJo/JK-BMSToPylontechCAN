@@ -32,7 +32,7 @@
 bool sSerialLCDAvailable;
 
 #if !defined(ENABLE_MONITORING) && defined(NO_ANALYTICS)
-char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with sprintf_P()
+char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with snprintf_P()
 #endif
 
 //#define DISPLAY_ALWAYS_ON   // Activate this, if you want the display to be always on.
@@ -292,7 +292,7 @@ void printCellInfoOnLCD() {
                  */
                 if (i == 4) {
                     // print SOC
-                    sprintf_P(sStringBuffer, PSTR("%3u%%"), JK_BMS_1.JKAllReplyPointer->SOCPercent);
+                    snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%3u%%"), JK_BMS_1.JKAllReplyPointer->SOCPercent);
                     myLCD.print(sStringBuffer);
                 } else if (i == 8) {
                     // Print current in the last 4 characters
@@ -320,7 +320,7 @@ void printCellInfoOnLCD() {
             myLCD.print(' ');
         }
         // print fix format 3 character value
-        sprintf_P(sStringBuffer, PSTR("%3d"), JK_BMS_1.JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt - 3000); // Value can be negative!
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%3d"), JK_BMS_1.JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt - 3000); // Value can be negative!
         myLCD.print(sStringBuffer);
     }
     if (tNumberOfCellInfoEntries > 0 && tNumberOfCellInfoEntries <= 16) {
@@ -477,7 +477,7 @@ void printBigInfoOnLCD() {
         float tBatteryLoadPowerFloat = tBatteryLoadPower * 0.001; // convert to kW
         dtostrf(tBatteryLoadPowerFloat, 5, 2, sStringBuffer);
     } else {
-        sprintf_P(sStringBuffer, PSTR("%d"), JK_BMS_1.JKComputedData.BatteryLoadPower);
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%d"), JK_BMS_1.JKComputedData.BatteryLoadPower);
     }
 
     /*
@@ -653,7 +653,7 @@ void printVoltageCurrentAndPowerOnLCD() {
     myLCD.print('A');
 
     // Power
-    sprintf_P(sStringBuffer, PSTR("%6d"), JK_BMS_1.JKComputedData.BatteryLoadPower); // force use of 6 columns
+    snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%6d"), JK_BMS_1.JKComputedData.BatteryLoadPower); // force use of 6 columns
     myLCD.print(sStringBuffer);
     myLCD.print('W');
 }
@@ -743,7 +743,7 @@ void printAlarmInfoOnLCD() {
             tCellMillivoltToPrint = JK_BMS_1.JKConvertedCellInfo.MaximumCellMillivolt;
         }
 // print millivolt with fix format 3 character value
-        sprintf_P(sStringBuffer, PSTR("%2d %3dmV "), tCellIndexToPrint + 1, tCellMillivoltToPrint - 3000);
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%2d %3dmV "), tCellIndexToPrint + 1, tCellMillivoltToPrint - 3000);
         myLCD.print(sStringBuffer);
 
     } else if (strlen_P(tLastAlarmString) > LCD_COLUMNS) {
@@ -788,7 +788,7 @@ void printOverwiewOrAlarmInfoOnLCD() {
         myLCD.print(JK_BMS_1.JKAllReplyPointer->SOCPercent);
         myLCD.print(F("% "));
 // Remaining capacity
-        sprintf_P(sStringBuffer, PSTR("%3d"), JK_BMS_1.JKComputedData.RemainingCapacityAmpereHour);
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%3d"), JK_BMS_1.JKComputedData.RemainingCapacityAmpereHour);
         myLCD.print(sStringBuffer);
         myLCD.print(F("Ah "));
 // Last 3 characters are the enable states
@@ -960,7 +960,7 @@ void checkButtonPressForLCD() {
                     }
                     myLCD.setCursor(0, 0);
                     if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
-                        updateEEPROMTo_FF(); // Clear EEPROM
+                        updateCompleteEEPROMTo_FF(); // Clear EEPROM
                         JK_INFO_PRINTLN(F("Long press detected -> clear EEPROM"));
                         myLCD.print(F("EEPROM data cleared "));
                     } else {

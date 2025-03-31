@@ -38,6 +38,7 @@
 
 #include "JK-BMS_Analytics.h"
 
+#include "LocalDebugLevelCheck.h"
 // This block must be located after the includes of other *.hpp files
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 //#define LOCAL_TRACE // This enables trace output only for this file - only for development
@@ -109,7 +110,7 @@ void initializeAnalytics() {
 /*
  * Just clear the complete EEPROM
  */
-void updateEEPROMTo_FF() {
+void updateCompleteEEPROMTo_FF() {
     for (int i = 0; i <= E2END; ++i) {
         eeprom_update_byte((uint8_t*) i, 0xFF);
     }

@@ -31,7 +31,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Protocol converter from the JK-BMS status frame to Pylontech CAN frames.
 - Supports sending of total capayity for **SMA** and **Luxpower** inverters.
 - Optional linear **reducing maximum current above 80% SOC** (values can be adapted to your needs).
-- Support for **multiple BMS**.
+- Support for **multiple BMS** on a Nano board.
 - Display of BMS information, Cell voltages, statistics and alarms on a locally attached **serial 2004 LCD**.
 - Page button for switching **5 LCD display pages**.
 - Debug output and extra **CAN info** and **Capacity info page** on long press of button.
@@ -59,6 +59,22 @@ If CAN communications breaks, the inverter may use different values for controll
 <br/>
 
 ![Overview](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BreadboardAndOverviewPage.jpg)
+
+<br/>
+
+# Multiple BMS
+Multiple BMS are enabled by activating line `#define HANDLE_MULTIPLE_BMS`.<br/>
+At the time, 2 BMS are supported, but the code is prepared to support more.
+
+The first BMS is connected with 115200 baud at pin 4 by SoftwareSerialTX to the JK-BMS RX line.
+The second BMS can be connected at Nano pin 5 to the JK-BMS RX line of the second BMS.
+
+We use the hardware serial RX pin for all serial from BMS (RX) because the RX data won't come at the same time.
+But it is necessary to use a Schottky diode in each line to create a wired OR gate. 
+As the active level of USART is **low**, all the cathodes of the Schottky diodes must be connected to the Nano RX pin, 
+while each anode is connected to the BMS TX pin.
+
+**Therefore we do not need a CPU with 2 serial ports, a Arduino Nano is sufficient.**
 
 <br/>
 

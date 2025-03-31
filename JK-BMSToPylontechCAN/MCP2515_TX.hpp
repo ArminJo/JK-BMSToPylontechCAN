@@ -100,7 +100,7 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { //
     // Set Configuration mode
     writeMCP2515Register(MCP_CANCTRL, MODE_CONFIG);
     if (readMCP2515Register(MCP_CANCTRL) != MODE_CONFIG) {
-        if(aSerial != NULL) {
+        if(aSerial != nullptr) {
             aSerial->print(F("First"));
             aSerial->println(reinterpret_cast<const __FlashStringHelper *>(StringAccessFailed));
         }
@@ -123,7 +123,7 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { //
             writeMCP2515Register(MCP_CNF2, MCP_16MHz_500kBPS_CFG2); // 0x80 is BTLMODE and always set
             writeMCP2515Register(MCP_CNF3, MCP_16MHz_500kBPS_CFG3);
         } else {
-            if(aSerial != NULL) {
+            if(aSerial != nullptr) {
                 aSerial->println(F("500 kB is not working stable with 8 MHz crystal"));
             }
             return true;
@@ -147,7 +147,7 @@ bool initializeCAN(uint32_t aBaudrate, uint8_t aCrystalMHz, Print *aSerial) { //
     // Reset Configuration mode
     writeMCP2515Register(MCP_CANCTRL, MCP2515_CAN_CONTROL_REGISTER_CONTENT);
     if (readMCP2515Register(MCP_CANCTRL) != MCP2515_CAN_CONTROL_REGISTER_CONTENT) {
-        if(aSerial != NULL) {
+        if(aSerial != nullptr) {
             aSerial->println(F("Last"));
             aSerial->println(reinterpret_cast<const __FlashStringHelper *>(StringAccessFailed));
         }

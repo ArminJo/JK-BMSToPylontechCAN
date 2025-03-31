@@ -41,7 +41,7 @@
 #if !defined(LCD_COLUMNS)
 #define LCD_COLUMNS     20
 #endif
-extern char sStringBuffer[];    // For rendering a LCD row with sprintf_P()
+extern char sStringBuffer[];    // For rendering a LCD row with snprintf_P()
 
 #include "LiquidCrystal_I2C.hpp" // This defines USE_SOFT_I2C_MASTER, if SoftI2CMasterConfig.h is available. Use only the modified version delivered with this program!
 extern LiquidCrystal_I2C myLCD;

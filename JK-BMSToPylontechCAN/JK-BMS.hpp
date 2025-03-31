@@ -51,10 +51,10 @@
  * Software serial for JK-BMS request frame sending
  */
 #include "SoftwareSerialTX.h"
-#else
 #endif
 
-// This block must be located after the includes of other *.hpp files
+#include "LocalDebugLevelCheck.h"
+// This definition must be located after the includes of other *.hpp files
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 #include "LocalDebugLevelStart.h"
 
@@ -347,7 +347,7 @@ void JK_BMS::printJKReplyFrameBuffer() {
     Serial.print(F(" bytes received from BMS "));
     Serial.println(NumberOfThisBMS);
 #else
-        Serial.println(F(" bytes received"));
+    Serial.println(F(" bytes received"));
 #endif
     printBufferHex(tBufferAddress, JK_BMS_FRAME_HEADER_LENGTH);
 
@@ -567,7 +567,7 @@ void JK_BMS::fillJKConvertedCellInfo() {
     uint16_t tVoltage;
     uint32_t tMillivoltSum = 0;
     uint8_t tNumberOfNonNullCellInfo = 0;
-    uint16_t tMinimumMillivolt = 0xFFFF;
+    uint16_t tMinimumMillivolt = UINT16_MAX;
     uint16_t tMaximumMillivolt = 0;
 
     for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
@@ -720,8 +720,8 @@ void JK_BMS::printJKCellStatisticsInfo() {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMinimumPercentageArray[i],
-                CellStatistics.CellMinimumArray[i]);
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%2u=%2u %% |%5u, "), i + 1,
+                CellStatistics.CellMinimumPercentageArray[i], CellStatistics.CellMinimumArray[i]);
         Serial.print(tStringBuffer);
     }
     Serial.println();
@@ -731,8 +731,8 @@ void JK_BMS::printJKCellStatisticsInfo() {
         if (i != 0 && (i % 8) == 0) {
             Serial.println();
         }
-        sprintf_P(tStringBuffer, PSTR("%2u=%2u %% |%5u, "), i + 1, CellStatistics.CellMaximumPercentageArray[i],
-                CellStatistics.CellMaximumArray[i]);
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%2u=%2u %% |%5u, "), i + 1,
+                CellStatistics.CellMaximumPercentageArray[i], CellStatistics.CellMaximumArray[i]);
         Serial.print(tStringBuffer);
     }
     Serial.println();
@@ -807,7 +807,8 @@ void JK_BMS::fillJKComputedData() {
      */
     if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
         CellStatistics.BalancingCount++;
-        sprintf_P(sBalancingTimeString, PSTR("%3uD%02uH%02uM"), (uint16_t) (CellStatistics.BalancingCount / (60 * 24 * 30UL)),
+        snprintf_P(sBalancingTimeString, sizeof(sBalancingTimeString), PSTR("%3uD%02uH%02uM"),
+                (uint16_t) (CellStatistics.BalancingCount / (60 * 24 * 30UL)),
                 (uint16_t) ((CellStatistics.BalancingCount / (60 * 30)) % 24),
                 (uint16_t) (CellStatistics.BalancingCount / 30) % 60);
     }
@@ -1055,7 +1056,7 @@ void JK_BMS::printJKStaticInfo() {
     Serial.print(NumberOfThisBMS);
     Serial.println(F(" INFO ***"));
 #else
-        Serial.println(F("*** BMS INFO ***"));
+    Serial.println(F("*** BMS INFO ***"));
 #endif
     printBMSInfo();
 
@@ -1078,7 +1079,7 @@ void JK_BMS::computeUpTimeString() {
 
         uint32_t tSystemWorkingMinutes = swap(JKAllReplyPointer->SystemWorkingMinutes);
 // 1 kByte for sprintf  creates string "1234D23H12M"
-        sprintf_P(sUpTimeString, PSTR("%4uD%02uH%02uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
+        snprintf_P(sUpTimeString, sizeof(sUpTimeString), PSTR("%4uD%02uH%02uM"), (uint16_t) (tSystemWorkingMinutes / (60 * 24)),
                 (uint16_t) ((tSystemWorkingMinutes / 60) % 24), (uint16_t) (tSystemWorkingMinutes % 60));
         if (sLastUpTimeTenthOfMinuteCharacter != sUpTimeString[8]) {
             sLastUpTimeTenthOfMinuteCharacter = sUpTimeString[8];
@@ -1165,7 +1166,7 @@ void JK_BMS::printJKDynamicInfo() {
             Serial.print(sBalancingTimeString);
             // Append seconds
             char tString[4]; // "03S" is 3 bytes long
-            sprintf_P(tString, PSTR("%02uS"), (uint16_t) (CellStatistics.BalancingCount % 30) * 2);
+            snprintf_P(tString, sizeof(tString), PSTR("%02uS"), (uint16_t) (CellStatistics.BalancingCount % 30) * 2);
             Serial.println(tString);
             printJKCellStatisticsInfo();
         }
@@ -1296,7 +1297,7 @@ void JK_BMS::setCSVString() {
     /*
      * Uptime minutes
      */
-    uint_fast8_t tBufferIndex = sprintf_P(sStringBuffer, PSTR("%lu;"), (swap(JKAllReplyPointer->SystemWorkingMinutes)));
+    uint_fast8_t tBufferIndex = snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%lu;"), (swap(JKAllReplyPointer->SystemWorkingMinutes)));
 
     /*
      * Individual cell voltages

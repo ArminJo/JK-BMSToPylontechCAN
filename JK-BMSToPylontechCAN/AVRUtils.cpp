@@ -24,7 +24,9 @@
  *
  */
 
-#if defined(__AVR__) && !(defined(__AVR_ATtiny1616__)  || defined(__AVR_ATtiny3216__) || defined(__AVR_ATtiny3217__))
+#include "Arduino.h"
+
+#if defined(__AVR__) && defined (SPMCSR) && !(defined(__AVR_ATtiny1616__)  || defined(__AVR_ATtiny3216__) || defined(__AVR_ATtiny3217__))
 #include "AVRUtils.h"
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
@@ -63,42 +65,28 @@ void initStackFreeMeasurement() {
 }
 
 /*
- * @return The amount of used/touched bytes since the last call to initStackFreeMeasurement()
- *          -1 if stack was completely used
- * Check for first touched pattern on the stack/heap, starting the UPWARD search at heap start.
- */
-/*
  * @param aStackUnusedSizePointer points to variable which is written with amount of stack/heap not used/touched.
  * @return The amount of stack/heap touched since the last call to initStackFreeMeasurement()
  *          -1 if stack was completely used
- * Do a downward search, because upward may be wrong, because malloc does not initialize the memory
+ * A downward search fails, because it finds an allocated variable / array on stack, which was unused!
+ * An upward search may be wrong, and claiming too much stack used, because malloc does not initialize the memory
  * and the search fails with multiple mallocs and partial writing of allocated regions.
- * Check for first two untouched pattern on the stack/heap, starting the DOWNWARD search at current stack pointer.
+ * In this case you should initialize stack free measurement after releasing last heap block.
  */
 //#include <Arduino.h> // for Serial
 int16_t getStackMaxUsedAndUnusedSizes(uint16_t *aStackUnusedSizePointer) {
-    uint8_t *tAvailableHeapStart = getAvailableHeapStart(); // __brkval
-    uint8_t *tStackSearchPtr = (uint8_t*) SP;
-
-    // Search for first two untouched values below current stackpointer.
-    // tStackSearchPtr > tAvailableHeapStart avoids overflow if stack was completely touched before.
-    while (!(*tStackSearchPtr == HEAP_STACK_UNTOUCHED_VALUE && *(tStackSearchPtr - 1) == HEAP_STACK_UNTOUCHED_VALUE)
-            && tStackSearchPtr > tAvailableHeapStart) {
-        tStackSearchPtr--;
-    }
-//    Serial.println((uint16_t) tStackSearchPtr, HEX);
-//    Serial.println((uint16_t) tAvailableHeapStart, HEX);
     /*
-     * tStackSearchPtr points now to highest untouched stack position
+     * Search for first touched value from end of current heap.
      */
-    int16_t tStackMaxUsedSize = RAMEND - (uint16_t) tStackSearchPtr;
-
-    // Search for first touched value used stack.
     uint16_t tStackUnused = 0;
-    while (*tStackSearchPtr == HEAP_STACK_UNTOUCHED_VALUE && tStackSearchPtr > tAvailableHeapStart) {
-        tStackSearchPtr--;
+    uint8_t *tHeapPtr = getAvailableHeapStart(); // __brkval
+    while (*tHeapPtr == HEAP_STACK_UNTOUCHED_VALUE && tHeapPtr <= (uint8_t*) SP) {
+        tHeapPtr++;
         tStackUnused++;
     }
+
+    int16_t tStackMaxUsedSize = (RAMEND + 1) - (uint16_t) tHeapPtr;
+
     *aStackUnusedSizePointer = tStackUnused;
     if (tStackUnused == 0) {
         return -1;
@@ -235,6 +223,7 @@ void printBaseRAMData(Print *aSerial) {
     aSerial->print((uint16_t) __flp); // The largest address just not allocated so far / start of available / free heap, initialized at first malloc()
     aSerial->println();
 }
+
 /*
  * RAM starts with Data, i.e. variables initialized with values != 0,
  * followed by BSS, i.e. uninitalized  variables (which are initialized with 0)
@@ -257,7 +246,7 @@ void printRAMInfo(Print *aSerial) {
 
     aSerial->print(F(". Heap: used="));
     aSerial->print((uint16_t) getAvailableHeapStart() - (uint16_t) &__heap_start);
-    aSerial->print(F(", max used="));
+    aSerial->print(F(", max written=")); // if Stack uses total heap, we see the stack size here :-(
     aSerial->print(getHeapMaxUsedSize());
     aSerial->print(F(", available="));
     uint16_t tStackAvailable = SP - (uint16_t) getAvailableHeapStart() + 1;
@@ -312,7 +301,7 @@ void testCallocSizesAndPrint(Print *aSerial) {
         aSerial->print(tMallocSize);
         aSerial->print(F(",1)"));
 
-        if (tMallocPtr == NULL) {
+        if (tMallocPtr == nullptr) {
             aSerial->print(F("failed ->"));
             tMallocSize = tMallocSize >> 1;
             if (tMallocSize < 1) {
@@ -334,7 +323,6 @@ void testCallocSizesAndPrint(Print *aSerial) {
 /********************************************
  * SLEEP AND WATCHDOG STUFF
  ********************************************/
-volatile uint16_t sNumberOfSleeps = 0;
 
 #ifndef _MILLIS_UTILS_H
 // copied from MillisUtils.h
@@ -440,13 +428,6 @@ void sleepWithWatchdog(uint8_t aWatchdogPrescaler, bool aAdjustMillis) {
 #endif
         timer0_millis += computeSleepMillis(aWatchdogPrescaler);
     }
-}
-
-/*
- * This interrupt wakes up the cpu from sleep
- */
-ISR(WDT_vect) {
-    sNumberOfSleeps++;
 }
 
 /*

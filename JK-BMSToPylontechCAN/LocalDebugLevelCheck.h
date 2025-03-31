@@ -1,8 +1,7 @@
 /*
- * LocalDebugLevelStart.h
- * Include to propagate global debug levels to file local ones and to define appropriate print macros.
- * To propagate debug levels to each other, use #include "DebugLevel.h".
- * !!! If used in included (.hpp) files, #include "LocalDebugLevelEnd.h" must be used at end of file to undefine local macros.
+ * LocalDebugLevelCheck.h
+ * Throw error if LOCAL_TRACE, LOCAL_DEBUG or LOCAL_INFO is defined, which should not be at the start of any hpp file.
+ * Each LOCAL_* definition must be undefined at the end of the file which defined it using #include "LocalDebugLevelEnd.h".
  *
  * LOCAL_TRACE   // Information you need to understand details of a function or if you hunt a bug.
  * LOCAL_DEBUG   // Information need to understand the operating of your program. E.g. function calls and values of control variables.
@@ -10,7 +9,7 @@
  * LOCAL_WARN    // Information that the program may encounter problems, like small Heap/Stack area.
  * LOCAL_ERROR   // Informations to explain why the program will not run. E.g. not enough Ram for all created objects.
  *
- *  Copyright (C) 2024-2025  Armin Joachimsmeyer
+ *  Copyright (C) 2025  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of Arduino-Utils https://github.com/ArminJo/Arduino-Utils.
@@ -31,44 +30,31 @@
  */
 
 /*
- * Propagate debug level to local ones but not to each other, i.e. Enabling TRACE does not enable DEBUG and INFO
- */
-#if defined(TRACE)
-#define LOCAL_TRACE
-#endif
-
-#if defined(DEBUG)
-#define LOCAL_DEBUG
-#endif
-
-#if defined(INFO)
-#define LOCAL_INFO
-#endif
-
-/*
- * Define appropriate print macros
+ * Check LOCAL_* macros
  */
 #if defined(LOCAL_TRACE)
-#define TRACE_PRINT(...)      Serial.print(__VA_ARGS__)
-#define TRACE_PRINTLN(...)    Serial.println(__VA_ARGS__)
-#else
-#define TRACE_PRINT(...)      void()
-#define TRACE_PRINTLN(...)    void()
+#error "LOCAL_TRACE is enabled at top of included file. Maybe because of missing include of LocalDebugLevelEnd.h at end of previous included file."
 #endif
 
 #if defined(LOCAL_DEBUG)
-#define DEBUG_PRINT(...)      Serial.print(__VA_ARGS__)
-#define DEBUG_PRINTLN(...)    Serial.println(__VA_ARGS__)
-#else
-#define DEBUG_PRINT(...)      void()
-#define DEBUG_PRINTLN(...)    void()
+#error "LOCAL_DEBUG is enabled at top of included file. Maybe because of missing include of LocalDebugLevelEnd.h at end of previous included file."
 #endif
 
 #if defined(LOCAL_INFO)
-#define INFO_PRINT(...)      Serial.print(__VA_ARGS__)
-#define INFO_PRINTLN(...)    Serial.println(__VA_ARGS__)
-#else
-#define INFO_PRINT(...)      void()
-#define INFO_PRINTLN(...)    void()
+#error "LOCAL_INFO is enabled at top of included file. Maybe because of missing include of LocalDebugLevelEnd.h at end of previous included file."
 #endif
 
+/*
+ * Check *_PRINT macros
+ */
+#if defined(TRACE_PRINT)
+#error "TRACE_PRINT is enabled at top of included file. Maybe because of missing include of LocalDebugLevelEnd.h at end of previous included file."
+#endif
+
+#if defined(DEBUG_PRINT)
+#error "DEBUG_PRINT is enabled at top of included file. Maybe because of missing include of LocalDebugLevelEnd.h at end of previous included file."
+#endif
+
+#if defined(INFO_PRINT)
+#error "INFO_PRINT is enabled at top of included file. Maybe because of missing include of LocalDebugLevelEnd.h at end of previous included file."
+#endif

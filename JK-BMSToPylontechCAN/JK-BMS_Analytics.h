@@ -42,9 +42,11 @@ struct SOCDataPointDeltaStruct {
     int8_t AverageAmpere;
     int8_t Delta100MilliampereHour; // at a capacity of 320 Ah we have 3.2 Ah per 1% SOC
 };
-// First place of size SOCDataPointDeltaStruct is used for sBatteryESRMilliohm_EEPROM + 3 filler bytes
 #define NUMBER_OF_SOC_DATA_POINTS   (((E2END + 1) - sizeof(SOCDataPointDeltaStruct)) / sizeof(SOCDataPointDeltaStruct)) // 0xFE for 1k EEPROM, 0x1FE for 2kEEPROM
 
+/*
+ * This structure is initially filled while reading data from EEPROM and updated on writing
+ */
 struct SOCDataPointsInfoStruct {
     /*
      * Index of next value to be written is ArrayStartIndex + ArrayLength % NUMBER_OF_SOC_DATA_POINTS
@@ -60,7 +62,7 @@ struct SOCDataPointsInfoStruct {
     long DeltaAccumulator10Milliampere; // Serves as accumulator to avoid rounding errors for consecutive data points of Delta100MilliampereHour. 1 Ah is 180,000 => Can hold values of +/-11930 Ah. We can have a residual of up to 18,000 (100 mAh) after write.
     long lastWrittenBatteryCapacityAsAccumulator10Milliampere;
 
-    uint16_t checksumForReboot; // Checksum of NumberOfSamples up to lastWrittenBatteryCapacityAsAccumulator10Milliampere to decide if we can keep this data at reboot
+    uint16_t checksumForReboot; // Checksum of values from NumberOfSamples up to lastWrittenBatteryCapacityAsAccumulator10Milliampere to decide if we can keep this data at reboot
 };
 extern SOCDataPointsInfoStruct SOCDataPointsInfo;
 
@@ -72,7 +74,7 @@ struct SOCDataPointMinMaxStruct {
 };
 
 void initializeAnalytics();
-void updateEEPROMTo_FF();
+void updateCompleteEEPROMTo_FF();
 void writeSOCData();
 void findFirstSOCDataPointIndex();
 void readBatteryESRfromEEPROM();

@@ -102,6 +102,11 @@
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
 #define VERSION_EXAMPLE "4.0.0"
 
+//#define HANDLE_MULTIPLE_BMS
+#if defined(HANDLE_MULTIPLE_BMS)
+#define NUMBER_OF_SUPPORTED_BMS 2 // Currently not more than 2 are supported by this source
+#endif
+
 /*
  * If battery SOC is below this value, the inverter is forced to charge the battery from any available power source regardless of inverter settings.
  */
@@ -121,8 +126,9 @@
 //#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
 //#define DEBUG                 // This enables debug output for all files - only for development
 #if defined(DEBUG)
-#define NO_CELL_STATISTICS
+#define NO_CELL_STATISTICS // to save program space required for debug
 #endif
+
 //#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 #if defined(STANDALONE_TEST)
 //#define ALARM_TIMEOUT_TEST
@@ -219,15 +225,21 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
  */
 #define BUZZER_PIN                             A2 // To signal errors
 #define PAGE_SWITCH_DEBUG_BUTTON_PIN_FOR_INFO   2 // Button at INT0 / D2 for switching LCD pages - definition is not used in program, only for documentation.
+
 // The standard RX of the Arduino is used for the JK_BMS_1 connection.
 #define JK_BMS_RX_PIN_FOR_INFO                  0 // We use the Serial RX pin - definition is not used in program, only for documentation.
 #if !defined(JK_BMS_TX_PIN)                       // Allow override by global symbol
 #  if defined(USE_LAYOUT_FOR_644_BOARD)
 #define JK_BMS_TX_PIN                          12
+#  else
+#define JK_BMS_TX_PIN                           4 // 115200 baud soft serial to JK-BMS. For serial from BMS we use the hardware Serial RX
+#  endif
+#endif
+#if !defined(JK_BMS_TX_PIN_2)                     // Allow override by global symbol
+#  if defined(USE_LAYOUT_FOR_644_BOARD)
 #define JK_BMS_TX_PIN_2                        12 // use same pin for tests
 #  else
-#define JK_BMS_TX_PIN                           4
-#define JK_BMS_TX_PIN_2                         5
+#define JK_BMS_TX_PIN_2                         5 // 115200 baud soft serial to JK-BMS
 #  endif
 #endif
 
@@ -376,9 +388,7 @@ void checkButtonPress();
 #include "JK-BMS.hpp"
 
 JK_BMS JK_BMS_1;
-//#define HANDLE_MULTIPLE_BMS
 #if defined(HANDLE_MULTIPLE_BMS)
-#define NUMBER_OF_SUPPORTED_BMS 2
 JK_BMS JK_BMS_2;
 JK_BMS *sCurrentBMS = &JK_BMS_1;
 #else
@@ -426,7 +436,8 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
  */
 bool sInitialActionsPerformed = false; // Flag to send static info only once after reset.
 
-// This block must be located after the includes of other *.hpp files
+#include "LocalDebugLevelCheck.h"
+// This definition must be located after the includes of other *.hpp files
 //#define LOCAL_DEBUG // This enables debug output only for this file - only for development
 #include "LocalDebugLevelStart.h" // no include "LocalDebugLevelEnd.h" required :-)
 
@@ -487,8 +498,6 @@ void setup() {
 #endif
 
     Serial.begin(115200);
-    while (!Serial)
-        ; // Wait for Serial to become available. Is optimized away for some cores.
 
 #if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) /*stm32duino*/|| defined(USBCON) /*STM32_stm32*/ \
     || defined(SERIALUSB_PID)  || defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_attiny3217)
@@ -565,7 +574,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_BMS_2.init(JK_BMS_TX_PIN_2);
     Serial.println(F("Serial to JK-BMS 1 + 2 started with 115.200 kbit/s at pins " STR(JK_BMS_TX_PIN) " + " STR(JK_BMS_TX_PIN_2)));
 #else
-    Serial.println (F("Serial to JK-BMS started with 115.200 kbit/s at pin " STR(JK_BMS_TX_PIN)));
+    Serial.println(F("Serial to JK-BMS started with 115.200 kbit/s at pin " STR(JK_BMS_TX_PIN)));
 #endif
 #if defined(USE_SERIAL_2004_LCD)
     if (sSerialLCDAvailable) {
@@ -686,7 +695,7 @@ void loop() {
 
 #  if !defined(USE_NO_COMMUNICATION_STATUS_LEDS)
     // Simulate BMS reading
-    digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH); // Turn on status LED. LED is turned off at end of loop.
+    digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, HIGH);// Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
     digitalWriteFast(BMS_COMMUNICATION_STATUS_LED_PIN, LOW); // Turn on status LED. LED is turned off at end of loop.
     delay(20); // do it simple :-)
@@ -746,7 +755,7 @@ void loop() {
                     TURN_BMS_STATUS_LED_OFF;
                     delay(200); // a hack
                     /*
-                     * Switch to next BMS
+                     * Switch to next BMS, NumberOfThisBMS is 1 greater than index :-)
                      */
                     sCurrentBMS = JK_BMS::BMSArray[sCurrentBMS->NumberOfThisBMS];
                     sCurrentBMS->RequestStatusFrame(sCommunicationDebugModeActivated);
@@ -784,7 +793,7 @@ void loop() {
             }
         }
     }
-#endif // defined(STANDALONE_TEST)
+#endif // else defined(STANDALONE_TEST)
 
     /*
      * Send CAN frame independently of the period of JK-BMS data requests,

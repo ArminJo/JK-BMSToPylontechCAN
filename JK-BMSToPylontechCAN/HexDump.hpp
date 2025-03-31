@@ -31,6 +31,7 @@
 
 #include <Arduino.h>
 
+// Next lines are a copy of the HexDump.h content
 #define _16_BYTES_PER_LINE  16
 
 #define HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS 0x00 // Print 16 bit absolute address
@@ -39,27 +40,83 @@
 #define HEX_DUMP_FORMAT_8_BIT_ADDRESS           0x04 // Bit 2: else 16 bit Address
 #define HEX_DUMP_FORMAT_ASCII_VALUES            0x08 // default
 
-void printBufferHex(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint);
-void printBufferHexDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint);
-void printBufferHexAndASCIIDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint);
+void printBufferHex(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint); // Prints no address and hex bytes without ASCII representation.
+void printBufferHexDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint); // Prints short relative address and hex bytes without ASCII representation.
+void printBufferHexAndASCIIDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint); // Prints short relative address and hex bytes without ASCII representation.
+void printMemoryHexNoASCIIDump(uint8_t *aMemoryAddress, uint16_t aNumberOfBytesToPrint); // Prints 16 bit address and hex bytes with ASCII representation.
+void printMemoryHexAndASCIIDump(uint8_t *aMemoryAddress, uint16_t aNumberOfBytesToPrint); // Prints 16 bit address and hex bytes with ASCII representation.
+void printStackMemory(uint16_t aNumberOfBytesToPrint); // Prints 16 bit address and hex bytes ending at top of stack / RAM end.
+void printStackDump(); // Prints 16 bit address and hex bytes starting at current stackpointer and ending at ending at top of stack / RAM end.
 void printMemoryHexDump(uint8_t *aMemory, uint16_t aSizeOfMemoryToPrint, uint8_t aBytesPerLine = _16_BYTES_PER_LINE,
         uint8_t aFormatFlags = HEX_DUMP_FORMAT_ASCII_VALUES);
 void printBytePaddedHex(uint8_t aHexValueToPrint);
 void printWordPaddedHex(uint16_t aHexValueToPrint);
+// End of the copy of the HexDump.h content
+
 /*
- * Print short address and hex bytes without ASCII representation
+ * Prints no address and hex bytes without ASCII representation.
  */
 void printBufferHex(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint) {
     printMemoryHexDump(aBufferAddress, aNumberOfBytesToPrint, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_NO_ADDRESS_AT_ALL);
 }
+/*
+ * Prints short relative address and hex bytes without ASCII representation.
+ */
 void printBufferHexDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint) {
     printMemoryHexDump(aBufferAddress, aNumberOfBytesToPrint, _16_BYTES_PER_LINE,
     HEX_DUMP_FORMAT_8_BIT_ADDRESS | HEX_DUMP_FORMAT_RELATIVE_ADDRESS);
 }
+/*
+ * Prints short relative address and hex bytes without ASCII representation.
+ */
 void printBufferHexAndASCIIDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytesToPrint) {
     printMemoryHexDump(aBufferAddress, aNumberOfBytesToPrint, _16_BYTES_PER_LINE,
     HEX_DUMP_FORMAT_8_BIT_ADDRESS | HEX_DUMP_FORMAT_RELATIVE_ADDRESS | HEX_DUMP_FORMAT_ASCII_VALUES);
 }
+
+/*
+ * Prints 16 bit address and hex bytes with ASCII representation.
+ */
+void printMemoryHexNoASCIIDump(uint8_t *aMemoryAddress, uint16_t aNumberOfBytesToPrint) {
+    printMemoryHexDump(aMemoryAddress, aNumberOfBytesToPrint, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
+}
+
+/*
+ * Prints 16 bit address and hex bytes starting at current stackpointer and ending at ending at top of stack / RAM end.
+ */
+void printStackDump() {
+    Serial.print(F("Caller address=0x"));
+    uint16_t tCallerAddress = (uint16_t) __builtin_return_address(0);
+    Serial.print(tCallerAddress, HEX);
+    Serial.print(F(" | "));
+    Serial.println(tCallerAddress << 1, HEX);
+    printMemoryHexDump((uint8_t*) SP, RAMEND - SP, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
+}
+
+/*
+ * Prints 16 bit address and hex bytes ending at top of stack / RAM end.
+ */
+void printStackMemory(uint16_t aNumberOfBytesToPrint) {
+    Serial.print(F("SP=0x"));
+    Serial.print((uint16_t) SP, HEX);
+    Serial.print(F(", caller address=0x"));
+    uint16_t tCallerAddress = (uint16_t) __builtin_return_address(0);
+    Serial.print(tCallerAddress, HEX);
+    Serial.print(F(" | "));
+    Serial.println(tCallerAddress << 1, HEX);
+
+    uint8_t *tMemoryAddress = (uint8_t*) ((RAMEND + 1) - aNumberOfBytesToPrint);
+    printMemoryHexDump(tMemoryAddress, aNumberOfBytesToPrint, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
+}
+
+/*
+ * Prints 16 bit address and hex bytes with ASCII representation.
+ * like printMemoryHexDump(aMemoryAddress, aNumberOfBytesToPrint), because of default parameter
+ */
+void printMemoryHexAndASCIIDump(uint8_t *aMemoryAddress, uint16_t aNumberOfBytesToPrint) {
+    printMemoryHexDump(aMemoryAddress, aNumberOfBytesToPrint, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_ASCII_VALUES);
+}
+
 /**
  * Prints lines of memory content
  * 0x0000:  0xF1 0x81 0x82 0x00 0x08 0x02 0x00 0x27 0xFF 0xFF 0x0E 0xB3 0x81 0xFC 0x9B 0x47  ... .. '  .....G
@@ -69,6 +126,7 @@ void printBufferHexAndASCIIDump(uint8_t *aBufferAddress, uint16_t aNumberOfBytes
  */
 void printMemoryHexDump(uint8_t *aMemory, uint16_t aNumberOfBytesToPrint, uint8_t aBytesPerLine, uint8_t aFormatFlags) {
     uint16_t tIndex = 0;
+    Serial.println();
     while (true) {
         if (aBytesPerLine > aNumberOfBytesToPrint) {
             // last line
@@ -111,7 +169,7 @@ void printMemoryHexDump(uint8_t *aMemory, uint16_t aNumberOfBytesToPrint, uint8_
                     uint8_t tCharacterToPrint = aMemory[tIndex + i];
 //            if(isalnum(tIndex+i)){ // requires 40 bytes more program space
                     if (' ' <= tCharacterToPrint && tCharacterToPrint <= '~') {
-                        Serial.print((char)tCharacterToPrint);
+                        Serial.print((char) tCharacterToPrint);
                     } else if (tCharacterToPrint != 0x00 && tCharacterToPrint != 0xFF) {
                         // for non printable characters except 0 and FF
                         Serial.print('.');
