@@ -143,6 +143,7 @@ struct JKFrameTailStruct {
 
 /*
  * This structure contains all converted and computed data useful for display
+ * One structure per BMS
  */
 struct JKComputedDataStruct {
     int16_t TemperaturePowerMosFet;     // Degree Celsius
@@ -163,12 +164,6 @@ struct JKComputedDataStruct {
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     int32_t BatteryCapacityAsAccumulator10MilliAmpere; // 500 Ah = 180,000,000 10MilliAmpereSeconds. Pre-computed capacity to compare with accumulator value.
     bool BMSIsStarting;                 // True if SOC and Cycles are both 0, for around 16 seconds during JK-BMS startup.
-#if defined(HANDLE_MULTIPLE_BMS)
-    uint16_t ChargeOvercurrentProtectionAmpere;
-    uint16_t DischargeOvercurrentProtectionAmpere;
-    uint16_t AlarmsAsWord;
-    uint16_t StatusAsWord;
-#endif
 };
 
 #define AMPERE_HOUR_AS_ACCUMULATOR_10_MILLIAMPERE   (3600L * 100 * MILLIS_IN_ONE_SECOND / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
@@ -181,44 +176,6 @@ struct JKLastPrintedDataStruct {
     int16_t BatteryLoadPower;           // Watt Computed value, Charging is positive discharging is negative
     int32_t BatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every 1%
 };
-
-union BMSStatusUnion {
-    uint16_t StatusAsWord;
-    struct {
-        uint8_t ReservedStatusHighByte; // This is the low byte of StatusAsWord, but it was sent as high byte of status
-        bool ChargeMosFetActive :1;     // 0x01 // Is disabled e.g. on over current or temperature
-        bool DischargeMosFetActive :1;  // 0x02 // Is disabled e.g. on over current or temperature
-        bool BalancerActive :1;         // 0x04
-        bool BatteryDown :1;            // 0x08
-        uint8_t ReservedStatus :4;
-    } StatusBits;
-};
-
-/*
- * Structure representing the semantic of the JK reply, except cell voltage info.
- * 221 bytes.
- *
- * All 16 and 32 bit values in this structure are filled with big endian by the JK protocol i.e. the higher byte is located at the lower memory address.
- * AVR and others are using little endian i.e. the lower byte is located at the lower memory address.
- * !!! => all 16 and 32 bit values in this structure must be "swapped" before interpreting them!!!
- *
- * All temperatures are in degree celsius.
- * Power MosFet temperature sensor is originally named PowerTube
- * Sensor1 temperature sensor is originally named Battery Box
- * Sensor2 temperature sensor is originally named Battery
- * Battery values are often originally named Total
- *
- * List of values seen in Bluetooth, but not in reply:
- * ChargeOvercurrentRecoverySeconds (Charge OCPR Time(S))
- * DischargeOvercurrentRecoverySeconds (Discharge OCPR Time(S))
- * ShortCircuitProtectionDelay  (SCP Delay(us))
- * ShortCircuitProtectionRecoverySeconds (SCPR Time(S))
- * CellPowerOffVoltage (Power Off Vol.(V))
- *
- * List of values in reply, but not in Bluetooth:
- * CellOvervoltageDelaySeconds (0x92)
- * CellUndervoltageDelaySeconds (0x95)
- */
 
 #define NUMBER_OF_DEFINED_ALARM_BITS    14
 #define NO_ALARM_WORD_CONTENT         0x00
@@ -259,6 +216,61 @@ union BatteryAlarmFlagsUnion {                  // 0x8B
     } AlarmBits;
 };
 
+#define STATUS_BYTE_BALANCER_MASK           0x04
+#define STATUS_BYTE_CHARGE_ACTIVE_MASK      0x01
+#define STATUS_BYTE_DISCHARGE_ACTIVE_MASK   0x02
+
+union BMSStatusUnion {
+    uint16_t StatusAsWord;
+    uint8_t StatusAsByteArray[2]; // StatusAsByteArray[1] contains the flags
+    struct {
+        uint8_t ReservedStatusHighByte; // This is the low byte of StatusAsWord, but it was sent as high byte of status
+        bool ChargeMosFetActive :1;     // 0x01 // Is disabled e.g. on over current or temperature
+        bool DischargeMosFetActive :1;  // 0x02 // Is disabled e.g. on over current or temperature
+        bool BalancerActive :1;         // 0x04
+        bool BatteryDown :1;            // 0x08
+        uint8_t ReservedStatus :4;
+    } StatusBits;
+};
+
+struct JKMultiBMSDataStruct {
+    int16_t SumOfBatteryLoadPower;
+    int16_t SumOfTotalCapacityAmpereHour;
+    int16_t SumOfBattery10MilliAmpere;
+    bool anyAlarm;
+    bool anyTimeout;
+    uint16_t SumOfChargeOvercurrentProtectionAmpere;
+    uint16_t SumOfDischargeOvercurrentProtectionAmpere;
+    int16_t TemperatureMaximum;
+    uint8_t oredStatusAsByte;
+    BatteryAlarmFlagsUnion oredAlarms; // not swapped !!!
+};
+
+/*
+ * Structure representing the semantic of the JK reply, except cell voltage info.
+ * 221 bytes.
+ *
+ * All 16 and 32 bit values in this structure are filled with big endian by the JK protocol i.e. the higher byte is located at the lower memory address.
+ * AVR and others are using little endian i.e. the lower byte is located at the lower memory address.
+ * !!! => all 16 and 32 bit values in this structure must be "swapped" before interpreting them!!!
+ *
+ * All temperatures are in degree celsius.
+ * Power MosFet temperature sensor is originally named PowerTube
+ * Sensor1 temperature sensor is originally named Battery Box
+ * Sensor2 temperature sensor is originally named Battery
+ * Battery values are often originally named Total
+ *
+ * List of values seen in Bluetooth, but not in reply:
+ * ChargeOvercurrentRecoverySeconds (Charge OCPR Time(S))
+ * DischargeOvercurrentRecoverySeconds (Discharge OCPR Time(S))
+ * ShortCircuitProtectionDelay  (SCP Delay(us))
+ * ShortCircuitProtectionRecoverySeconds (SCPR Time(S))
+ * CellPowerOffVoltage (Power Off Vol.(V))
+ *
+ * List of values in reply, but not in Bluetooth:
+ * CellOvervoltageDelaySeconds (0x92)
+ * CellUndervoltageDelaySeconds (0x95)
+ */
 struct JKReplyStruct {
     uint8_t TokenTemperaturePowerMosFet;    // 0x80
     uint16_t TemperaturePowerMosFet;        // 99 = 99 degree Celsius, 100 = 100, 101 = -1, 140 = -40
@@ -523,15 +535,9 @@ public:
     uint8_t NumberOfThisBMS; // The number of the BMS this class is used for. Starting with 1. => Is index of next BMS in list :-).
     static uint8_t sBMS_ArrayNextIndex;     // = number of the BMS classes instantiated.
     static JK_BMS *BMSArray[NUMBER_OF_SUPPORTED_BMS];
-    static bool getAnyAlarm();
-    static bool getAnyTimeout();
-    static uint16_t getSumOfChargeOvercurrentProtectionAmpere();
-    static uint16_t getSumOfDischargeOvercurrentProtectionAmpere();
-    static int16_t getSumOfBattery10MilliAmpere();
-    static uint16_t getSumOfTotalCapacityAmpereHour();
-    static union BatteryAlarmFlagsUnion getOredBatteryAlarmFlags();
-    static union BMSStatusUnion getOredBMSStatusFlags();
-
+    static float getSumOfBatteryLoadCurrentFloat();
+    static uint8_t getAverageOfBatterySOC();
+    static void resetJKMultiBMSData();
 #endif
 
     /*

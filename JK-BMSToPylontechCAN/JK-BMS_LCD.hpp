@@ -173,20 +173,25 @@ void doLCDBacklightTimeoutHandling() {
 }
 #  endif
 
-void printShortEnableFlagsOnLCD() {
-    if (JK_BMS_1.JKAllReplyPointer->ChargeIsEnabled) {
-        myLCD.print('C');
-    } else {
-        myLCD.print(' ');
+char getCharOfEnableFlags() {
+#if defined(HANDLE_MULTIPLE_BMS)
+    // TODO - Decide, when to use ORed state and when BMS specific ones.
+    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+#else
+    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+#endif
+    char tCharToPrint = ' ';
+    if (tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK) {
+        tCharToPrint = 'C';
     }
-    if (JK_BMS_1.JKAllReplyPointer->ChargeIsEnabled) {
-        myLCD.print('D');
-    } else {
-        myLCD.print(' ');
+    if (tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK) {
+        tCharToPrint = 'D';
     }
-    if (JK_BMS_1.JKAllReplyPointer->BalancingIsEnabled) {
-        myLCD.print('B');
+    if (tStatus & STATUS_BYTE_BALANCER_MASK) {
+        tCharToPrint = 'B';
     }
+    return tCharToPrint;
+
 }
 
 /*
@@ -195,44 +200,32 @@ void printShortEnableFlagsOnLCD() {
  * If Undervoltage, D is Replaced by U
  */
 void printShortStateOnLCD() {
-
+    char tCharToPrint = getCharOfEnableFlags();
     if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.ChargeOvervoltageAlarm) {
-        myLCD.print('O');
-    } else if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
-        myLCD.print('C');
-    } else {
-        myLCD.print(' ');
+        tCharToPrint = 'O';
     }
-
     if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.DischargeUndervoltageAlarm) {
-        myLCD.print('U');
-    } else if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive) {
-        myLCD.print('D');
-    } else {
-        myLCD.print(' ');
+        tCharToPrint = 'U';
     }
-
-    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
-        myLCD.print('B');
-    } else {
-        myLCD.print(' ');
-    }
+    myLCD.print(tCharToPrint);
 }
 
 void printLongStateOnLCD() {
-    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive) {
+    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+
+    if (tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK) {
         myLCD.print(F("CH "));
     } else {
         myLCD.print(F("   "));
     }
 
-    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive) {
+    if (tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK) {
         myLCD.print(F("DC "));
     } else {
         myLCD.print(F("   "));
     }
 
-    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+    if (tStatus & STATUS_BYTE_BALANCER_MASK) {
         myLCD.print(F("BAL"));
     }
 }
@@ -300,7 +293,7 @@ void printCellInfoOnLCD() {
                 } else if (i == 12) {
                     // print " A  " or " A B"
                     myLCD.print(F(" A "));
-                    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1] & STATUS_BYTE_BALANCER_MASK) {
                         myLCD.print('B');
                     } else {
                         myLCD.print(' ');
@@ -451,11 +444,16 @@ void printCapacityInfoOnLCD() {
 
 void printBigInfoOnLCD() {
     bigNumberLCD.setBigNumberCursor(0, 0);
-    bigNumberLCD.print(JK_BMS_1.JKAllReplyPointer->SOCPercent);
+#if defined(HANDLE_MULTIPLE_BMS)
+    auto tSOCPercent = JK_BMS::getAverageOfBatterySOC();
+#else
+    auto tSOCPercent = JK_BMS_1.JKAllReplyPointer->SOCPercent;
+#endif
+    bigNumberLCD.print(tSOCPercent);
     uint8_t tColumn;
-    if (JK_BMS_1.JKAllReplyPointer->SOCPercent < 10) {
+    if (tSOCPercent < 10) {
         tColumn = 3;
-    } else if (JK_BMS_1.JKAllReplyPointer->SOCPercent < 100) {
+    } else if (tSOCPercent < 100) {
         tColumn = 6;
     } else {
         tColumn = 8; // 100%
@@ -468,7 +466,11 @@ void printBigInfoOnLCD() {
      */
     uint8_t tAvailableColumns = (LCD_COLUMNS - 2) - tColumn; // 14, 11, 9. -2 for the trailing W or KW
     char tKiloWattChar = ' ';
+#if defined(HANDLE_MULTIPLE_BMS)
+    int16_t tBatteryLoadPower = JKMultiBMSData.SumOfBatteryLoadPower;
+#else
     int16_t tBatteryLoadPower = JK_BMS_1.JKComputedData.BatteryLoadPower;
+#endif
     /*
      * First print string to buffer
      */
@@ -477,7 +479,7 @@ void printBigInfoOnLCD() {
         float tBatteryLoadPowerFloat = tBatteryLoadPower * 0.001; // convert to kW
         dtostrf(tBatteryLoadPowerFloat, 5, 2, sStringBuffer);
     } else {
-        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%d"), JK_BMS_1.JKComputedData.BatteryLoadPower);
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%d"), tBatteryLoadPower);
     }
 
     /*
@@ -533,11 +535,19 @@ void printBigInfoOnLCD() {
      * Bottom row: Max temperature, current, voltage difference and the actual states
      */
     myLCD.setCursor(0, 3);
+#if defined(HANDLE_MULTIPLE_BMS)
+    myLCD.print(JKMultiBMSData.TemperatureMaximum);
+#else
     myLCD.print(JK_BMS_1.JKComputedData.TemperatureMaximum);
+#endif
     myLCD.print(F(DEGREE_SIGN_STRING " "));
 
     myLCD.setCursor(4, 3);
+#if defined(HANDLE_MULTIPLE_BMS)
+    printFloatValueRightAlignedOnLCD(JK_BMS::getSumOfBatteryLoadCurrentFloat(), 5);
+#else
     printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 5);
+#endif
     myLCD.print('A');
 
     printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5);
@@ -794,7 +804,7 @@ void printOverwiewOrAlarmInfoOnLCD() {
 // Last 3 characters are the enable states
         myLCD.setCursor(14, 1);
         myLCD.print(F("En:"));
-        printShortEnableFlagsOnLCD();
+        myLCD.print(getCharOfEnableFlags());
 
         /*
          * Row 3 - Voltage, Current and Power
@@ -818,7 +828,7 @@ void printBMSDataOnLCD() {
 #  if !defined(DISPLAY_ALWAYS_ON)
             && !sSerialLCDIsSwitchedOff
 #  endif
-    ) {
+            ) {
         /*
          * Check for alarm info, which is not yet reset by main loop at time of calling
          */
@@ -835,10 +845,10 @@ void printBMSDataOnLCD() {
                 sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Set current page
                 printAlarmInfoOnLCD(); // print info only once
 #  if !defined(DISPLAY_ALWAYS_ON)
-            if (checkAndTurnLCDOn()) {
-                JK_INFO_PRINTLN(F("alarm status changing")); // Reason for switching on LCD display
-            }
-    #  endif
+                if (checkAndTurnLCDOn()) {
+                    JK_INFO_PRINTLN(F("alarm status changing")); // Reason for switching on LCD display
+                }
+#  endif
 #  if !defined(ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD)
             }
 #  endif

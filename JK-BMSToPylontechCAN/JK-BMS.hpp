@@ -113,6 +113,7 @@ const char *const JK_BMSAlarmStringsArray[NUMBER_OF_DEFINED_ALARM_BITS] PROGMEM 
 #if defined(HANDLE_MULTIPLE_BMS)
 JK_BMS *JK_BMS::BMSArray[NUMBER_OF_SUPPORTED_BMS];
 uint8_t JK_BMS::sBMS_ArrayNextIndex = 0;
+JKMultiBMSDataStruct JKMultiBMSData;
 #endif
 
 JK_BMS::JK_BMS() { // @suppress("Class members should be properly initialized")
@@ -303,6 +304,9 @@ uint8_t JK_BMS::checkForReplyFromBMSOrTimeout() {
         if (!JKBMSFrameHasTimeout) {
             //Do this only once per timeout
             JKBMSFrameHasTimeout = true;
+#if defined(HANDLE_MULTIPLE_BMS)
+            JKMultiBMSData.anyTimeout  = true;
+#endif
             TimeoutJustDetected = true; // This forces the beep
         }
         return JK_BMS_RECEIVE_TIMEOUT;
@@ -310,6 +314,9 @@ uint8_t JK_BMS::checkForReplyFromBMSOrTimeout() {
     return JK_BMS_RECEIVE_ONGOING; // No requested or ongoing receive
 }
 
+/*
+ * Fills up all self computed data
+ */
 void JK_BMS::processReceivedData() {
     /*
      * Set the static pointer to the start of the reply data which depends on the number of cell voltage entries
@@ -399,72 +406,27 @@ int32_t JK_BMS::getOnePercentCapacityAsAccumulator10Milliampere() {
 }
 
 #if defined(HANDLE_MULTIPLE_BMS)
-bool JK_BMS::getAnyAlarm() {
+
+// is shorter than computing on the fly
+float JK_BMS::getSumOfBatteryLoadCurrentFloat() {
+    float tBatteryLoadCurrentFloatSum = 0;
     for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        if (JK_BMS::BMSArray[i]->AlarmActive) {
-            return true;
-        }
+        tBatteryLoadCurrentFloatSum += JK_BMS::BMSArray[i]->JKComputedData.BatteryLoadCurrentFloat;
     }
-    return false;
+    return tBatteryLoadCurrentFloatSum;
 }
 
-bool JK_BMS::getAnyTimeout() {
+uint8_t JK_BMS::getAverageOfBatterySOC() {
+    uint16_t tBatterySOCSum = 0;
     for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        if (JK_BMS::BMSArray[i]->JKBMSFrameHasTimeout) {
-            return true;
-        }
+        tBatterySOCSum += JK_BMS::BMSArray[i]->lastJKReply.SOCPercent;
     }
-    return false;
+    return tBatterySOCSum / JK_BMS::sBMS_ArrayNextIndex;
 }
 
-uint16_t JK_BMS::getSumOfChargeOvercurrentProtectionAmpere() {
-    uint16_t tChargeOvercurrentProtectionAmpereSum = 0;
-    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        tChargeOvercurrentProtectionAmpereSum += JK_BMS::BMSArray[i]->JKComputedData.ChargeOvercurrentProtectionAmpere;
-    }
-    return tChargeOvercurrentProtectionAmpereSum;
-}
-
-uint16_t JK_BMS::getSumOfDischargeOvercurrentProtectionAmpere() {
-    uint16_t tDischargeOvercurrentProtectionAmpereSum = 0;
-    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        tDischargeOvercurrentProtectionAmpereSum += JK_BMS::BMSArray[i]->JKComputedData.DischargeOvercurrentProtectionAmpere;
-    }
-    return tDischargeOvercurrentProtectionAmpereSum;
-}
-
-int16_t JK_BMS::getSumOfBattery10MilliAmpere() {
-    int16_t tBattery10MilliAmpereSum = 0;
-    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        tBattery10MilliAmpereSum += JK_BMS::BMSArray[i]->JKComputedData.Battery10MilliAmpere;
-    }
-    return tBattery10MilliAmpereSum;
-}
-
-uint16_t JK_BMS::getSumOfTotalCapacityAmpereHour() {
-    int16_t tTotalCapacityAmpereHourSum = 0;
-    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        tTotalCapacityAmpereHourSum += JK_BMS::BMSArray[i]->JKComputedData.TotalCapacityAmpereHour;
-    }
-    return tTotalCapacityAmpereHourSum;
-}
-
-union BatteryAlarmFlagsUnion JK_BMS::getOredBatteryAlarmFlags(){
-    union BatteryAlarmFlagsUnion tBatteryAlarmFlags;
-    tBatteryAlarmFlags.AlarmsAsWord = 0;
-    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        tBatteryAlarmFlags.AlarmsAsWord |= JK_BMS::BMSArray[i]->JKComputedData.AlarmsAsWord;
-    }
-    return tBatteryAlarmFlags;
-}
-
-union BMSStatusUnion JK_BMS::getOredBMSStatusFlags(){
-    union BMSStatusUnion tBMSStatusFlags;
-    tBMSStatusFlags.StatusAsWord = 0;
-    for (uint_fast8_t i = 0; i < JK_BMS::sBMS_ArrayNextIndex; ++i) {
-        tBMSStatusFlags.StatusAsWord |= JK_BMS::BMSArray[i]->JKComputedData.StatusAsWord;
-    }
-    return tBMSStatusFlags;
+void JK_BMS::resetJKMultiBMSData() {
+    memset(&JKMultiBMSData, 0, sizeof(JKMultiBMSData));
+//    JKMultiBMSData.TemperatureMaximum = -127;
 }
 #endif
 
@@ -597,15 +559,16 @@ void JK_BMS::fillJKConvertedCellInfo() {
         /*
          * Mark and count minimum and maximum cell voltages
          */
+    bool tBalancerIsActive = JKAllReplyPointer->BMSStatus.StatusAsByteArray[1] & STATUS_BYTE_BALANCER_MASK;
         for (uint8_t i = 0; i < tNumberOfCellInfo; ++i) {
             if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMinimumMillivolt) {
                 JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MINIMUM;
-                if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                if (tBalancerIsActive) {
                     CellStatistics.CellMinimumArray[i]++; // count for statistics
                 }
             } else if (JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt == tMaximumMillivolt) {
                 JKConvertedCellInfo.CellInfoStructArray[i].VoltageIsMinMaxOrBetween = VOLTAGE_IS_MAXIMUM;
-                if (JKAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+                if (tBalancerIsActive) {
                     CellStatistics.CellMaximumArray[i]++;
                 }
             } else {
@@ -756,8 +719,15 @@ void JK_BMS::fillJKComputedData() {
         tMaxTemperature = JKComputedData.TemperatureSensor2;
     }
     JKComputedData.TemperatureMaximum = tMaxTemperature;
-
+#if defined(HANDLE_MULTIPLE_BMS)
+    if (JKMultiBMSData.TemperatureMaximum < tMaxTemperature) {
+        JKMultiBMSData.TemperatureMaximum = tMaxTemperature;
+    }
+#endif
     JKComputedData.TotalCapacityAmpereHour = swap(JKAllReplyPointer->TotalCapacityAmpereHour);
+#if defined(HANDLE_MULTIPLE_BMS)
+    JKMultiBMSData.SumOfTotalCapacityAmpereHour +=JKComputedData.TotalCapacityAmpereHour;
+#endif
 // 16 bit multiplication gives overflow at 640 Ah
     JKComputedData.RemainingCapacityAmpereHour = ((uint32_t) JKComputedData.TotalCapacityAmpereHour * JKAllReplyPointer->SOCPercent)
             / 100;
@@ -781,6 +751,9 @@ void JK_BMS::fillJKComputedData() {
     JKComputedData.BatteryVoltageFloat = JKComputedData.BatteryVoltage10Millivolt / 100.0;
 
     JKComputedData.Battery10MilliAmpere = getCurrent(JKAllReplyPointer->Battery10MilliAmpere);
+#if defined(HANDLE_MULTIPLE_BMS)
+    JKMultiBMSData.SumOfBattery10MilliAmpere += JKComputedData.Battery10MilliAmpere;
+#endif
     JKComputedData.BatteryLoadCurrentFloat = JKComputedData.Battery10MilliAmpere / 100.0;
     JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere += JKComputedData.Battery10MilliAmpere;
     if (lastJKReply.SOCPercent == 0 && JKAllReplyPointer->SOCPercent == 1) {
@@ -800,6 +773,9 @@ void JK_BMS::fillJKComputedData() {
 //    Serial.println(JKComputedData.BatteryLoadCurrentFloat);
 
     JKComputedData.BatteryLoadPower = JKComputedData.BatteryVoltageFloat * JKComputedData.BatteryLoadCurrentFloat;
+#if defined(HANDLE_MULTIPLE_BMS)
+    JKMultiBMSData.SumOfBatteryLoadPower += JKComputedData.BatteryLoadPower;
+#endif
 
 #if !defined(NO_CELL_STATISTICS)
     /*
@@ -814,10 +790,10 @@ void JK_BMS::fillJKComputedData() {
     }
 #endif // NO_CELL_STATISTICS
 #if defined(HANDLE_MULTIPLE_BMS)
-    JKComputedData.ChargeOvercurrentProtectionAmpere = swap(JKAllReplyPointer->ChargeOvercurrentProtectionAmpere);
-    JKComputedData.DischargeOvercurrentProtectionAmpere = swap(JKAllReplyPointer->DischargeOvercurrentProtectionAmpere);
-    JKComputedData.AlarmsAsWord = swap(JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord);
-    JKComputedData.StatusAsWord = swap(JKAllReplyPointer->BMSStatus.StatusAsWord);
+    JKMultiBMSData.SumOfChargeOvercurrentProtectionAmpere += swap(JKAllReplyPointer->ChargeOvercurrentProtectionAmpere);
+    JKMultiBMSData.SumOfDischargeOvercurrentProtectionAmpere += swap(JKAllReplyPointer->DischargeOvercurrentProtectionAmpere);
+    JKMultiBMSData.oredAlarms.AlarmsAsWord |= JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord;
+    JKMultiBMSData.oredStatusAsByte |= JKAllReplyPointer->BMSStatus.StatusAsWord >> 8; // flags are in upper byte (sent first)
 #endif
 }
 
@@ -865,7 +841,7 @@ void JK_BMS::printJKCellInfo() {
 }
 
 void JK_BMS::printVoltageProtectionInfo() {
-    JKReplyStruct *tJKFAllReplyPointer = JKAllReplyPointer;
+    JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
     /*
      * Voltage protection
      */
@@ -874,106 +850,106 @@ void JK_BMS::printVoltageProtectionInfo() {
     Serial.print(F(", Undervoltage="));
     Serial.println(JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 2);
 
-    myPrintSwap(F("Cell Overvoltage Protection[mV]="), tJKFAllReplyPointer->CellOvervoltageProtectionMillivolt);
-    myPrintSwap(F(", Recovery="), tJKFAllReplyPointer->CellOvervoltageRecoveryMillivolt);
-    myPrintlnSwap(F(", Delay[s]="), tJKFAllReplyPointer->CellOvervoltageDelaySeconds);
+    myPrintSwap(F("Cell Overvoltage Protection[mV]="), tJKAllReplyPointer->CellOvervoltageProtectionMillivolt);
+    myPrintSwap(F(", Recovery="), tJKAllReplyPointer->CellOvervoltageRecoveryMillivolt);
+    myPrintlnSwap(F(", Delay[s]="), tJKAllReplyPointer->CellOvervoltageDelaySeconds);
 
-    myPrintSwap(F("Cell Undervoltage Protection[mV]="), tJKFAllReplyPointer->CellUndervoltageProtectionMillivolt);
-    myPrintSwap(F(", Recovery="), tJKFAllReplyPointer->CellUndervoltageRecoveryMillivolt);
-    myPrintlnSwap(F(", Delay[s]="), tJKFAllReplyPointer->CellUndervoltageDelaySeconds);
+    myPrintSwap(F("Cell Undervoltage Protection[mV]="), tJKAllReplyPointer->CellUndervoltageProtectionMillivolt);
+    myPrintSwap(F(", Recovery="), tJKAllReplyPointer->CellUndervoltageRecoveryMillivolt);
+    myPrintlnSwap(F(", Delay[s]="), tJKAllReplyPointer->CellUndervoltageDelaySeconds);
 
-    myPrintlnSwap(F("Cell Voltage Difference Protection[mV]="), tJKFAllReplyPointer->VoltageDifferenceProtectionMillivolt);
+    myPrintlnSwap(F("Cell Voltage Difference Protection[mV]="), tJKAllReplyPointer->VoltageDifferenceProtectionMillivolt);
 
-    myPrintSwap(F("Discharging Overcurrent Protection[A]="), tJKFAllReplyPointer->DischargeOvercurrentProtectionAmpere);
-    myPrintlnSwap(F(", Delay[s]="), tJKFAllReplyPointer->DischargeOvercurrentDelaySeconds);
+    myPrintSwap(F("Discharging Overcurrent Protection[A]="), tJKAllReplyPointer->DischargeOvercurrentProtectionAmpere);
+    myPrintlnSwap(F(", Delay[s]="), tJKAllReplyPointer->DischargeOvercurrentDelaySeconds);
 
-    myPrintSwap(F("Charging Overcurrent Protection[A]="), tJKFAllReplyPointer->ChargeOvercurrentProtectionAmpere);
-    myPrintlnSwap(F(", Delay[s]="), tJKFAllReplyPointer->ChargeOvercurrentDelaySeconds);
+    myPrintSwap(F("Charging Overcurrent Protection[A]="), tJKAllReplyPointer->ChargeOvercurrentProtectionAmpere);
+    myPrintlnSwap(F(", Delay[s]="), tJKAllReplyPointer->ChargeOvercurrentDelaySeconds);
     Serial.println();
 }
 
 void JK_BMS::printTemperatureProtectionInfo() {
-    JKReplyStruct *tJKFAllReplyPointer = JKAllReplyPointer;
+    JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
     /*
      * Temperature protection
      */
-    myPrintSwap(F("Power MosFet Temperature Protection="), tJKFAllReplyPointer->PowerMosFetTemperatureProtection);
-    myPrintlnSwap(F(", Recovery="), tJKFAllReplyPointer->PowerMosFetRecoveryTemperature);
+    myPrintSwap(F("Power MosFet Temperature Protection="), tJKAllReplyPointer->PowerMosFetTemperatureProtection);
+    myPrintlnSwap(F(", Recovery="), tJKAllReplyPointer->PowerMosFetRecoveryTemperature);
 
-    myPrintSwap(F("Sensor1 Temperature Protection="), tJKFAllReplyPointer->Sensor1TemperatureProtection);
-    myPrintlnSwap(F(", Recovery="), tJKFAllReplyPointer->Sensor1RecoveryTemperature);
+    myPrintSwap(F("Sensor1 Temperature Protection="), tJKAllReplyPointer->Sensor1TemperatureProtection);
+    myPrintlnSwap(F(", Recovery="), tJKAllReplyPointer->Sensor1RecoveryTemperature);
 
     myPrintlnSwap(F("Sensor1 to Sensor2 Temperature Difference Protection="),
-            tJKFAllReplyPointer->BatteryDifferenceTemperatureProtection);
+            tJKAllReplyPointer->BatteryDifferenceTemperatureProtection);
 
-    myPrintSwap(F("Charge Overtemperature Protection="), tJKFAllReplyPointer->ChargeOvertemperatureProtection);
-    myPrintlnSwap(F(", Discharge="), tJKFAllReplyPointer->DischargeOvertemperatureProtection);
+    myPrintSwap(F("Charge Overtemperature Protection="), tJKAllReplyPointer->ChargeOvertemperatureProtection);
+    myPrintlnSwap(F(", Discharge="), tJKAllReplyPointer->DischargeOvertemperatureProtection);
 
-    myPrintSwap(F("Charge Undertemperature Protection="), tJKFAllReplyPointer->ChargeUndertemperatureProtection);
-    myPrintlnSwap(F(", Recovery="), tJKFAllReplyPointer->ChargeRecoveryUndertemperature);
+    myPrintSwap(F("Charge Undertemperature Protection="), tJKAllReplyPointer->ChargeUndertemperatureProtection);
+    myPrintlnSwap(F(", Recovery="), tJKAllReplyPointer->ChargeRecoveryUndertemperature);
 
-    myPrintSwap(F("Discharge Undertemperature Protection="), tJKFAllReplyPointer->DischargeUndertemperatureProtection);
-    myPrintlnSwap(F(", Recovery="), tJKFAllReplyPointer->DischargeRecoveryUndertemperature);
+    myPrintSwap(F("Discharge Undertemperature Protection="), tJKAllReplyPointer->DischargeUndertemperatureProtection);
+    myPrintlnSwap(F(", Recovery="), tJKAllReplyPointer->DischargeRecoveryUndertemperature);
     Serial.println();
 }
 
 void JK_BMS::printBatteryInfo() {
-    JKReplyStruct *tJKFAllReplyPointer = JKAllReplyPointer;
+    JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
 
     Serial.print(F("Manufacturer Date="));
-    tJKFAllReplyPointer->TokenSystemWorkingMinutes = '\0'; // Set end of string token
-    Serial.println(tJKFAllReplyPointer->ManufacturerDate);
+    tJKAllReplyPointer->TokenSystemWorkingMinutes = '\0'; // Set end of string token
+    Serial.println(tJKAllReplyPointer->ManufacturerDate);
 
     Serial.print(F("Manufacturer Id=")); // First 8 characters of the manufacturer id entered in the app field "User Private Data"
-    tJKFAllReplyPointer->TokenProtocolVersionNumber = '\0'; // Set end of string token
-    Serial.println(tJKFAllReplyPointer->ManufacturerId);
+    tJKAllReplyPointer->TokenProtocolVersionNumber = '\0'; // Set end of string token
+    Serial.println(tJKAllReplyPointer->ManufacturerId);
 
     Serial.print(F("Device ID String=")); // First 8 characters of ManufacturerId
-    tJKFAllReplyPointer->TokenManufacturerDate = '\0'; // Set end of string token
-    Serial.println(tJKFAllReplyPointer->DeviceIdString);
+    tJKAllReplyPointer->TokenManufacturerDate = '\0'; // Set end of string token
+    Serial.println(tJKAllReplyPointer->DeviceIdString);
 
-    myPrintln(F("Device Address="), tJKFAllReplyPointer->BoardAddress);
+    myPrintln(F("Device Address="), tJKAllReplyPointer->BoardAddress);
 
     myPrint(F("Total Battery Capacity[Ah]="), JKComputedData.TotalCapacityAmpereHour); // 0xAA
-    myPrintln(F(", Low Capacity Alarm Percent="), tJKFAllReplyPointer->LowCapacityAlarmPercent); // 0xB1
+    myPrintln(F(", Low Capacity Alarm Percent="), tJKAllReplyPointer->LowCapacityAlarmPercent); // 0xB1
 
-    myPrintlnSwap(F("Charging Cycles="), tJKFAllReplyPointer->Cycles);
-    myPrintlnSwap(F("Total Charging Cycle Capacity="), tJKFAllReplyPointer->TotalBatteryCycleCapacity);
-    myPrintSwap(F("# Battery Cells="), tJKFAllReplyPointer->NumberOfBatteryCells); // 0x8A Total number of battery strings
-    myPrintln(F(", Cell Count="), tJKFAllReplyPointer->BatteryCellCount); // 0xA9 Battery string count settings
+    myPrintlnSwap(F("Charging Cycles="), tJKAllReplyPointer->Cycles);
+    myPrintlnSwap(F("Total Charging Cycle Capacity="), tJKAllReplyPointer->TotalBatteryCycleCapacity);
+    myPrintSwap(F("# Battery Cells="), tJKAllReplyPointer->NumberOfBatteryCells); // 0x8A Total number of battery strings
+    myPrintln(F(", Cell Count="), tJKAllReplyPointer->BatteryCellCount); // 0xA9 Battery string count settings
     Serial.println();
 }
 
 void JK_BMS::printBMSInfo() {
-    JKReplyStruct *tJKFAllReplyPointer = JKAllReplyPointer;
+    JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
 
-    myPrintln(F("Protocol Version Number="), tJKFAllReplyPointer->ProtocolVersionNumber);
+    myPrintln(F("Protocol Version Number="), tJKAllReplyPointer->ProtocolVersionNumber);
 
     Serial.print(F("Software Version Number="));
-    tJKFAllReplyPointer->TokenStartCurrentCalibration = '\0'; // set end of string token
-    Serial.println(tJKFAllReplyPointer->SoftwareVersionNumber);
+    tJKAllReplyPointer->TokenStartCurrentCalibration = '\0'; // set end of string token
+    Serial.println(tJKAllReplyPointer->SoftwareVersionNumber);
 
     Serial.print(F("Modify Parameter Password="));
-    tJKFAllReplyPointer->TokenDedicatedChargerSwitchState = '\0'; // set end of string token
-    Serial.println(tJKFAllReplyPointer->ModifyParameterPassword);
+    tJKAllReplyPointer->TokenDedicatedChargerSwitchState = '\0'; // set end of string token
+    Serial.println(tJKAllReplyPointer->ModifyParameterPassword);
 
-    myPrintln(F("# External Temperature Sensors="), tJKFAllReplyPointer->NumberOfTemperatureSensors); // 0x86
+    myPrintln(F("# External Temperature Sensors="), tJKAllReplyPointer->NumberOfTemperatureSensors); // 0x86
 
     Serial.println();
 }
 
 void JK_BMS::printMiscellaneousInfo() {
-    JKReplyStruct *tJKFAllReplyPointer = JKAllReplyPointer;
+    JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
 
-    myPrintlnSwap(F("Balance Starting Cell Voltage[mV]="), tJKFAllReplyPointer->BalancingStartMillivolt);
-    myPrintlnSwap(F("Balance Triggering Voltage Difference[mV]="), tJKFAllReplyPointer->BalancingStartDifferentialMillivolt);
+    myPrintlnSwap(F("Balance Starting Cell Voltage[mV]="), tJKAllReplyPointer->BalancingStartMillivolt);
+    myPrintlnSwap(F("Balance Triggering Voltage Difference[mV]="), tJKAllReplyPointer->BalancingStartDifferentialMillivolt);
 
-    myPrintlnSwap(F("Current Calibration[mA]="), tJKFAllReplyPointer->CurrentCalibrationMilliampere);
-    myPrintlnSwap(F("Sleep Wait Time[s]="), tJKFAllReplyPointer->SleepWaitingTimeSeconds);
+    myPrintlnSwap(F("Current Calibration[mA]="), tJKAllReplyPointer->CurrentCalibrationMilliampere);
+    myPrintlnSwap(F("Sleep Wait Time[s]="), tJKAllReplyPointer->SleepWaitingTimeSeconds);
 
-    myPrintln(F("Dedicated Charge Switch Active="), tJKFAllReplyPointer->DedicatedChargerSwitchIsActive);
-    myPrintln(F("Start Current Calibration State="), tJKFAllReplyPointer->StartCurrentCalibration);
-    myPrintlnSwap(F("Battery Actual Capacity[Ah]="), tJKFAllReplyPointer->ActualBatteryCapacityAmpereHour);
+    myPrintln(F("Dedicated Charge Switch Active="), tJKAllReplyPointer->DedicatedChargerSwitchIsActive);
+    myPrintln(F("Start Current Calibration State="), tJKAllReplyPointer->StartCurrentCalibration);
+    myPrintlnSwap(F("Battery Actual Capacity[Ah]="), tJKAllReplyPointer->ActualBatteryCapacityAmpereHour);
 
     Serial.println();
 }
@@ -998,6 +974,9 @@ void JK_BMS::detectAndPrintAlarmInfo() {
         } else {
             AlarmJustGetsActive = true; // This forces the beep, which is NOT suppressed for over and undervoltage
             AlarmActive = true;
+#if defined(HANDLE_MULTIPLE_BMS)
+            JKMultiBMSData.anyAlarm = true;
+#endif
             /*
              * Print alarm info
              */
@@ -1100,7 +1079,7 @@ extern const char sCSVCaption[] PROGMEM;
  * All other data are used unconverted and are therefore printed by swap() functions.
  */
 void JK_BMS::printJKDynamicInfo() {
-    JKReplyStruct *tJKFAllReplyPointer = JKAllReplyPointer;
+    JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
 
 #if defined(ENABLE_MONITORING)
 #  if defined(MONOTORING_PERIOD_FAST)
@@ -1173,17 +1152,17 @@ void JK_BMS::printJKDynamicInfo() {
 #endif
 
 #if !defined(SUPPRESS_LIFEPO4_PLAUSI_WARNING)
-        if (swap(tJKFAllReplyPointer->CellOvervoltageProtectionMillivolt) > 3450) {
+        if (swap(tJKAllReplyPointer->CellOvervoltageProtectionMillivolt) > 3450) {
             // https://www.evworks.com.au/page/technical-information/lifepo4-care-guide-looking-after-your-lithium-batt/
             Serial.print(F("Warning: CellOvervoltageProtectionMillivolt value "));
-            Serial.print(swap(tJKFAllReplyPointer->CellOvervoltageProtectionMillivolt));
+            Serial.print(swap(tJKAllReplyPointer->CellOvervoltageProtectionMillivolt));
             Serial.println(F(" mV > 3450 mV is not recommended for LiFePO4 chemistry."));
             Serial.println(F("There is less than 1% extra capacity above 3.5V."));
         }
-        if (swap(tJKFAllReplyPointer->CellUndervoltageProtectionMillivolt) < 3000) {
+        if (swap(tJKAllReplyPointer->CellUndervoltageProtectionMillivolt) < 3000) {
             // https://batteryfinds.com/lifepo4-voltage-chart-3-2v-12v-24v-48v/
             Serial.print(F("Warning: CellUndervoltageProtectionMillivolt value "));
-            Serial.print(swap(tJKFAllReplyPointer->CellUndervoltageProtectionMillivolt));
+            Serial.print(swap(tJKAllReplyPointer->CellUndervoltageProtectionMillivolt));
             Serial.println(F(" mV < 3000 mV is not recommended for LiFePO4 chemistry."));
             Serial.println(F("There is less than 10% capacity below 3.0V and 20% capacity below 3.2V."));
         }
@@ -1218,11 +1197,11 @@ void JK_BMS::printJKDynamicInfo() {
     /*
      * SOC
      */
-    if (tJKFAllReplyPointer->SOCPercent != lastJKReply.SOCPercent) {
+    if (tJKAllReplyPointer->SOCPercent != lastJKReply.SOCPercent) {
         /*
          * SOC changed
          */
-        myPrint(F("SOC[%]="), tJKFAllReplyPointer->SOCPercent);
+        myPrint(F("SOC[%]="), tJKAllReplyPointer->SOCPercent);
         myPrintln(F(" -> Remaining Capacity[Ah]="), JKComputedData.RemainingCapacityAmpereHour);
     }
 
@@ -1249,32 +1228,33 @@ void JK_BMS::printJKDynamicInfo() {
     /*
      * Charge, Discharge and Balancer flags
      */
-    if (tJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive != lastJKReply.BMSStatus.StatusBits.ChargeMosFetActive
-            || tJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive
-                    != lastJKReply.BMSStatus.StatusBits.DischargeMosFetActive) {
+    auto tStatus = tJKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+    auto tLastStatus = lastJKReply.BMSStatus.StatusAsByteArray[1];
+
+    if ((tStatus ^ tLastStatus) & (STATUS_BYTE_DISCHARGE_ACTIVE_MASK | STATUS_BYTE_CHARGE_ACTIVE_MASK)) {
         /*
          * This happens quite seldom!
          */
         Serial.print(F("Charging MosFet"));
-        printEnabledState(tJKFAllReplyPointer->ChargeIsEnabled);
+        printEnabledState(tJKAllReplyPointer->ChargeIsEnabled);
         Serial.print(',');
-        printActiveState(tJKFAllReplyPointer->BMSStatus.StatusBits.ChargeMosFetActive);
+        printActiveState(tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK);
         Serial.print(F(" | Discharging MosFet"));
-        printEnabledState(tJKFAllReplyPointer->DischargeIsEnabled);
+        printEnabledState(tJKAllReplyPointer->DischargeIsEnabled);
         Serial.print(',');
-        printActiveState(tJKFAllReplyPointer->BMSStatus.StatusBits.DischargeMosFetActive);
+        printActiveState(tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK);
         Serial.print(F(" | Balancing")); // including balancer state to be complete :-)
-        printEnabledState(tJKFAllReplyPointer->BalancingIsEnabled);
+        printEnabledState(tJKAllReplyPointer->BalancingIsEnabled);
         Serial.print(',');
-        printActiveState(tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive);
+        printActiveState(tStatus & STATUS_BYTE_BALANCER_MASK);
         Serial.println(); // printActiveState does no println()
-    } else if (tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive != lastJKReply.BMSStatus.StatusBits.BalancerActive) {
+    } else if ((tStatus ^ tLastStatus) & STATUS_BYTE_BALANCER_MASK) {
         /*
          * Only Balancer, since it happens very often
          */
         Serial.print(F("Balancing"));
-        printActiveState(tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive);
-        if (tJKFAllReplyPointer->BMSStatus.StatusBits.BalancerActive) {
+        printActiveState(tStatus & STATUS_BYTE_BALANCER_MASK);
+        if (tStatus & STATUS_BYTE_BALANCER_MASK) {
             printJKCellInfoOverview();
         } else {
             Serial.println(); // printActiveState does no println()

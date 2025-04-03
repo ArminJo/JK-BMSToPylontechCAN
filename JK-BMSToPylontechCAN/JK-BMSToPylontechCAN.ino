@@ -350,7 +350,7 @@ uint32_t sFirstBeepMillis = 0;
 /*
  * Function declarations
  */
-void printReceivedData();
+void printReceivedDataLCD();
 bool isVCCTooHighSimple();
 void handleOvervoltage();
 void handleBeep();
@@ -646,7 +646,7 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     Serial.println();
     sResponseFrameBytesAreExpected = false; // Enable CAN data sending
     JK_BMS_1.processReceivedData(); // sets sCANDataIsInitialized to true
-    printReceivedData();
+    printReceivedDataLCD();
     /*
      * Copy complete reply and computed values for change determination
      */
@@ -763,6 +763,12 @@ void loop() {
 
                 } else {
                     /*
+                     * Print LCD data only after receiving last BMS
+                     * TODO - How to select, which data to show?
+                     */
+                    printReceivedDataLCD();
+
+                    /*
                      * Fill CAN data after all BMS are processed
                      * First BMS is determines the CAN data except current, capacity and flags, which are added / OR'ed.
                      * and switch back to first BMS
@@ -770,12 +776,15 @@ void loop() {
                     fillAllCANData(JK_BMS::BMSArray[0]);
                     sCANDataIsInitialized = true; // One time flag
 
-#  if !defined(NO_BEEP_ON_ERROR) // Beep enabled
+#    if !defined(NO_BEEP_ON_ERROR) // Beep enabled
                     handleBeep(); // Alarm / beep handling one per period
-#  endif
+#    endif
                     sCurrentBMS = JK_BMS::BMSArray[0]; // switch back to first BMS
+                    JK_BMS::resetJKMultiBMSData();
                 }
 #  else
+                printReceivedDataLCD();
+
                 /*
                  * Fill CAN data
                  */
@@ -829,7 +838,7 @@ void handleBeep() {
     bool tAnyTimeoutActive;
 #if defined(HANDLE_MULTIPLE_BMS)
     // loop through all instantiated BMS
-    tAnyAlarmActive = JK_BMS::getAnyAlarm();
+    tAnyAlarmActive = JKMultiBMSData.anyAlarm;
 #else
     tAnyAlarmActive = sCurrentBMS->AlarmActive;
     tAnyTimeoutActive = sCurrentBMS->JKBMSFrameHasTimeout;
@@ -882,7 +891,7 @@ void handleBeep() {
     }
 
 #if defined(HANDLE_MULTIPLE_BMS)
-    tAnyTimeoutActive = JK_BMS::getAnyTimeout();
+    tAnyTimeoutActive = JKMultiBMSData.anyTimeout;
 #else
     tAnyTimeoutActive = sCurrentBMS->JKBMSFrameHasTimeout;
 #endif
@@ -962,7 +971,6 @@ void processJK_BMSStatusFrame() {
 #endif
     }
 
-    printReceivedData();
 #if !defined(NO_ANALYTICS)
 #  if defined(HANDLE_MULTIPLE_BMS)
     if (sCurrentBMS->NumberOfThisBMS == 1) {
@@ -1015,7 +1023,7 @@ void handleFrameReceiveTimeout() {
 /*
  * Called exclusively by processJK_BMSStatusFrame()
  */
-void printReceivedData() {
+void printReceivedDataLCD() {
 #if defined(USE_SERIAL_2004_LCD)
     if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
         // Do not interfere with plotter output

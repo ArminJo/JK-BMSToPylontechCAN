@@ -117,8 +117,8 @@ struct PylontechCANBatteryLimitsFrame351Struct {
         /*
          * Use sum of current limits
          */
-        FrameData.BatteryChargeCurrentLimit100Milliampere = JK_BMS::getSumOfChargeOvercurrentProtectionAmpere() * 10;
-        FrameData.BatteryDischargeCurrentLimit100Milliampere = JK_BMS::getSumOfDischargeOvercurrentProtectionAmpere() * 10;
+        FrameData.BatteryChargeCurrentLimit100Milliampere = JKMultiBMSData.SumOfChargeOvercurrentProtectionAmpere * 10;
+        FrameData.BatteryDischargeCurrentLimit100Milliampere = JKMultiBMSData.SumOfDischargeOvercurrentProtectionAmpere * 10;
 #else
     FrameData.BatteryChargeCurrentLimit100Milliampere = swap(aJK_BMS_Ptr->JKAllReplyPointer->ChargeOvercurrentProtectionAmpere)
             * 10;
@@ -160,7 +160,7 @@ struct PylontechCANCurrentValuesFrame356Struct {
     void fillFrame(JK_BMS *aJK_BMS_Ptr) {
         FrameData.Voltage10Millivolt = aJK_BMS_Ptr->JKComputedData.BatteryVoltage10Millivolt;
 #if defined(HANDLE_MULTIPLE_BMS)
-        FrameData.Current100Milliampere = JK_BMS::getSumOfBattery10MilliAmpere() / 10;
+        FrameData.Current100Milliampere = JKMultiBMSData.SumOfBattery10MilliAmpere / 10;
 #else
         FrameData.Current100Milliampere = aJK_BMS_Ptr->JKComputedData.Battery10MilliAmpere / 10;
 #endif
@@ -221,7 +221,7 @@ struct PylontechCANErrorsWarningsFrame359Struct {
     } FrameData;
     void fillFrame(JK_BMS *aJK_BMS_Ptr) {
 #if defined(HANDLE_MULTIPLE_BMS)
-        union BatteryAlarmFlagsUnion tBatteryAlarmFlags = JK_BMS::getOredBatteryAlarmFlags();
+        union BatteryAlarmFlagsUnion tBatteryAlarmFlags = JKMultiBMSData.oredAlarms;
 #else
         union BatteryAlarmFlagsUnion tBatteryAlarmFlags = aJK_BMS_Ptr->JKAllReplyPointer->BatteryAlarmFlags;
 #endif
@@ -314,12 +314,13 @@ struct PylontechCANBatteryRequesFrame35CStruct {
         }
 
 #if defined(HANDLE_MULTIPLE_BMS)
-        union BMSStatusUnion tBMSStatusFlags = JK_BMS::getOredBMSStatusFlags();
-        FrameData.DischargeEnable = tBMSStatusFlags.StatusBits.ChargeMosFetActive;
-        FrameData.ChargeEnable = tBMSStatusFlags.StatusBits.DischargeMosFetActive;
+        auto tStatus = JKMultiBMSData.oredStatusAsByte;
+        FrameData.DischargeEnable = tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK;
+        FrameData.ChargeEnable = tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK;
 #else
-        FrameData.DischargeEnable = tJKFAllReply->BMSStatus.StatusBits.ChargeMosFetActive;
-        FrameData.ChargeEnable = tJKFAllReply->BMSStatus.StatusBits.DischargeMosFetActive;
+        auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+        FrameData.DischargeEnable = tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK;
+        FrameData.ChargeEnable = tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK;
 #endif
     }
 };
@@ -358,11 +359,11 @@ struct PylontechCANSMACapacityFrame35FStruct {
         FrameData.SoftwareVersionLowByte = tJKFAllReply->SoftwareVersionNumber[1];
         FrameData.SoftwareVersionHighByte = tJKFAllReply->SoftwareVersionNumber[0];
 #if defined(HANDLE_MULTIPLE_BMS)
-        FrameData.CapacityAmpereHour = JK_BMS::getSumOfTotalCapacityAmpereHour();
+        FrameData.CapacityAmpereHour = JKMultiBMSData.SumOfTotalCapacityAmpereHour;
 #else
         FrameData.CapacityAmpereHour = aJK_BMS_Ptr->JKComputedData.TotalCapacityAmpereHour;
 #endif
-}
+    }
 };
 
 /*
