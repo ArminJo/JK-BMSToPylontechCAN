@@ -3,7 +3,7 @@
  *
  *  Contains LCD related variables and functions
  *
- *  Copyright (C) 2023-2024  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2025  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -27,7 +27,6 @@
 #define _JK_BMS_LCD_HPP
 
 #include "JK-BMS_LCD.h"
-#include "LCDPrintUtils.hpp"
 
 bool sSerialLCDAvailable;
 
@@ -43,15 +42,16 @@ bool sSerialLCDIsSwitchedOff = false;
 uint16_t sFrameCounterForLCDTAutoOff = 0;
 #  endif
 
-LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 /*
  * Big numbers for LCD JK_BMS_PAGE_BIG_INFO page
  */
 #define USE_SERIAL_2004_LCD             // required by LCDBigNumbers.hpp
+#include "LCDPrintUtils.hpp"            // sets USE_PARALLEL_LCD or USE_SERIAL_LCD
 #include "LCDBigNumbers.hpp"            // Include sources for LCD big number generation
 //LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_1); // Use 2x3 numbers, 1. variant
 //#define UNITS_ROW_FOR_BIG_INFO  2
+LiquidCrystal_I2C myLCD(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 LCDBigNumbers bigNumberLCD(&myLCD, BIG_NUMBERS_FONT_2_COLUMN_3_ROWS_VARIANT_2); // Use 2x3 numbers, 2. variant
 #define UNITS_ROW_FOR_BIG_INFO  1
 const uint8_t bigNumbersTopBlock[8] PROGMEM = { 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // char 1: top block for maximum cell voltage marker
@@ -289,7 +289,7 @@ void printCellInfoOnLCD() {
                     myLCD.print(sStringBuffer);
                 } else if (i == 8) {
                     // Print current in the last 4 characters
-                    printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 4);
+                    LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 4);
                 } else if (i == 12) {
                     // print " A  " or " A B"
                     myLCD.print(F(" A "));
@@ -319,7 +319,7 @@ void printCellInfoOnLCD() {
     if (tNumberOfCellInfoEntries > 0 && tNumberOfCellInfoEntries <= 16) {
         // print voltage difference
         myLCD.setCursor(17, 3);
-        printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 3, true); // true = no leading space
+        LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 3, true); // true = no leading space
     }
 #else
     if (tNumberOfCellInfoEntries > 12) {
@@ -544,13 +544,13 @@ void printBigInfoOnLCD() {
 
     myLCD.setCursor(4, 3);
 #if defined(HANDLE_MULTIPLE_BMS)
-    printFloatValueRightAlignedOnLCD(JK_BMS::getSumOfBatteryLoadCurrentFloat(), 5);
+    LCDPrintFloatValueRightAligned(&myLCD, JK_BMS::getSumOfBatteryLoadCurrentFloat(), 5);
 #else
-    printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 5);
+    LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 5);
 #endif
     myLCD.print('A');
 
-    printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5);
+    LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5);
     myLCD.print('V');
 
     myLCD.setCursor(17, 3); // Last 3 characters are the actual states
@@ -603,11 +603,11 @@ void printCANInfoOnLCD() {
          */
         myLCD.setCursor(0, 2);
 // Voltage
-        printFloatValueRightAlignedOnLCD(PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt / 100.0, 5, true);
+        LCDPrintFloatValueRightAligned(&myLCD, PylontechCANCurrentValuesFrame356.FrameData.Voltage10Millivolt / 100.0, 5, true);
         myLCD.print(F("V "));
 
 // Current
-        printFloatValueRightAlignedOnLCD(PylontechCANCurrentValuesFrame356.FrameData.Current100Milliampere / 10.0, 5);
+        LCDPrintFloatValueRightAligned(&myLCD, PylontechCANCurrentValuesFrame356.FrameData.Current100Milliampere / 10.0, 5);
         myLCD.print(F("A "));
 
 // Temperature, we have only a 1 degree resolution here
@@ -655,11 +655,11 @@ void printVoltageCurrentAndPowerOnLCD() {
     myLCD.setCursor(0, 2);
     // Voltage
 //    myLCD.print(JK_BMS_1.JKComputedData.BatteryVoltageFloat, 2); // currently requires more programming space
-    printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryVoltageFloat, 5, true); // true -> do not print leading space
+    LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryVoltageFloat, 5, true); // true -> do not print leading space
     myLCD.print(F("V "));
 
     // Current
-    printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 5);
+    LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 5);
     myLCD.print('A');
 
     // Power
@@ -683,7 +683,7 @@ void printVoltageDifferenceAndTemperature() {
             && abs(JK_BMS_1.JKComputedData.TemperatureSensor1 - JK_BMS_1.JKComputedData.TemperatureSensor2)
                     < (min(JK_BMS_1.JKComputedData.TemperatureSensor1, JK_BMS_1.JKComputedData.TemperatureSensor1) / 4)) {
         tShowBothExternalTemperatures = false;
-        printFloatValueRightAlignedOnLCD(JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5, true); // true = no leading space
+        LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 5, true); // true = no leading space
         myLCD.print(F("V "));
     }
     myLCD.print(JK_BMS_1.JKComputedData.TemperaturePowerMosFet);
@@ -953,17 +953,17 @@ void checkButtonPressForLCD() {
                     // EEPROM data not already cleared here
                     myLCD.setCursor(0, 0);
                     myLCD.print(F("Clear EEPROM data in"));
-                    LCDClearLine(1);
+                    LCDClearLine(&myLCD, 1);
                     myLCD.print(F("2 seconds"));
-                    LCDClearLine(2);
-                    LCDClearLine(3);
+                    LCDClearLine(&myLCD, 2);
+                    LCDClearLine(&myLCD, 3);
                     delay(1000);
                     if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
                         myLCD.setCursor(0, 1);
                         myLCD.print('1');
                         delay(1000); // To wait for eventual button release
                         if (PageSwitchButtonAtPin2.readDebouncedButtonState() == BUTTON_IS_ACTIVE) { // Check again, if still pressed
-                            LCDClearLine(1);
+                            LCDClearLine(&myLCD, 1);
                             myLCD.print(F("now")); // is visible for the time EEPROM needs for erasing (+200 ms)
                             delay(200); // To wait for eventual button release
                         }
@@ -977,7 +977,7 @@ void checkButtonPressForLCD() {
                         myLCD.print(F("Clear EEPROM aborted"));
                     }
                     myLCD.setCursor(0, 1);
-                    LCDPrintSpaces(9); // overwrite 2. line containing 2 seconds
+                    LCDPrintSpaces(&myLCD, 9); // overwrite 2. line containing 2 seconds
 
                     delay (LCD_MESSAGE_PERSIST_TIME_MILLIS); // To see the messages
                 }

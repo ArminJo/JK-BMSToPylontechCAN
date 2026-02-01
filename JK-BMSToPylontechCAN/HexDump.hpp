@@ -85,12 +85,15 @@ void printMemoryHexNoASCIIDump(uint8_t *aMemoryAddress, uint16_t aNumberOfBytesT
  * Prints 16 bit address and hex bytes starting at current stackpointer and ending at ending at top of stack / RAM end.
  */
 void printStackDump() {
-    Serial.print(F("Caller address=0x"));
+    Serial.print(F("Caller address=(0x"));
     uint16_t tCallerAddress = (uint16_t) __builtin_return_address(0);
     Serial.print(tCallerAddress, HEX);
-    Serial.print(F(" | "));
-    Serial.println(tCallerAddress << 1, HEX);
-    printMemoryHexDump((uint8_t*) SP, RAMEND - SP, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
+    Serial.print(F(" << 1)=0x"));
+    Serial.print(tCallerAddress << 1, HEX); // printMemoryHexDump starts with a newline
+    Serial.flush();
+    printMemoryHexDump((uint8_t*) SP, (RAMEND - SP) + 1, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
+    // Print multiple of 16 bytes
+//    printMemoryHexDump((uint8_t*) (SP & 0xFFF0), ((RAMEND - SP) | 0x000F) + 1, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
 }
 
 /*
@@ -99,10 +102,10 @@ void printStackDump() {
 void printStackMemory(uint16_t aNumberOfBytesToPrint) {
     Serial.print(F("SP=0x"));
     Serial.print((uint16_t) SP, HEX);
-    Serial.print(F(", caller address=0x"));
+    Serial.print(F(", caller address=(0x"));
     uint16_t tCallerAddress = (uint16_t) __builtin_return_address(0);
     Serial.print(tCallerAddress, HEX);
-    Serial.print(F(" | "));
+    Serial.print(F(" << 1) =0x"));
     Serial.println(tCallerAddress << 1, HEX);
 
     uint8_t *tMemoryAddress = (uint8_t*) ((RAMEND + 1) - aNumberOfBytesToPrint);
@@ -178,6 +181,7 @@ void printMemoryHexDump(uint8_t *aMemory, uint16_t aNumberOfBytesToPrint, uint8_
                     }
                 }
             }
+            Serial.flush();
             Serial.println();
             tIndex += aBytesPerLine;
         }
@@ -185,7 +189,7 @@ void printMemoryHexDump(uint8_t *aMemory, uint16_t aNumberOfBytesToPrint, uint8_
 }
 
 /*
- * Print with leading space and padded with 0
+ * Print with leading space and "0x" and padded with 0
  */
 void printBytePaddedHex(uint8_t aHexValueToPrint) {
     Serial.print(F(" 0x"));
@@ -207,6 +211,5 @@ void printWordPaddedHex(uint16_t aHexValueToPrint) {
         Serial.print('0');
     }
     Serial.print(aHexValueToPrint, HEX);
-
 }
 #endif // _HEX_DUMP_HPP

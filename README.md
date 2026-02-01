@@ -252,7 +252,7 @@ Alternative circuit for VCC lower than 5 volt e.g. for supply by Li-ion battery
 <br/>
 
 # Example schematics and PCB layouts
-- KiCad8 schematics and PCB layout for ATmega644 compiled with [MightyCore](https://github.com/MCUdude/MightyCore) and 2 BMS connectors by Andé Meier.
+- [KiCad8 schematics and PCB layout](https://github.com/dremeier/Arduino-JK-BMS-To-Pylontech-CAN-PCB) for ATmega644 compiled with [MightyCore](https://github.com/MCUdude/MightyCore) and 2 BMS connectors by Andé Meier.
 [![PCB layout](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BMS-CAN_PCB_top_v0.1.png)](https://github.com/dremeier/Arduino-JK-BMS-To-Pylontech-CAN-PCB)
 
 ![644 board](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/644Board.jpg)

@@ -31,7 +31,7 @@
  */
 
 /*
- * Propagate debug level to local ones but not to each other, i.e. Enabling TRACE does not enable DEBUG and INFO
+ * Propagate debug level to local ones but at first not to each other, i.e. enabling TRACE does not enable DEBUG and INFO
  */
 #if defined(TRACE)
 #define LOCAL_TRACE
@@ -44,6 +44,18 @@
 #if defined(INFO)
 #define LOCAL_INFO
 #endif
+
+#if defined(PROPAGATE_DEBUG_LEVELS)
+/*
+ * Propagate levels i.e. enabling TRACE does not enable DEBUG and INFO
+ */
+#  if defined(LOCAL_TRACE)
+#define LOCAL_DEBUG
+#  endif
+#  if defined(LOCAL_DEBUG)
+#define LOCAL_INFO
+#  endif
+#endif // defined(PROPAGATE_DEBUG_LEVELS)
 
 /*
  * Define appropriate print macros

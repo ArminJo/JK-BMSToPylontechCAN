@@ -1157,7 +1157,7 @@ void doStandaloneTest() {
     if (sSerialLCDAvailable) {
         testLCDPages();
         delay(LCD_MESSAGE_PERSIST_TIME_MILLIS);
-        testPrintFloatValueRightAlignedOnLCD();
+        LCDTestPrintFloatValueRightAligned();
         delay(2*LCD_MESSAGE_PERSIST_TIME_MILLIS);
 #    if defined(BIG_NUMBER_TEST)
         testBigNumbers();
