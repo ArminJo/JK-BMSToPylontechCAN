@@ -236,13 +236,13 @@ void readAndPrintSOCData() {
          * Print 500 data points in order to shift unwanted entries out to left of plotter window
          */
         if (((499 / NUMBER_OF_SOC_DATA_POINTS) + 1) > 1) {
-            Serial.println(F("Print SOC data with each entry printed twice"));
+            Serial.println(F("1k EEPROM -> print SOC data with each entry printed twice")); // for 1 kB EEPROM
         } else {
-            Serial.println(F("Print SOC data"));
+            Serial.println(F("Print SOC data")); // for 2 kB EEPROM
         }
         // Using a bool variable requires 16 bytes more
         if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) == LOW) {
-            Serial.println(F("No battery ESR compensation for voltage"));
+            Serial.println(F("Pin " STR(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) " is low ->no battery ESR compensation for voltage"));
         }
 
         uint16_t i;
@@ -274,8 +274,8 @@ void readAndPrintSOCData() {
 
             if (i == 0) {
                 // Initialize start value of capacity with a reasonable value
-                tCurrentCapacity100MilliampereHour = (tCurrentSOCDataPoint.SOCPercent * JK_BMS_1.JKComputedData.TotalCapacityAmpereHour)
-                        / 10;
+                tCurrentCapacity100MilliampereHour = (tCurrentSOCDataPoint.SOCPercent
+                        * JK_BMS_1.JKComputedData.TotalCapacityAmpereHour) / 10;
                 tCurrentCapacityAmpereHour = tCurrentCapacity100MilliampereHour / 10;
             }
 
@@ -319,10 +319,13 @@ void readAndPrintSOCData() {
 
             /*
              * Compensate voltage with Current * ESR
+             * Show delta sum of sBatteryESRMilliohm + 1 and sBatteryESRMilliohm + 1
+             * sBatteryESRMilliohm must me minimal to be correct, if one of the +1 or -1 value is smaller
+             * it seems to be the more correct, than sBatteryESRMilliohm
              */
             if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) != LOW) {
                 /*
-                 * Compute sum of delta values for (sBatteryESRMilliohm + 1)
+                 * Compute sum of delta values for (sBatteryESRMilliohm + 1) - should be not less than
                  */
                 int16_t tVoltageDifferenceToEmpty50MillivoltPlus1 = tVoltageDifferenceToEmpty50Millivolt
                         - (((int16_t) tCurrentSOCDataPoint.AverageAmpere * (sBatteryESRMilliohm + 1)) / 50);
@@ -376,7 +379,9 @@ void readAndPrintSOCData() {
                 }
 
             } else {
-                // print last entry with caption
+                /*
+                 * print last entry with caption
+                 */
                 for (uint_fast8_t j = 0; j < ((499 / NUMBER_OF_SOC_DATA_POINTS) + 1); ++j) {
                     Serial.print(F("SOC="));
                     Serial.print(tMinimumSOCData.SOCPercent);
@@ -384,19 +389,23 @@ void readAndPrintSOCData() {
                     Serial.print(tMaximumSOCData.SOCPercent);
                     Serial.print(F("%:"));
                     Serial.print(tCurrentSOCDataPoint.SOCPercent);
-                    Serial.print(F(" Capacity_"));
-                    uint16_t tTotalCapacity = ((tMaximumSOCData.CapacityAmpereHour - tMinimumSOCData.CapacityAmpereHour) * 100)
-                            / (tMaximumSOCData.SOCPercent - tMinimumSOCData.SOCPercent);
-                    Serial.print(tTotalCapacity);
-                    Serial.print(F("Ah_"));
+                    Serial.print(F(" Cap_"));
                     Serial.print(tMinimumSOCData.CapacityAmpereHour); // Minimum Ah
                     Serial.print(F("->"));
                     Serial.print(tMaximumSOCData.CapacityAmpereHour); // Maximum Ah
                     Serial.print(F("_"));
                     Serial.print(tMaximumSOCData.CapacityAmpereHour - tMinimumSOCData.CapacityAmpereHour); // Delta Ah
+                    Serial.print(F("Ah__100%_"));
+                    uint16_t tTotalCapacity = ((tMaximumSOCData.CapacityAmpereHour - tMinimumSOCData.CapacityAmpereHour) * 100)
+                            / (tMaximumSOCData.SOCPercent - tMinimumSOCData.SOCPercent);
+                    Serial.print(tTotalCapacity);
                     Serial.print(F("Ah:"));
                     Serial.print(tCurrentCapacityAmpereHour); // print Ah
-                    Serial.print(F(" VoltToEmpty_"));
+                    Serial.print(F(" VToEmpty"));
+                    Serial.print(JK_BMS_1.JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 1);
+                    Serial.print('_');
+                    Serial.print(swap(JK_BMS_1.JKAllReplyPointer->CellUndervoltageProtectionMillivolt) / 1000.0, 2);
+                    Serial.print(F("V__"));
                     Serial.print(tMinimumSOCData.VoltageDifferenceToEmpty50Millivolt / 20.0, 2);
                     Serial.print(F("V->"));
                     Serial.print(tMaximumSOCData.VoltageDifferenceToEmpty50Millivolt / 20.0, 2);
@@ -414,24 +423,23 @@ void readAndPrintSOCData() {
                         Serial.print(sBatteryESRMilliohm);
 //#if defined(LOCAL_DEBUG)
                         Serial.print(F("mOhm_"));
-                        Serial.print(tVoltToEmptyAccumulatedDeltasESR);
+                        Serial.print(tVoltToEmptyAccumulatedDeltasESR); // chosen value should be minimum
+                        Serial.print(F("__"));
+                        Serial.print(sBatteryESRMilliohm + 1);
                         Serial.print('_');
-                        Serial.print(tVoltToEmptyAccumulatedDeltasESRPlus1);
+                        Serial.print(tVoltToEmptyAccumulatedDeltasESRPlus1); // adjacent value to proof that tVoltToEmptyAccumulatedDeltasESR is minimum
+                        Serial.print(F("__"));
+                        Serial.print(sBatteryESRMilliohm - 1);
                         Serial.print('_');
-                        Serial.print(tVoltToEmptyAccumulatedDeltasESRMinus1);
-                        Serial.print(F(":0"));
+                        Serial.print(tVoltToEmptyAccumulatedDeltasESRMinus1); // adjacent value to proof that tVoltToEmptyAccumulatedDeltasESR is minimum
 //#else
 //                        Serial.print(F("mOhm:0"));
 //#endif
-                    } else {
-                        Serial.print(F(" 0"));
+
                     }
 
-                    Serial.print(F(" Empty_voltage_"));
-                    Serial.print(JK_BMS_1.JKComputedData.BatteryEmptyVoltage10Millivolt / 100.0, 1);
-                    Serial.print('_');
-                    Serial.print(swap(JK_BMS_1.JKAllReplyPointer->CellUndervoltageProtectionMillivolt) / 1000.0, 2);
-                    Serial.println(F("V:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0"));
+                    // to overwrite residual output of former prints
+                    Serial.println(F(" _:0 _:0 _:0 _:0 _:0 _:0 _:0 _:0"));
                 }
 
                 /*
@@ -440,7 +448,7 @@ void readAndPrintSOCData() {
                  */
                 if (((499 / NUMBER_OF_SOC_DATA_POINTS) + 1) > 1) {
                     for (; i < 249; ++i) {
-                        // For 1 k EEPROM
+                        // For 1 k EEPROM print every entry twice
                         Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
                         Serial.println(F(" 0 0 0 0 0 0 0 0 0 0"));
                     }
@@ -487,7 +495,7 @@ void readAndPrintSOCData() {
  * E.g. values for SOC 10 are written for rising SOC at SOC = 10.001 for falling SOC at 9.990
  * => we can not write values for SOC 0 with this condition!
  */
-void writeSOCData() {
+void writeSOCDataToEEPROMIfSOCChanged() {
     SOCDataPointDeltaStruct tSOCDataPoint;
 
     /*

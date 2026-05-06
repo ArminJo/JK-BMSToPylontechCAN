@@ -42,7 +42,6 @@ bool sSerialLCDIsSwitchedOff = false;
 uint16_t sFrameCounterForLCDTAutoOff = 0;
 #  endif
 
-
 /*
  * Big numbers for LCD JK_BMS_PAGE_BIG_INFO page
  */
@@ -241,7 +240,8 @@ void printAlarmHexOrStateOnLCD() {
         printShortStateOnLCD();
     } else {
         myLCD.setCursor(16, 3); // Last 4 characters are the actual HEX alarm bits
-        uint16_t tAlarms = swap(JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord);
+        uint16_t tAlarms = swap(JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmsAsWord); // Use temporarily swapped value here
+
         if (tAlarms < 0x100) {
             myLCD.print(F("0x"));
             if (tAlarms < 0x10) {
@@ -260,7 +260,7 @@ void printAlarmHexOrStateOnLCD() {
  *  SOC
  *  Current
  *  " A  " or " A B"
- *  Voltage difference
+ *  Battery voltage difference
  */
 void printCellInfoOnLCD() {
     uint_fast8_t tRowNumber;
@@ -312,12 +312,20 @@ void printCellInfoOnLCD() {
         } else {
             myLCD.print(' ');
         }
+
+        /*
+         * Subtract 3000 mV from value to save space on display
+         */
+        auto tCellMillivolt = JK_BMS_1.JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt;
+        if(tCellMillivolt > 3000) {
+            tCellMillivolt -= 3000; // 3001 -> 1, 3000 -> 3000, 0 -> 0. Value is always positive :-)
+        }
         // print fix format 3 character value
-        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%3d"), JK_BMS_1.JKConvertedCellInfo.CellInfoStructArray[i].CellMillivolt - 3000); // Value can be negative!
+        snprintf_P(sStringBuffer, sizeof(sStringBuffer), PSTR("%3d"), tCellMillivolt);
         myLCD.print(sStringBuffer);
     }
     if (tNumberOfCellInfoEntries > 0 && tNumberOfCellInfoEntries <= 16) {
-        // print voltage difference
+        // print battery voltage difference
         myLCD.setCursor(17, 3);
         LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 100.0, 3, true); // true = no leading space
     }
@@ -900,8 +908,8 @@ void checkButtonPressForLCD() {
             /*
              * If alarm is active, only reset it and do no other action, except switching the display on, if display is off
              */
-            if (sAlarmOrTimeoutBeepActive) {
-                sAlarmOrTimeoutBeepActive = false; // disable further alarm beeps
+            if (sAlarmOrTimeoutBeepActive != ALARM_OR_TIMEOUT_NOT_ACTIVE) {
+                sAlarmOrTimeoutBeepActive = ALARM_OR_TIMEOUT_NOT_ACTIVE; // disable further alarm beeps
 #  if defined(DISPLAY_ALWAYS_ON)
                 return; // No further action, just reset flag / beep
 #  else

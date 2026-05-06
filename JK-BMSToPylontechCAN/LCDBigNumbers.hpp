@@ -3,7 +3,7 @@
  *
  *  Arduino library to write big numbers on a 1602 or 2004 LCD.
  *
- *  Copyright (C) 2022-2025  Armin Joachimsmeyer
+ *  Copyright (C) 2022-2026  Armin Joachimsmeyer
  *  armin.joachimsmeyer@gmail.com
  *
  *  This file is part of LCDBigNumbers https://github.com/ArminJo/LCDBigNumbers.
@@ -47,7 +47,7 @@
 #define VERSION_HEX_VALUE(major, minor, patch) ((major << 16) | (minor << 8) | (patch))
 #define VERSION_LCD_BIG_NUMBERS_HEX  VERSION_HEX_VALUE(VERSION_LCD_BIG_NUMBERS_MAJOR, VERSION_LCD_BIG_NUMBERS_MINOR, VERSION_LCD_BIG_NUMBERS_PATCH)
 
-// START Copy from https://github.com/ArminJo/Arduino-Utils/blob/master/src/LCDPrintUtils.hpp
+// START - This is a copy from https://github.com/ArminJo/Arduino-Utils/blob/master/src/LCDPrintUtils.hpp
 //#define USE_PARALLEL_2004_LCD // Is default
 //#define USE_PARALLEL_1602_LCD
 //#define USE_SERIAL_2004_LCD
@@ -106,13 +106,13 @@
 // http://www.picbasic.co.uk/forum/showthread.php?t=13376
 // 8 custom characters for 1 column font
 const uint8_t bigNumbers1x2CustomPatterns_1[][8] PROGMEM = {
- { 0b11110, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b11110 }, // 0 Closed rectangle - 8
+ { 0b11110, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b11110 }, // 0 Closed rectangle - used for: 8, 9
  { 0b11110, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010 }, // 1 Rectangle - open at bottom - 0
- { 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b11110 }, // 2 Rectangle - open at top - 0
- { 0b11110, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b11110 }, // 3 Rectangle - open at left
- { 0b11110, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11110 }, // 4 Rectangle - open at right
- { 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010 }, // 5 Right bar - 1
- { 0b11110, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010 }, // 6 Top right - 7
+ { 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b10010, 0b11110 }, // 2 Rectangle - open at top - 0, 4, 6, 8
+ { 0b11110, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b11110 }, // 3 Rectangle - open at left - 3
+ { 0b11110, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11110 }, // 4 Rectangle - open at right - 2, 5, 6
+ { 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010 }, // 5 Right bar - 1, 4, 7
+ { 0b11110, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010 }, // 6 Top right - 2, 7
  { 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b11110 }  // 7 Right bottom - 3,5,9
 };
 const uint8_t bigNumbers1x2_1[2][13] PROGMEM = {                   // 2-line numbers

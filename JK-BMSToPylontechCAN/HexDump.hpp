@@ -89,7 +89,7 @@ void printStackDump() {
     uint16_t tCallerAddress = (uint16_t) __builtin_return_address(0);
     Serial.print(tCallerAddress, HEX);
     Serial.print(F(" << 1)=0x"));
-    Serial.print(tCallerAddress << 1, HEX); // printMemoryHexDump starts with a newline
+    Serial.println(tCallerAddress << 1, HEX);
     Serial.flush();
     printMemoryHexDump((uint8_t*) SP, (RAMEND - SP) + 1, _16_BYTES_PER_LINE, HEX_DUMP_FORMAT_16_BIT_ABSOLUTE_ADDRESS);
     // Print multiple of 16 bytes
@@ -129,7 +129,6 @@ void printMemoryHexAndASCIIDump(uint8_t *aMemoryAddress, uint16_t aNumberOfBytes
  */
 void printMemoryHexDump(uint8_t *aMemory, uint16_t aNumberOfBytesToPrint, uint8_t aBytesPerLine, uint8_t aFormatFlags) {
     uint16_t tIndex = 0;
-    Serial.println();
     while (true) {
         if (aBytesPerLine > aNumberOfBytesToPrint) {
             // last line

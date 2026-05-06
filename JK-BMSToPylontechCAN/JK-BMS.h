@@ -11,7 +11,7 @@
  *  5. JKLastPrintedDataStruct - part of last JKComputedDataStruct to detect changes.
  *  6. CellStatisticsStruct - for minimum and maximum cell voltages statistics.
  *
- *  Copyright (C) 2023-2024  Armin Joachimsmeyer
+ *  Copyright (C) 2023-2026  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -177,7 +177,8 @@ struct JKLastPrintedDataStruct {
     int32_t BatteryCapacityAccumulator10MilliAmpere; // For CSV line to print every 1%
 };
 
-#define NUMBER_OF_DEFINED_ALARM_BITS    14
+//#define NUMBER_OF_DEFINED_ALARM_BITS    14
+#define NUMBER_OF_DEFINED_ALARM_BITS    15
 #define NO_ALARM_WORD_CONTENT         0x00
 #define MASK_OF_CHARGING_AND_DISCHARGING_OVERVOLTAGE_ALARM_UNSWAPPED    0x0C00
 // Required for displaying specific info for this alarms
@@ -190,15 +191,15 @@ struct JKLastPrintedDataStruct {
 union BatteryAlarmFlagsUnion {                  // 0x8B
     uint16_t AlarmsAsWord;
     struct {
-        // High byte of alarms sent
+        // High byte of alarms sent. Swapped value is only used locally/temporarily for display and error message output
         bool Sensor2OvertemperatureAlarm :1;    // 0x0100
         bool Sensor1Or2UndertemperatureAlarm :1; // 0x0200 Disables charging, but Has no effect on discharging
         bool CellOvervoltageAlarm :1;           // 0x0400
         bool CellUndervoltageAlarm :1;
         bool _309_A_ProtectionAlarm :1;         // 0x1000
         bool _309_B_ProtectionAlarm :1;
-        bool Reserved1Alarm :1;                 // Two highest bits are reserved
-        bool Reserved2Alarm :1;
+        bool Internal_CellVoltageIsZero :1;     // Me misuse this bit as internal "cell voltage is zero" alarm
+        bool Reserved1Alarm :1;                 // Two highest bits were reserved
 
         // Low byte of alarms sent
         bool LowCapacityAlarm :1;               // 0x0001

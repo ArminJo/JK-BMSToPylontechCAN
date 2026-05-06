@@ -30,13 +30,16 @@
 #endif
 #undef TRACE_PRINT
 #undef TRACE_PRINTLN
+#undef TRACE_FLUSH
 #if defined(LOCAL_DEBUG)
 #undef LOCAL_DEBUG
 #endif
 #undef DEBUG_PRINT
 #undef DEBUG_PRINTLN
+#undef DEBUG_FLUSH
 #if defined(LOCAL_INFO)
 #undef LOCAL_INFO
 #endif
 #undef INFO_PRINT
 #undef INFO_PRINTLN
+#undef INFO_FLUSH

@@ -223,7 +223,7 @@ struct PylontechCANErrorsWarningsFrame359Struct {
 #if defined(HANDLE_MULTIPLE_BMS)
         union BatteryAlarmFlagsUnion tBatteryAlarmFlags = JKMultiBMSData.oredAlarms;
 #else
-        union BatteryAlarmFlagsUnion tBatteryAlarmFlags = aJK_BMS_Ptr->JKAllReplyPointer->BatteryAlarmFlags;
+        union BatteryAlarmFlagsUnion tBatteryAlarmFlags = aJK_BMS_Ptr->JKAllReplyPointer->BatteryAlarmFlags; // use unswapped word here
 #endif
         /*
          * Pylon has no battery over voltage alarm but cell over voltage warning and error

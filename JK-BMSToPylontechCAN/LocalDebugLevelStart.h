@@ -1,8 +1,8 @@
 /*
  * LocalDebugLevelStart.h
  * Include to propagate global debug levels to file local ones and to define appropriate print macros.
- * To propagate debug levels to each other, use #include "DebugLevel.h".
  * !!! If used in included (.hpp) files, #include "LocalDebugLevelEnd.h" must be used at end of file to undefine local macros.
+ * If, for example, #define LOCAL_TRACE is placed before this include, it will not be propagated. This enables TRACE-level output to be selected only.
  *
  * LOCAL_TRACE   // Information you need to understand details of a function or if you hunt a bug.
  * LOCAL_DEBUG   // Information need to understand the operating of your program. E.g. function calls and values of control variables.
@@ -10,7 +10,7 @@
  * LOCAL_WARN    // Information that the program may encounter problems, like small Heap/Stack area.
  * LOCAL_ERROR   // Informations to explain why the program will not run. E.g. not enough Ram for all created objects.
  *
- *  Copyright (C) 2024-2025  Armin Joachimsmeyer
+ *  Copyright (C) 2024-2026  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of Arduino-Utils https://github.com/ArminJo/Arduino-Utils.
@@ -30,32 +30,33 @@
  *
  */
 
+/////////////// put this before the include /////////////////////////
+// This block must be located after the includes of other *.hpp files
+//#define LOCAL_INFO  // This enables info output only for this file
+//#define LOCAL_DEBUG // This enables debug output only for this file - only for development
+//#define LOCAL_TRACE // This enables trace output only for this file - only for development
+
 /*
  * Propagate debug level to local ones but at first not to each other, i.e. enabling TRACE does not enable DEBUG and INFO
  */
-#if defined(TRACE)
+#if defined(TRACE) // Information you need to understand details of a function or if you hunt a bug.
 #define LOCAL_TRACE
-#endif
-
-#if defined(DEBUG)
+#  if !defined(DO_NOT_PROPAGATE_DEBUG_LEVELS) // Propagate levels by default i.e. enabling TRACE does enable DEBUG and INFO
 #define LOCAL_DEBUG
-#endif
-
-#if defined(INFO)
-#define LOCAL_INFO
-#endif
-
-#if defined(PROPAGATE_DEBUG_LEVELS)
-/*
- * Propagate levels i.e. enabling TRACE does not enable DEBUG and INFO
- */
-#  if defined(LOCAL_TRACE)
-#define LOCAL_DEBUG
-#  endif
-#  if defined(LOCAL_DEBUG)
 #define LOCAL_INFO
 #  endif
-#endif // defined(PROPAGATE_DEBUG_LEVELS)
+#endif
+
+#if defined(DEBUG) // Information need to understand the operating of your program. E.g. function calls and values of control variables.
+#define LOCAL_DEBUG
+#  if !defined(DO_NOT_PROPAGATE_DEBUG_LEVELS)
+#define LOCAL_INFO
+#  endif
+#endif
+
+#if defined(INFO) // Information you want to see in regular operation to see what the program is doing. E.g. "START ../src/LightToTone.cpp Version 1.2 from Dec 31 2019" or "Now playing Muppets melody".
+#define LOCAL_INFO
+#endif
 
 /*
  * Define appropriate print macros
@@ -63,24 +64,31 @@
 #if defined(LOCAL_TRACE)
 #define TRACE_PRINT(...)      Serial.print(__VA_ARGS__)
 #define TRACE_PRINTLN(...)    Serial.println(__VA_ARGS__)
+#define TRACE_FLUSH()         Serial.flush()
 #else
 #define TRACE_PRINT(...)      void()
 #define TRACE_PRINTLN(...)    void()
+#define TRACE_FLUSH()         void()
 #endif
 
 #if defined(LOCAL_DEBUG)
 #define DEBUG_PRINT(...)      Serial.print(__VA_ARGS__)
 #define DEBUG_PRINTLN(...)    Serial.println(__VA_ARGS__)
+#define DEBUG_FLUSH()         Serial.flush()
 #else
 #define DEBUG_PRINT(...)      void()
 #define DEBUG_PRINTLN(...)    void()
+#define DEBUG_FLUSH()         void()
+
 #endif
 
 #if defined(LOCAL_INFO)
 #define INFO_PRINT(...)      Serial.print(__VA_ARGS__)
 #define INFO_PRINTLN(...)    Serial.println(__VA_ARGS__)
+#define INFO_FLUSH()         Serial.flush()
 #else
 #define INFO_PRINT(...)      void()
 #define INFO_PRINTLN(...)    void()
+#define INFO_FLUSH()         void()
 #endif
 

@@ -39,8 +39,8 @@
 struct SOCDataPointDeltaStruct {
     uint8_t SOCPercent;
     uint8_t VoltageDifferenceToEmpty50Millivolt; // 1 = 50 mV, 255 = 12.75 V. Values > 240 to 255 / 12 V to 12.7 V are taken as negative ones, just in case it happens.
-    int8_t AverageAmpere;
-    int8_t Delta100MilliampereHour; // at a capacity of 320 Ah we have 3.2 Ah per 1% SOC
+    int8_t AverageAmpere;   // Direct value, no delta required for this resolution
+    int8_t Delta100MilliampereHour; // -12.8 Ah to 12.7 Ah. At a capacity of 320 Ah we have 3.2 Ah per 1% SOC
 };
 #define NUMBER_OF_SOC_DATA_POINTS   (((E2END + 1) - sizeof(SOCDataPointDeltaStruct)) / sizeof(SOCDataPointDeltaStruct)) // 0xFE for 1k EEPROM, 0x1FE for 2kEEPROM
 
@@ -75,7 +75,7 @@ struct SOCDataPointMinMaxStruct {
 
 void initializeAnalytics();
 void updateCompleteEEPROMTo_FF();
-void writeSOCData();
+void writeSOCDataToEEPROMIfSOCChanged();
 void findFirstSOCDataPointIndex();
 void readBatteryESRfromEEPROM();
 void readAndPrintSOCData();

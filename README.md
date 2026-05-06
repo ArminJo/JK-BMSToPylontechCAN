@@ -7,7 +7,7 @@ Display of many BMS information and alarms on a locally attached serial 2004 LCD
 
 [![Badge License: GPLv3](https://img.shields.io/badge/License-GPLv3-brightgreen.svg)](https://www.gnu.org/licenses/gpl-3.0)
  &nbsp; &nbsp;
-[![Badge Version](https://img.shields.io/github/v/release/ArminJo/JK-BMSToPylontechCAN?include_prereleases&color=yellow&logo=DocuSign&logoColor=white)](https://github.com/ArminJo/JK-BMSToPylontechCAN/releases/latest)
+[![Badge Version](https://img.shields.io/github/v/release/ArminJo/JK-BMSToPylontechCAN?color=yellow&logo=DocuSign&logoColor=white)](https://github.com/ArminJo/JK-BMSToPylontechCAN/releases/latest)
  &nbsp; &nbsp;
 [![Badge Commits since latest](https://img.shields.io/github/commits-since/ArminJo/JK-BMSToPylontechCAN/latest?color=yellow)](https://github.com/ArminJo/JK-BMSToPylontechCAN/commits/main)
  &nbsp; &nbsp;
@@ -41,6 +41,7 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Serial.print() function is still available for monitoring and debugging.
 - SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
 - The voltage in the SOC graph is corrected by the automatically computed ESR to get a smoother voltage curve.
+- Runs on an ATmega644 with all features. Compile it with [MightyCore](https://github.com/MCUdude/MightyCore).
 
 <br/>
 
@@ -304,8 +305,8 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `MILLISECONDS_BETWEEN_CAN_FRAME_SEND` | 2000 | % |
 | `NO_BEEP_ON_ERROR` | disabled | . |
 | `ONE_BEEP_ON_ERROR` | disabled | If activated, only beep once if error was detected. |
-| `BEEP_TIMEOUT_SECONDS` | 60 | 1 minute, every 2 seconds. |
-| `MULTIPLE_BEEPS_WITH_TIMEOUT` | enabled | If error was detected, beep for 60 s. |
+| `MULTIPLE_BEEPS_WITH_TIMEOUT` | enabled | If error was detected, beep for `BEEP_TIMEOUT_SECONDS` (60) s. |
+| `BEEP_TIMEOUT_SECONDS` | 60 | 1 minute, every MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS` (2) seconds. |
 | `SUPPRESS_LIFEPO4_PLAUSI_WARNING` | disabled | Disables warning on Serial out about using LiFePO4 beyond 3.0 v to 3.45 V. |
 | `ENABLE_OVER_AND_UNDER_VOLTAGE_WARNING_ON_LCD` | disabled | Enables switching to Overview page and showing over- and undervoltage data. |
 | `MAXIMUM_NUMBER_OF_CELLS` | 24 | Maximum number of cell info which can be converted. Saves RAM. |
