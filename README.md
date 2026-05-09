@@ -104,9 +104,9 @@ The same (raw) data without ESR correction of voltage.
 | ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Undervoltage Alarm page<br/>Start of alarm message in first line<br/>Index and value of minimum cell and uptime in second line | Overtemperature Alarm page<br/>Alarm message is cleared by switching page |
 | ![Alarm page undervoltage](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_Undervoltage.png) | ![Alarm page overtemperature](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_MosFetOvertemperature.png) |
-| Cell info page with maximum and minimum indicators | Cell info page with:<br/>- (Cell voltages - 3 V)<br/>- SOC, current in A, balancing flag and difference between minimum / empty and current battery voltage in last column |
+| Cell info page with maximum and minimum indicators | Cell info page with SHOW_SHORT_CELL_VOLTAGES aktivated:<br/>- (Cell voltages - 3 V)<br/>- SOC, current in A, state of enabled functions and difference between minimum / empty and current battery voltage in last column |
 | ![Cell info page long](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Cell info page short](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage_shortVoltages.png) |
-| Maximum Cell Statistics page with total Time of Balancing | Maximum Cell Statistics page |
+| Maximum Cell Statistics page with total Time of Balancing | Maximum Cell Statistics page with total balancing time in right rows|
 | ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
 | CAN info page |  |
 | ![CAN info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |

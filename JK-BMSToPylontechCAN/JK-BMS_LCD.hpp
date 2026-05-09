@@ -172,25 +172,22 @@ void doLCDBacklightTimeoutHandling() {
 }
 #  endif
 
-char getCharOfEnableFlags() {
-#if defined(HANDLE_MULTIPLE_BMS)
-    // TODO - Decide, when to use ORed state and when BMS specific ones.
-    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
-#else
-    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
-#endif
-    char tCharToPrint = ' ';
-    if (tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK) {
-        tCharToPrint = 'C';
+void printShortEnableFlagsOnLCD() {
+    if (JK_BMS_1.JKAllReplyPointer->ChargeIsEnabled) {
+        myLCD.print('C');
+    } else {
+        myLCD.print(' ');
     }
-    if (tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK) {
-        tCharToPrint = 'D';
+    if (JK_BMS_1.JKAllReplyPointer->DischargeIsEnabled) {
+        myLCD.print('D');
+    } else {
+        myLCD.print(' ');
     }
-    if (tStatus & STATUS_BYTE_BALANCER_MASK) {
-        tCharToPrint = 'B';
+    if (JK_BMS_1.JKAllReplyPointer->BalancingIsEnabled) {
+        myLCD.print('B');
+    } else {
+        myLCD.print(' ');
     }
-    return tCharToPrint;
-
 }
 
 /*
@@ -199,16 +196,38 @@ char getCharOfEnableFlags() {
  * If Undervoltage, D is Replaced by U
  */
 void printShortStateOnLCD() {
-    char tCharToPrint = getCharOfEnableFlags();
+#if defined(HANDLE_MULTIPLE_BMS)
+    // TODO - Decide, when to use ORed state and when BMS specific ones.
+    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+#else
+    auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
+#endif
     if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.ChargeOvervoltageAlarm) {
-        tCharToPrint = 'O';
+        myLCD.print('O');
+    } else if (tStatus & STATUS_BYTE_CHARGE_ACTIVE_MASK) {
+        myLCD.print('C');
+    } else {
+        myLCD.print(' ');
     }
+
     if (JK_BMS_1.JKAllReplyPointer->BatteryAlarmFlags.AlarmBits.DischargeUndervoltageAlarm) {
-        tCharToPrint = 'U';
+        myLCD.print('U');
+    } else if (tStatus & STATUS_BYTE_DISCHARGE_ACTIVE_MASK) {
+        myLCD.print('D');
+    } else {
+        myLCD.print(' ');
     }
-    myLCD.print(tCharToPrint);
+
+    if (tStatus & STATUS_BYTE_BALANCER_MASK) {
+        myLCD.print('B');
+    } else {
+        myLCD.print(' ');
+    }
 }
 
+/*
+ * not used yet
+ */
 void printLongStateOnLCD() {
     auto tStatus = JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1];
 
@@ -259,7 +278,7 @@ void printAlarmHexOrStateOnLCD() {
  * Print Info in last 3 columns
  *  SOC
  *  Current
- *  " A  " or " A B"
+ *  " CDB" state of enabled functions
  *  Battery voltage difference
  */
 void printCellInfoOnLCD() {
@@ -291,13 +310,8 @@ void printCellInfoOnLCD() {
                     // Print current in the last 4 characters
                     LCDPrintFloatValueRightAligned(&myLCD, JK_BMS_1.JKComputedData.BatteryLoadCurrentFloat, 4);
                 } else if (i == 12) {
-                    // print " A  " or " A B"
-                    myLCD.print(F(" A "));
-                    if (JK_BMS_1.JKAllReplyPointer->BMSStatus.StatusAsByteArray[1] & STATUS_BYTE_BALANCER_MASK) {
-                        myLCD.print('B');
-                    } else {
-                        myLCD.print(' ');
-                    }
+                    myLCD.print(' ');
+                    printShortStateOnLCD();
                 }
             }
             myLCD.setCursor(0, tRowNumber);
@@ -812,7 +826,7 @@ void printOverwiewOrAlarmInfoOnLCD() {
 // Last 3 characters are the enable states
         myLCD.setCursor(14, 1);
         myLCD.print(F("En:"));
-        myLCD.print(getCharOfEnableFlags());
+        printShortEnableFlagsOnLCD();
 
         /*
          * Row 3 - Voltage, Current and Power
@@ -836,7 +850,7 @@ void printBMSDataOnLCD() {
 #  if !defined(DISPLAY_ALWAYS_ON)
             && !sSerialLCDIsSwitchedOff
 #  endif
-            ) {
+    ) {
         /*
          * Check for alarm info, which is not yet reset by main loop at time of calling
          */

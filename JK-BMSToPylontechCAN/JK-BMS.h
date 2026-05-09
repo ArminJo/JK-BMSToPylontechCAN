@@ -299,7 +299,7 @@ struct JKReplyStruct {
     union BatteryAlarmFlagsUnion BatteryAlarmFlags;
 
     uint8_t TokenBatteryStatus;                     // 0x8C
-    union BMSStatusUnion BMSStatus;
+    union BMSStatusUnion BMSStatus;                 // Current status, not enabled one
 
     uint8_t TokenBatteryOvervoltageProtection10Millivolt; // 0x8E
     uint16_t BatteryOvervoltageProtection10Millivolt; // 1000 to 15000 BMS computed: # of cells * CellOvervoltageProtectionMillivolt
