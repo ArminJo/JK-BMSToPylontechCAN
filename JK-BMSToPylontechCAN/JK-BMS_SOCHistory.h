@@ -1,9 +1,9 @@
 /*
- * JK-BMS_Analytics.h
+ * JK-BMS_SOCHistory.h
  *
- * Definitions of the data structures used by JK-BMS_Analytics
+ * Definitions of the data structures used by JK-BMS_SOCHistory
  *
- *  Copyright (C) 2024  Armin Joachimsmeyer
+ *  Copyright (C) 2024-2026  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -22,8 +22,8 @@
  *  along with this program. If not, see <http://www.gnu.org/licenses/gpl.html>.
  *
  */
-#ifndef _JK_BMS_ANALYTICS_H
-#define _JK_BMS_ANALYTICS_H
+#ifndef _JK_BMS_SOC_HISTORY_H
+#define _JK_BMS_SOC_HISTORY_H
 
 /*
  * The value of AverageAccumulator10Milliampere for 1 Ah is:
@@ -80,4 +80,4 @@ void findFirstSOCDataPointIndex();
 void readBatteryESRfromEEPROM();
 void readAndPrintSOCData();
 
-#endif // _JK_BMS_ANALYTICS_H
+#endif // _JK_BMS_SOC_HISTORY_H

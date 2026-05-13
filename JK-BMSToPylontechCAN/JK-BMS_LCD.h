@@ -35,7 +35,7 @@
 #define LCD_I2C_ADDRESS             LCD_I2C_DEFAULT_ADDRESS // 0x27 Default LCD address for a 20 chars and 4 line / 2004 display
 extern bool sSerialLCDAvailable;
 
-#if !defined(ENABLE_MONITORING) && defined(NO_ANALYTICS)
+#if !defined(ENABLE_MONITORING) && defined(NO_SOC_HISTORY)
 extern char sStringBuffer[LCD_COLUMNS + 1];    // Only for rendering a LCD row with snprintf_P()
 #endif
 /*
@@ -64,31 +64,30 @@ extern uint16_t sFrameCounterForLCDTAutoOff;
 /*
  * LCD display pages
  */
-#define JK_BMS_PAGE_OVERVIEW            0 // is selected in case of BMS alarm message
-#define JK_BMS_PAGE_CELL_INFO           1
-#if defined(NO_CELL_STATISTICS)
-#define JK_BMS_PAGE_BIG_INFO            2
-#define JK_BMS_PAGE_CAN_INFO            3 // Enter on long press
-#define JK_BMS_PAGE_CAPACITY_INFO       4
-#else
-#define JK_BMS_PAGE_CELL_STATISTICS     2
-#define CELL_STATISTICS_COUNTER_MASK 0x04 // must be a multiple of 2 and determines how often one page (min or max) is displayed.
-#define JK_BMS_PAGE_BIG_INFO            3
-#define JK_BMS_PAGE_CAN_INFO            4 // Enter on long press
-#define JK_BMS_PAGE_CAPACITY_INFO       5
+typedef enum {
+    PageBigInfo = 0,
+    PageOverview, /*selected in case of BMS alarm message*/
+    PageCellInfo,
+#if !defined(NO_CELL_STATISTICS)
+    PageCellStatistics,
 #endif
+    DummyPageWrapAround1,
+    PageCANInfo, /*Enter on long press*/
+#if !defined(NO_SOC_HISTORY)
+    PageSOCHistory,
+#endif
+#if !defined(NO_CAPACITY_INFO)
+    PageCapacityInfo,
+#endif
+    DummyPageWrapAround2
+} sPageNummberEnum;
+#define JK_BMS_START_PAGE   PageBigInfo
 
-// Switch to start page after 10 seconds of JK_BMS_PAGE_CAPACITY_INFO. 10 seconds to allow EEROM clearing by long press.
-#define JK_BMS_PAGE_CAPACITY_INFO_PAGE_TIMEOUT_MILLIS  10000
-#define CELL_CAPACITY_COUNTER_VOLTAGE   0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
+#define CELL_STATISTICS_COUNTER_MASK 0x04 // must be a multiple of 2 and determines how often one page (min or max) is displayed.
 
-#define JK_BMS_PAGE_MAX                 JK_BMS_PAGE_BIG_INFO
-#define JK_BMS_DEBUG_PAGE_MAX           JK_BMS_PAGE_CAPACITY_INFO
-#define JK_BMS_START_PAGE               JK_BMS_PAGE_BIG_INFO
-//uint8_t sLCDDisplayPageNumber = JK_BMS_PAGE_OVERVIEW; // Start with Overview page
-extern uint8_t sLCDDisplayPageNumber; // Start with Big Info page
-
-void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber, bool aDoNotPrint = false);
+// Switch to capacity page after 10 seconds of PageSOCHistory. 10 seconds to allow EEROM clearing by long press.
+#define JK_BMS_PAGE_SOC_HISTORY_TIMEOUT_MILLIS    10000
+#define CAPACITY_INFO_COUNTER_MASK_FOR_VOLTAGE_DISPLAY  0x06 // If counter "anded" with mask is true show delta voltages instead of percents.
 
 void printBMSDataOnLCD();
 void printCANInfoOnLCD();
@@ -113,7 +112,10 @@ void printCellInfoOnLCD();
 void printCellStatisticsOnLCD();
 #endif // !defined(NO_CELL_STATISTICS)
 
-#if !defined(NO_ANALYTICS)
+#if !defined(NO_SOC_HISTORY)
+void printSOCDataInfoOnLCD();
+#endif
+#if !defined(NO_CAPACITY_INFO)
 void printCapacityInfoOnLCD();
 #endif
 
@@ -126,7 +128,7 @@ void printAlarmInfoOnLCD();
 void printOverwiewOrAlarmInfoOnLCD();
 void printBMSDataOnLCD();
 void checkButtonPressForLCD();
-void setLCDDisplayPage(uint8_t aLCDDisplayPageNumber, bool aDoNotPrint);
+void setLCDDisplayPage(sPageNummberEnum aLCDDisplayPageNumber, bool aDoNotPrint = false);
 
 #if defined(STANDALONE_TEST)
 void testLCDPages();

@@ -1,0 +1,65 @@
+/*
+ * JK-BMS_CapacityInfo.h
+ *
+ * Definitions of the data structures used by JK-BMS_CapacityInfo
+ *
+ *  Copyright (C) 2024-2026  Armin Joachimsmeyer
+ *  Email: armin.joachimsmeyer@gmail.com
+ *
+ *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
+ *
+ *  JK-BMSToPylontechCAN is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *  See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program. If not, see <http://www.gnu.org/licenses/gpl.html>.
+ *
+ */
+#ifndef _JK_BMS_CAPACITY_INFO_H
+#define _JK_BMS_CAPACITY_INFO_H
+
+
+#define SIZE_OF_COMPUTED_CAPACITY_ARRAY         4 // LCD_ROWS
+
+struct JKComputedCapacityStruct {
+    uint8_t StartSOCPercent;
+    int8_t Start100MilliVoltToEmpty; // 250 bytes program memory incl. display
+    uint8_t EndSOCPercent;
+    int8_t End100MilliVoltToEmpty;
+    uint16_t Capacity;
+    uint16_t TotalCapacity;
+};
+
+#define CAPACITY_COMPUTATION_MODE_IDLE                  0
+#define CAPACITY_COMPUTATION_MODE_CHARGE                1
+#define CAPACITY_COMPUTATION_MODE_DISCHARGE             2
+#define CAPACITY_COMPUTATION_MAX_WRONG_CHARGE_DIRECTION 4 // If we have 5 wrong directions, we end computation
+
+struct CapacityComputationInfoStruct {
+    uint8_t WrongDirectionCount = 0;
+    uint8_t Mode = CAPACITY_COMPUTATION_MODE_IDLE;
+    uint32_t Accumulator10Milliampere = 0;
+    uint8_t LastDeltaSOC = 0;
+};
+extern CapacityComputationInfoStruct sCapacityComputationInfo;
+/*
+ * The value of AverageAccumulator10Milliampere for 1 Ah is:
+ * (60 * 60 * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) is number of samples in 1 hour -> 1800 at 1 sample / 2 seconds
+ * 100 is factor for 10 mA to 1 A
+ */
+#define CAPACITY_ACCUMULATOR_1_AMPERE_HOUR  (100L * 60L * 60L * 1000L / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) // 180000
+
+extern struct JKComputedCapacityStruct JKComputedCapacity[SIZE_OF_COMPUTED_CAPACITY_ARRAY]; // The last 4 values
+void checkAndStoreCapacityComputationValues();
+void printComputedCapacity(uint8_t aCapacityArrayIndex);
+
+void fillCapacityInfo();
+
+#endif // _JK_BMS_ANALYTICS_H

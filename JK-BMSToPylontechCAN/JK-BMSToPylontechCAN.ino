@@ -32,6 +32,8 @@
  *  The LCD has 4 "pages" showing overview data, up to 16 cell voltages, up to 16 cell minimum and maximum statistics, or SOC and current with big numbers.
  *  The pages can be switched by the button at pin 2.
  *
+ *  3 additional pages, activated by long button press, showing CAN data, allowing EEPROM clearing, or SOC analytics.
+ *
  *  On timeout, the last BMS data is kept.
  *
  *  It uses the following libraries, which are included in this repository:
@@ -130,6 +132,7 @@
 
 //#define STANDALONE_TEST       // If activated, fixed BMS data is sent to CAN bus and displayed on LCD.
 #if defined(STANDALONE_TEST)
+#define NO_CELL_STATISTICS // to save space
 //#define ALARM_TIMEOUT_TEST
 #define BEEP_TIMEOUT_SECONDS        20
 uint8_t sTestState = 0;
@@ -148,13 +151,17 @@ uint8_t sTestState = 0;
 #endif
 
 /*
- * Options to reduce program size / add optional features
+ * Options to reduce program size
  */
+//#define NO_CELL_STATISTICS  // Disables generating and display of cell balancing statistics. Saves 1628 bytes program space.
+//#define NO_SOC_HISTORY      // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3856 bytes program space.
+#define KEEP_SOC_HISTORY_ACCUMULATED_DATA_AT_RESET  // Requires additional 80 bytes program space
 #if FLASHEND > 0x7FFF // for more than 32k
 #define ENABLE_MONITORING // Requires additional 858 bytes program space
 #define SERIAL_INFO_PRINT // Requires additional 1684 bytes program space
+#else
+#define NO_CAPACITY_INFO    // Disables capacity statistics and the corresponding LCD page. Saves 1260 bytes program space.
 #endif
-#define KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET  // Requires additional 80 bytes program space
 
 //#define DO_NOT_SHOW_SHORT_CELL_VOLTAGES // Saves 470 bytes program space
 #if !defined(DO_NOT_SHOW_SHORT_CELL_VOLTAGES)
@@ -178,13 +185,13 @@ uint8_t sTestState = 0;
 #define JK_INFO_PRINTLN(...)    Serial.println(__VA_ARGS__);
 #endif
 
+ /*
+  * Options to reduce program size / add optional features
+  */
 //#define NO_CAPACITY_35F_EXTENSIONS // Disables generating of frame 0x35F for total capacity. This additional frame is no problem for Deye inverters. Saves 56 bytes program space.
 //#define NO_CAPACITY_379_EXTENSIONS // Disables generating of frame 0x379 for total capacity. This additional frame is no problem for Deye inverters. Saves 24 bytes program space.
 //#define NO_BYD_LIMITS_373_EXTENSIONS // Disables generating of frame 0x373 for cell limits as sent by BYD battery. See https://github.com/dfch/BydCanProtocol/tree/main. This additional frame is no problem for Deye inverters. Saves 200 bytes program space.
-//#define NO_CELL_STATISTICS    // Disables generating and display of cell balancing statistics. Saves 1628 bytes program space.
-//#define NO_ANALYTICS          // Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3856 bytes program space.
-//#define USE_NO_LCD            // Disables the code for the LCD display. Saves 25% program space on a Nano.
-
+//#define USE_NO_LCD                   // Disables the code for the LCD display. Saves 25% program space on a Nano.
 //#define USE_NO_COMMUNICATION_STATUS_LEDS // The code for the BMS and CAN communication status LED is deactivated and the pins are not switched to output
 
 #if !defined(ENABLE_LIFEPO4_PLAUSI_WARNING)
@@ -213,10 +220,10 @@ uint8_t sTestState = 0;
 #  endif
 #endif
 
-// sStringBuffer is defined in JK-BMS_LCD.hpp if not ENABLE_MONITORING and NO_ANALYTICS are defined
+// sStringBuffer is defined in JK-BMS_LCD.hpp if not ENABLE_MONITORING and NO_SOC_HISTORY are defined
 #if defined(ENABLE_MONITORING)
 char sStringBuffer[100];                // For cvs lines, "Store computed capacity" line and LCD rows
-#elif !defined(NO_ANALYTICS)
+#elif !defined(NO_SOC_HISTORY)
 char sStringBuffer[40];                 // for "Store computed capacity" line, printComputedCapacity() and LCD rows
 #endif
 
@@ -265,7 +272,7 @@ char sStringBuffer[40];                 // for "Store computed capacity" line, p
 #define TURN_CAN_STATUS_LED_OFF                 digitalWriteFast(CAN_COMMUNICATION_STATUS_LED_PIN, LOW)
 #endif
 
-#if !defined(NO_ANALYTICS)
+#if !defined(NO_SOC_HISTORY)
 #define DISABLE_ESR_IN_GRAPH_OUTPUT_PIN         8 // If this pin is held low, the ESR value is not used to correct the voltage in the graph output.
 #endif
 
@@ -425,8 +432,15 @@ uint32_t sMillisOfLastCANFrameSent = 0;     // For CAN timing
 /*
  * Optional analytics stuff
  */
-#if !defined(NO_ANALYTICS)
-#include "JK-BMS_Analytics.hpp"
+#if !defined(NO_SOC_HISTORY)
+#include "JK-BMS_SOCHistory.hpp"
+#endif
+
+/*
+ * Optional analytics stuff
+ */
+#if !defined(NO_CAPACITY_INFO)
+#include "JK-BMS_CapacityInfo.hpp"
 #endif
 
 /*
@@ -500,7 +514,7 @@ void setup() {
 #if defined(TIMING_TEST)
     pinModeFast(TIMING_TEST_PIN, OUTPUT);
 #endif
-#if !defined(NO_ANALYTICS)
+#if !defined(NO_SOC_HISTORY)
     pinModeFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN, INPUT_PULLUP);
 #endif
 
@@ -529,10 +543,10 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
     JK_INFO_PRINTLN(F("Cell statistics activated"));
 #endif
 
-#if defined(NO_ANALYTICS)
-    JK_INFO_PRINTLN(F("Analytics deactivated"));
+#if defined(NO_SOC_HISTORY)
+    JK_INFO_PRINTLN(F("SOC history plot deactivated"));
 #else
-    JK_INFO_PRINTLN(F("Analytics activated"));
+    JK_INFO_PRINTLN(F("SOC history plot activated"));
     readBatteryESRfromEEPROM();
     JK_INFO_PRINT(F("EEPROM BatteryESR="));
     JK_INFO_PRINTLN(sBatteryESRMilliohm);
@@ -981,7 +995,7 @@ void processJK_BMSStatusFrame() {
 #  endif
         Serial.println();
         sCurrentBMS->printJKStaticInfo();
-#if !defined(NO_ANALYTICS)
+#if !defined(NO_SOC_HISTORY)
 #  if defined(HANDLE_MULTIPLE_BMS)
         if (sCurrentBMS->NumberOfThisBMS == 1) {
             initializeAnalytics();
@@ -994,7 +1008,7 @@ void processJK_BMSStatusFrame() {
 #endif
     }
 
-#if !defined(NO_ANALYTICS)
+#if !defined(NO_SOC_HISTORY)
 #  if defined(HANDLE_MULTIPLE_BMS)
     if (sCurrentBMS->NumberOfThisBMS == 1) {
         writeSOCDataToEEPROMIfSOCChanged();
@@ -1048,10 +1062,11 @@ void handleFrameReceiveTimeout() {
  */
 void printReceivedDataLCD() {
 #if defined(USE_SERIAL_2004_LCD)
-    if (sLCDDisplayPageNumber != JK_BMS_PAGE_CAPACITY_INFO) {
-        // Do not interfere with plotter output
+# if !defined(NO_SOC_HISTORY)
+    if (sLCDDisplayPage != PageSOCHistory) { // Do not interfere with plotter output
         sCurrentBMS->printJKDynamicInfo(); // Prints newline before SOC[%]=
     }
+# endif
     printBMSDataOnLCD();
 #else
     sCurrentBMS->printJKDynamicInfo();

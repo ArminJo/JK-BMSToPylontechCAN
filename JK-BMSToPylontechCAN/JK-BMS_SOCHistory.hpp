@@ -1,5 +1,5 @@
 /*
- * JK-BMS_Analytics.hpp
+ * JK-BMS_SOCHistory.hpp
  *
  * Functions for computing the capacity and storing and displaying the SOC graph
  *
@@ -10,7 +10,7 @@
  * The right ESR if found by computing the sum of deltas for current ESR and ESR + 1 and ESR - 1.
  * If ESR + 1 or ESR - 1 deltas are at least 3 smaller than the current value, then the computation is run again with the ESR of the smaller value.
  *
- *  Copyright (C) 2024  Armin Joachimsmeyer
+ *  Copyright (C) 2024-2026  Armin Joachimsmeyer
  *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
@@ -30,13 +30,13 @@
  *
  */
 
-#ifndef _JK_BMS_ANALYTICS_HPP
-#define _JK_BMS_ANALYTICS_HPP
+#ifndef _JK_BMS_SOC_HISTORY_HPP
+#define _JK_BMS_SOC_HISTORY_HPP
 
 #include <Arduino.h>
 #include <limits.h>
 
-#include "JK-BMS_Analytics.h"
+#include "JK-BMS_SOCHistory.h"
 
 #include "LocalDebugLevelCheck.h"
 // This block must be located after the includes of other *.hpp files
@@ -56,7 +56,7 @@ volatile EEMEM uint8_t sFiller3_EEPROM;
  */
 EEMEM SOCDataPointDeltaStruct SOCDataPointsEEPROMArray[NUMBER_OF_SOC_DATA_POINTS]; // 255 for 1 kB EEPROM
 SOCDataPointsInfoStruct SOCDataPointsInfo
-#ifdef KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET
+#ifdef KEEP_SOC_HISTORY_ACCUMULATED_DATA_AT_RESET
 __attribute__((section(".noinit")))
 #endif
 ;
@@ -79,7 +79,7 @@ uint16_t computeSOCDataPointsInfoChecksum() {
  * Is called only once in loop after receiving of first response
  */
 void initializeAnalytics() {
-#ifdef KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET
+#ifdef KEEP_SOC_HISTORY_ACCUMULATED_DATA_AT_RESET
     /*
      * If computed checksum is equal actual checksum, we assume that we had an reset
      * e.g. for displaying the Arduino Plotter graph and can reuse the contents of the accumulators,
@@ -432,6 +432,7 @@ void readAndPrintSOCData() {
                         Serial.print(sBatteryESRMilliohm - 1);
                         Serial.print('_');
                         Serial.print(tVoltToEmptyAccumulatedDeltasESRMinus1); // adjacent value to proof that tVoltToEmptyAccumulatedDeltasESR is minimum
+                        Serial.print(F(":0")); // does this avoid the initial peak for plotter?
 //#else
 //                        Serial.print(F("mOhm:0"));
 //#endif
@@ -672,11 +673,11 @@ void writeSOCDataToEEPROMIfSOCChanged() {
 #endif
     }
 
-#ifdef KEEP_ANALYTICS_ACCUMULATED_DATA_AT_RESET
+#ifdef KEEP_SOC_HISTORY_ACCUMULATED_DATA_AT_RESET
         // Update checksum
         SOCDataPointsInfo.checksumForReboot = computeSOCDataPointsInfoChecksum();
 #endif
 }
 
 #include "LocalDebugLevelEnd.h"
-#endif // _JK_BMS_ANALYTICS_HPP
+#endif // _JK_BMS_SOC_HISTORY_HPP

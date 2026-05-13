@@ -33,13 +33,14 @@ The JK-BMS RS485 data (e.g. at connector GPS) are provided as RS232 TTL with 115
 - Optional linear **reducing maximum current above 80% SOC** (values can be adapted to your needs).
 - Support for **multiple BMS** on a Nano board.
 - Display of BMS information, Cell voltages, statistics and alarms on a locally attached **serial 2004 LCD**.
-- Page button for switching **5 LCD display pages**.
-- Debug output and extra **CAN info** and **Capacity info page** on long press of button.
+- Page button for switching **6 LCD display pages**.
+- **CAN Info page** and debug output during long press of button.
 - Statistics of minimum and maximum cells during balancing to **identify conspicuous cells**.
-- Switch off LCD backlight after timeout (can be disabled).
+- Switch off LCD backlight after timeout (can be disabled at compile time).
 - Beep on alarm and connection timeouts with selectable timeout.
+- Alarm on cell voltage zero which indicats an internal BMS failure.
 - Serial.print() function is still available for monitoring and debugging.
-- SOC graph output for Arduino Serial Plotter at startup and Capacity Statistics page. Clear data on long press.
+- **SOC graph output for Arduino Serial Plotter** at Plotter Info page. Clearing of SOC EEPROM data on long press.
 - The voltage in the SOC graph is corrected by the automatically computed ESR to get a smoother voltage curve.
 - Runs on an ATmega644 with all features. Compile it with [MightyCore](https://github.com/MCUdude/MightyCore).
 
@@ -80,7 +81,7 @@ while each anode is connected to the BMS TX pin.
 <br/>
 
 # SOC graph for a 16S LiFePO4 battery
-Created by attaching Arduio 1.8.19 Serial Plotter and then doing a long button press followed by a single one to enter the capacity info page.<br/>
+Created by attaching Arduio 1.8.19 Serial Plotter and then doing a long button press followed by a single one to enter the SOC History page.<br/>
 
 Here you see a steep capacity increasing at the transition from 100 % to 99 %.
 This happens when the specified capacity in the BMS is smaller than the real one.
@@ -101,16 +102,16 @@ The same (raw) data without ESR correction of voltage.
 
 | Big Info page with:<br/>- SOC and Power<br/>- Maximum of 3 Temperatures and Ampere in/out<br/>- Difference between minimum / empty and (current battery voltage - Volt to full)<br/>- Display of  "C"harging "D"ischarging and "B"alancing active flags | Overview pagewith :<br/>- SOC, charged capacity, state of enable flags<br/>- Voltage, current and power<br/>- Voltage difference to empty, MosFet temperature, maximum sensor temperature, state of enabled functions. <br/>- If Overvoltage, C is replaced by O<br/>- If Undervoltage, D is Replaced by U |
 | :-: | :-: |
-| ![Big info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
+| ![Big Info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/BigInfoPage.png) | ![Overview page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/OverviewPage.png) |
 | Undervoltage Alarm page<br/>Start of alarm message in first line<br/>Index and value of minimum cell and uptime in second line | Overtemperature Alarm page<br/>Alarm message is cleared by switching page |
 | ![Alarm page undervoltage](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_Undervoltage.png) | ![Alarm page overtemperature](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_MosFetOvertemperature.png) |
-| Cell info page with maximum and minimum indicators | Cell info page with SHOW_SHORT_CELL_VOLTAGES aktivated:<br/>- (Cell voltages - 3 V)<br/>- SOC, current in A, state of enabled functions and difference between minimum / empty and current battery voltage in last column |
-| ![Cell info page long](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Cell info page short](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage_shortVoltages.png) |
-| Maximum Cell Statistics page with total Time of Balancing | Maximum Cell Statistics page with total balancing time in right rows|
+| Cell Info page with maximum and minimum indicators | Cell Info page with SHOW_SHORT_CELL_VOLTAGES aktivated:<br/>- (Cell voltages - 3 V)<br/>- SOC, current in A, state of enabled functions and difference between minimum / empty and current battery voltage in last column |
+| ![Cell Info page long](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Cell Info page short](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage_shortVoltages.png) |
+| Maximum Cell Statistics page with total balancing time in right rows | Minimum Cell Statistics page <br/>The maximum and minimum displays are toggled every 8 seconds. |
 | ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
-| CAN info page |  |
-| ![CAN info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
-| Capacity Statistics page percentages | Capacity Statistics page voltages |
+| CAN Info page |  |
+| ![CAN Info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
+| Capacity Info page (CAN Info page + 2 buttton presses) percentages | Capacity Info page voltages |
 | ![Percentage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsPercentagePage.png) | ![Voltage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsVoltagePage.png)  |
 
 <br/>
@@ -318,7 +319,7 @@ Modify them by enabling / disabling them, or change the values if applicable.
 | `SERIAL_INFO_PRINT` | disabled | Enables writing some info to serial output. Requires additional 1684 bytes program space. |
 | `ENABLE_MONITORING` | enabled for more than 32k FLASH | Enables writing cell and current values CSV data to serial output. Requires additional 858 bytes program space. |
 | `NO_CELL_STATISTICS` | disabled | Disables generating and display of cell balancing statistics. Saves 1628 bytes program space. |
-| `NO_ANALYTICS` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
+| `NO_SOC_HISTORY` | disabled | Disables generating, storing and display of SOC graph for Arduino Serial Plotter. Saves 3882 bytes program space. |
 | `STANDALONE_TEST` | disabled | If activated, fixed BMS data is sent to CAN bus and displayed on LCD. |
 | `NO_CAPACITY_35F_EXTENSIONS` | disabled | If activated, supress sending of frame 0x35F for total capacity for SMA Sunny Island inverters over CAN. Saves 56 bytes program space. |
 | `NO_CAPACITY_379_EXTENSIONS` | disabled | If activated, supress sending of frame 0x379 for total capacity for Luxpower SNA inverters over CAN. Saves 24 bytes program space. |

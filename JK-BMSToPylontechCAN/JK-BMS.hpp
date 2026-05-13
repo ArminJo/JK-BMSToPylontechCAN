@@ -44,6 +44,9 @@
 
 #include "JK-BMS.h"
 #include "HexDump.hpp" // include sources for printBufferHex()
+#if !defined(NO_CAPACITY_INFO)
+#include "JK-BMS_CapacityInfo.h" // for fillCapacityInfo()
+#endif
 
 #define USE_SOFTWARE_SERIAL
 #if defined(USE_SOFTWARE_SERIAL)
@@ -386,6 +389,7 @@ void JK_BMS::printJKReplyFrameBuffer() {
     JK_INFO_PRINTLN(F("TRAILER:"));
     tBufferAddress += tRemainingDataLength;
     printBufferHex(tBufferAddress, JK_BMS_FRAME_TRAILER_LENGTH); // Trailer
+    Serial.println();
 }
 
 /*
@@ -797,6 +801,9 @@ void JK_BMS::fillJKComputedData() {
                 (uint16_t) (CellStatistics.BalancingCount / 30) % 60);
     }
 #endif // NO_CELL_STATISTICS
+#if !defined(NO_CAPACITY_INFO)
+    fillCapacityInfo();
+#endif
 #if defined(HANDLE_MULTIPLE_BMS)
     JKMultiBMSData.SumOfChargeOvercurrentProtectionAmpere += swap(JKAllReplyPointer->ChargeOvercurrentProtectionAmpere);
     JKMultiBMSData.SumOfDischargeOvercurrentProtectionAmpere += swap(JKAllReplyPointer->DischargeOvercurrentProtectionAmpere);
