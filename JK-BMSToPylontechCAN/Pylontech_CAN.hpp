@@ -8,7 +8,6 @@
  * https://www.skpang.co.uk/products/teensy-4-1-triple-can-board-with-240x240-ips-lcd
  *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -50,26 +49,6 @@ struct PylontechCANManufacturerFrameStruct35E PylontechCANManufacturerFrame35E;
 struct PylontechCANAliveFrame305Struct PylontechCANAliveFrame305;
 
 void modifyCANData(); // user function, which currently enables the function to reduce max current at high SOC level
-
-void fillAllCANData(JK_BMS *aJK_BMS_Ptr) {
-    PylontechCANBatteryLimitsFrame351.fillFrame(aJK_BMS_Ptr);
-    PylontechCANSohSocFrame355.fillFrame(aJK_BMS_Ptr);
-    PylontechCANBatteryRequestFrame35C.fillFrame(aJK_BMS_Ptr);
-    PylontechCANErrorsWarningsFrame359.fillFrame(aJK_BMS_Ptr);
-    PylontechCANCurrentValuesFrame356.fillFrame(aJK_BMS_Ptr);
-#if defined(CAPACITY_35F_EXTENSIONS)
-    PylontechCANSMACapacityFrame35F.fillFrame(aJK_BMS_Ptr);
-#endif
-#if defined(CAPACITY_379_EXTENSIONS)
-    PylontechCANLuxpowerCapacityFrame379.fillFrame(aJK_BMS_Ptr);
-#endif
-#if defined(BYD_LIMITS_373_EXTENSIONS)
-    BYDCANCellLimitsFrame373.fillFrame(aJK_BMS_Ptr);
-#endif
-#if defined(CAN_DATA_MODIFICATION)
-    modifyCANData();
-#endif
-}
 
 void sendCANFrame(struct CANFrameStruct *aPylontechCANFrame) {
     sendCANMessage(aPylontechCANFrame->CANFrameInfo.CANId, aPylontechCANFrame->CANFrameInfo.FrameLength,
@@ -144,19 +123,12 @@ void sendAllCANFrames(bool aDebugModeActive) {
 #endif
 }
 
+#if defined(CAN_DATA_MODIFICATION_TOP_CURRENT)
 /*
- * User defined function to modify CAN data sent to inverter.
- * Currently implemented is a function to reduce max current at high SOC level
+ * Function to modify CAN data sent to inverter.
+ * This function reduces max current at high SOC level.
  */
-#if !defined(MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT)
-#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
-#endif
-#if !defined(MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE)
-#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
-#endif
-
-#if !defined(USE_OWN_MODIFY_FUNCTION) && !defined(USE_CCCV_MODIFY_FUNCTION)
-void modifyCANData() {
+void modifyCANData_ReduceTopCurrent() {
     if (JK_BMS_1.JKAllReplyPointer->SOCPercent >= MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT) {
         /*
          * Reduce max current linear from 100% at MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD (80%) SOC
@@ -169,7 +141,24 @@ void modifyCANData() {
                 MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE);
     }
 }
-#elif defined(USE_CCCV_MODIFY_FUNCTION)
+#endif
+
+#if defined(CAN_DATA_MODIFICATION_TOP_SOC)
+/*
+ * Function to modify CAN data sent to inverter.
+ * Modify the SOC so that it is 100% when the first cell reaches its maximum voltage.
+ */
+void modifyCANData_TopSOC() {
+    if (JK_BMS_1.JKAllReplyPointer->SOCPercent > ORIGINAL_SOC_THRESHOLD_PERCENT && MaximumCellMillivoltAtSOC90 > 0) {
+        // 101 is to avoid reaching the overvoltage value
+        PylontechCANSohSocFrame355.FrameData.SOCPercent = map(JK_BMS_1.JKConvertedCellInfo.MaximumCellMillivolt,
+                MaximumCellMillivoltAtSOC90, swap(JK_BMS_1.JKAllReplyPointer->CellOvervoltageProtectionMillivolt),
+                ORIGINAL_SOC_THRESHOLD_PERCENT, 100);
+    }
+}
+#endif
+
+#if defined(CAN_DATA_MODIFICATION_CCCV)
 /*
  * Example from https://github.com/paulsteigel/JK-BMSToPylontechCAN/blob/b96af8e2e39850211ca847f347a632ed57e5ce4f/JK-BMSToPylontechCAN/Pylontech_CAN.hpp#L152
  */
@@ -352,13 +341,32 @@ uint8_t ReachChargeLimit() {
         return 2;
     }
 }
-#else
-/*
- * Put your own modification code here :-)
- */
-void modifyCANData() {
+#endif // defined(CAN_DATA_MODIFICATION_CCCV)
 
+void fillAllCANData(JK_BMS *aJK_BMS_Ptr) {
+    PylontechCANBatteryLimitsFrame351.fillFrame(aJK_BMS_Ptr);
+    PylontechCANSohSocFrame355.fillFrame(aJK_BMS_Ptr);
+    PylontechCANBatteryRequestFrame35C.fillFrame(aJK_BMS_Ptr);
+    PylontechCANErrorsWarningsFrame359.fillFrame(aJK_BMS_Ptr);
+    PylontechCANCurrentValuesFrame356.fillFrame(aJK_BMS_Ptr);
+#if defined(CAPACITY_35F_EXTENSIONS)
+    PylontechCANSMACapacityFrame35F.fillFrame(aJK_BMS_Ptr);
+#endif
+#if defined(CAPACITY_379_EXTENSIONS)
+    PylontechCANLuxpowerCapacityFrame379.fillFrame(aJK_BMS_Ptr);
+#endif
+#if defined(BYD_LIMITS_373_EXTENSIONS)
+    BYDCANCellLimitsFrame373.fillFrame(aJK_BMS_Ptr);
+#endif
+#if defined(CAN_DATA_MODIFICATION_TOP_SOC)
+    modifyCANData_TopSOC();
+#endif
+#if defined(CAN_DATA_MODIFICATION_TOP_CURRENT)
+    modifyCANData_ReduceTopCurrent();
+#endif
+#if defined(CAN_DATA_MODIFICATION_CCCV)
+    modifyCANData_ReduceTopCurrent();
+#endif
 }
-#endif // !defined(USE_OWN_MODIFY_FUNCTION) && !defined(USE_CCCV_MODIFY_FUNCTION)
 
 #endif // _PYLONTECH_CAN_HPP

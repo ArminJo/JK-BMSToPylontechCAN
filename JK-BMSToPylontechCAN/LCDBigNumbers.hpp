@@ -4,7 +4,6 @@
  *  Arduino library to write big numbers on a 1602 or 2004 LCD.
  *
  *  Copyright (C) 2022-2026  Armin Joachimsmeyer
- *  armin.joachimsmeyer@gmail.com
  *
  *  This file is part of LCDBigNumbers https://github.com/ArminJo/LCDBigNumbers.
  *

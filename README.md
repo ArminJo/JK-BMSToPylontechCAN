@@ -107,11 +107,11 @@ The same (raw) data without ESR correction of voltage.
 | ![Alarm page undervoltage](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_Undervoltage.png) | ![Alarm page overtemperature](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/AlarmPage_MosFetOvertemperature.png) |
 | Cell Info page with maximum and minimum indicators | Cell Info page with SHOW_SHORT_CELL_VOLTAGES aktivated:<br/>- (Cell voltages - 3 V)<br/>- SOC, current in A, state of enabled functions and difference between minimum / empty and current battery voltage in last column |
 | ![Cell Info page long](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage.png) | ![Cell Info page short](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CellInfoPage_shortVoltages.png) |
-| Maximum Cell Statistics page with total balancing time in right rows | Minimum Cell Statistics page <br/>The maximum and minimum displays are toggled every 8 seconds. |
+| Maximum Cell Statistics page with total balancing time in right rows | Minimum Cell Statistics page<br/>The maximum and minimum displays are toggled every 8 seconds |
 | ![Max page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMaxPage.png) | ![Min page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/StatisticsMinPage.png)  |
 | CAN Info page |  |
 | ![CAN Info page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CANInfoPage.png) |  |
-| Capacity Info page (CAN Info page + 2 buttton presses) percentages | Capacity Info page voltages |
+| Capacity Info page (CAN Info page + 2 buttton presses) percentages | Capacity Info page voltages<br/>Current capacity change in first row if delta-SOC > 1<br/>Historic capacity changes with delta-SOC > 40 in row 2 to 4 |
 | ![Percentage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsPercentagePage.png) | ![Voltage page](https://github.com/ArminJo/JK-BMSToPylontechCAN/blob/main/pictures/CapacityStatisticsVoltagePage.png)  |
 
 <br/>

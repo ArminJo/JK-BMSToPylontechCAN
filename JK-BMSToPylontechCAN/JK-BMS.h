@@ -12,7 +12,6 @@
  *  6. CellStatisticsStruct - for minimum and maximum cell voltages statistics.
  *
  *  Copyright (C) 2023-2026  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -88,6 +87,9 @@ struct JKConvertedCellInfoStruct {
     uint16_t DeltaCellMillivolt;    // Difference between MinimumVoltagCell and MaximumVoltagCell
     uint16_t RoundedAverageCellMillivolt;
 };
+#if defined(CAN_DATA_MODIFICATION_TOP_SOC)
+uint16_t MaximumCellMillivoltAtSOC90 = 0;
+#endif
 
 #define VOLTAGE_IS_BETWEEN_MINIMUM_AND_MAXIMUM  0
 #define VOLTAGE_IS_MINIMUM                      1

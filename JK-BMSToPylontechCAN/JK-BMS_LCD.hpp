@@ -4,7 +4,6 @@
  *  Contains LCD related variables and functions
  *
  *  Copyright (C) 2023-2025  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -164,7 +163,10 @@ void doLCDBacklightTimeoutHandling() {
     if (sFrameCounterForLCDTAutoOff == (DISPLAY_ON_TIME_SECONDS * 1000U) / MILLISECONDS_BETWEEN_JK_DATA_FRAME_REQUESTS) {
         myLCD.noBacklight(); // switch off backlight after 5 minutes
         sSerialLCDIsSwitchedOff = true;
-        if (sLCDDisplayPage != PageSOCHistory) { // Do not interfere with plotter output
+#    if !defined(NO_SOC_HISTORY)
+        if (sLCDDisplayPage < PageSOCHistory) // Do not interfere with plotter output
+#    endif
+        {
             JK_INFO_PRINTLN(F("Switch off LCD display, triggered by LCD \"ON\" timeout reached."));
         }
     }
@@ -480,16 +482,18 @@ void printCapacityInfoOnLCD() {
             if (JKComputedCapacity[i].Capacity != 0) {
                 myLCD.setCursor(0, i);
                 if (tDisplayDeltaVoltages) {
+                    // Voltage
                     snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%1u.%1uV->%1u.%1uV %3u %3uAh"),
                             JKComputedCapacity[i].Start100MilliVoltToEmpty / 10,
                             JKComputedCapacity[i].Start100MilliVoltToEmpty % 10, JKComputedCapacity[i].End100MilliVoltToEmpty / 10,
                             JKComputedCapacity[i].End100MilliVoltToEmpty % 10, JKComputedCapacity[i].Capacity,
                             JKComputedCapacity[i].TotalCapacity);
                 } else {
+                    // Percentage
                     snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("%2d%%->%2d%% "), JKComputedCapacity[i].StartSOCPercent,
                             JKComputedCapacity[i].EndSOCPercent);
                     myLCD.print(sStringBuffer);
-                    // If we have 100% as SOC value, we end up one column later, so we start at fixed position here
+                    // If we have 100% as SOC value above, we end up one column later, so we start at fixed position here
                     myLCD.setCursor(9, i);
                     snprintf_P(sStringBuffer, LCD_COLUMNS + 1, PSTR("  %3u %3uAh"), JKComputedCapacity[i].Capacity,
                             JKComputedCapacity[i].TotalCapacity);
@@ -634,6 +638,29 @@ void printCANInfoOnLCD() {
             /*
              * Caption in row 1 and "No errors / warnings" in row 2
              */
+#if defined(CAN_DATA_MODIFICATION_TOP_SOC)
+            if (PylontechCANSohSocFrame355.FrameData.SOCPercent != JK_BMS_1.JKAllReplyPointer->SOCPercent) {
+                myLCD.print(F("CAN INFO"));
+                if (JK_BMS_1.JKAllReplyPointer->SOCPercent < 100) {
+                    myLCD.print(' ');
+                }
+            } else {
+                myLCD.print(F(" -CAN INFO- "));
+            }
+
+            if (PylontechCANSohSocFrame355.FrameData.SOCPercent < 100) {
+                myLCD.print(' ');
+            }
+
+            myLCD.print(F("SOC="));
+            myLCD.print(PylontechCANSohSocFrame355.FrameData.SOCPercent);
+            if (PylontechCANSohSocFrame355.FrameData.SOCPercent != JK_BMS_1.JKAllReplyPointer->SOCPercent) {
+                myLCD.print('|');
+                myLCD.print(JK_BMS_1.JKAllReplyPointer->SOCPercent);
+            }
+            myLCD.print('%');
+
+#else
             myLCD.print(F(" -CAN INFO- "));
             if (PylontechCANSohSocFrame355.FrameData.SOCPercent < 100) {
                 myLCD.print(' ');
@@ -641,6 +668,8 @@ void printCANInfoOnLCD() {
             myLCD.print(F("SOC="));
             myLCD.print(PylontechCANSohSocFrame355.FrameData.SOCPercent);
             myLCD.print('%');
+#endif
+
             myLCD.setCursor(0, 1);
             myLCD.print(F("No errors / warnings"));
         } else {

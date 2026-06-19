@@ -12,7 +12,6 @@
  *  6. CellStatisticsStruct - for minimum and maximum cell voltages statistics.
  *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -46,6 +45,10 @@
 #include "HexDump.hpp" // include sources for printBufferHex()
 #if !defined(NO_CAPACITY_INFO)
 #include "JK-BMS_CapacityInfo.h" // for fillCapacityInfo()
+#endif
+
+#if !defined(USE_NO_LCD)
+#include "JK-BMS_LCD.h"
 #endif
 
 #define USE_SOFTWARE_SERIAL
@@ -572,6 +575,11 @@ void JK_BMS::fillJKConvertedCellInfo() {
     }
     JKConvertedCellInfo.MinimumCellMillivolt = tMinimumMillivolt;
     JKConvertedCellInfo.MaximumCellMillivolt = tMaximumMillivolt;
+#if defined(CAN_DATA_MODIFICATION_TOP_SOC)
+    if(JKAllReplyPointer->SOCPercent == ORIGINAL_SOC_THRESHOLD_PERCENT) {
+        MaximumCellMillivoltAtSOC90 = tMaximumMillivolt;
+    }
+#endif
     JKConvertedCellInfo.DeltaCellMillivolt = tMaximumMillivolt - tMinimumMillivolt;
     JKConvertedCellInfo.RoundedAverageCellMillivolt = (tMillivoltSum + (tNumberOfCellInfo / 2)) / tNumberOfCellInfo;
 
@@ -1104,6 +1112,12 @@ extern const char sCSVCaption[] PROGMEM;
  * All other data are used unconverted and are therefore printed by swap() functions.
  */
 void JK_BMS::printJKDynamicInfo() {
+# if !defined(NO_SOC_HISTORY) && !defined(USE_NO_LCD)
+    if (sLCDDisplayPage >= PageSOCHistory) { // Do not interfere with plotter output
+        return;
+    }
+#endif
+
     JKReplyStruct *tJKAllReplyPointer = JKAllReplyPointer;
 
 #if defined(ENABLE_MONITORING)

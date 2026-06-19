@@ -14,7 +14,6 @@
  *  The macros INT0_PIN and INT1_PIN are set after the include.
  *
  *  Copyright (C) 2018-2024  Armin Joachimsmeyer
- *  armin.joachimsmeyer@gmail.com
  *
  *  This file is part of EasyButtonAtInt01 https://github.com/ArminJo/EasyButtonAtInt01.
  *

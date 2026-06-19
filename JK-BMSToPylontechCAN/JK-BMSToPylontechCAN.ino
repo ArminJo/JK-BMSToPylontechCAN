@@ -50,7 +50,6 @@
  *  Available as Wokwi example https://wokwi.com/projects/371657348012321793
  *
  *  Copyright (C) 2023-2026  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -101,7 +100,7 @@
 #include <Arduino.h>
 
 // For full revision history see https://github.com/ArminJo/JK-BMSToPylontechCAN?tab=readme-ov-file#revision-history
-#define VERSION_EXAMPLE "4.0.0"
+#define VERSION_EXAMPLE "4.1.0"
 
 //#define HANDLE_MULTIPLE_BMS
 #if defined(HANDLE_MULTIPLE_BMS)
@@ -117,14 +116,26 @@
 /*
  * Macros for CAN data modifications
  */
-//#define CAN_DATA_MODIFICATION         // Currently enables the function to reduce max current at high SOC level
-//#define USE_CCCV_MODIFY_FUNCTION      // Changes modification to CCCV method by Ngoc: https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/31
-//#define USE_OWN_MODIFY_FUNCTION       // Use (currently empty) function which must be filled in at bottom of Pylontech_CAN.hpp
+//#define CAN_DATA_MODIFICATION_TOP_CURRENT // Enables the function to reduce max current at high SOC level
+//#define CAN_DATA_MODIFICATION_TOP_SOC     // Enables the function to reduce max current at high SOC level
+//#define CAN_DATA_MODIFICATION_CCCV        // Enables CCCV method by Ngoc: https://github.com/ArminJo/JK-BMSToPylontechCAN/discussions/31
 /*
- * Values for standard CAN data modification
+ * Values for CAN data modification
  */
-//#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
-//#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
+#if defined(CAN_DATA_MODIFICATION_TOP_SOC)
+#  if !defined(ORIGINAL_SOC_THRESHOLD_PERCENT)
+#define ORIGINAL_SOC_THRESHOLD_PERCENT       90  // Modification of SOC above this value
+#  endif
+#endif
+
+#if defined(CAN_DATA_MODIFICATION_TOP_CURRENT)
+#  if !defined(MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT)
+#define MAX_CURRENT_MODIFICATION_LOWER_SOC_THRESHOLD_PERCENT        80  // Start SOC for linear reducing maximum current. Default 80
+#  endif
+#  if !defined(MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE)
+#define MAX_CURRENT_MODIFICATION_MIN_CURRENT_TENTHS_OF_AMPERE       50  // Value of current at 100 % SOC. Units are 100 mA! Default 50
+#  endif
+#endif
 //#define DEBUG                 // This enables debug output for all files - only for development
 #if defined(DEBUG)
 #define NO_CELL_STATISTICS // to save program space required for debug
@@ -358,6 +369,10 @@ uint32_t sFirstBeepMillis = 0;      // Time of first beep used for beep timeout
 uint8_t sAlarmOrTimeoutBeepActive = ALARM_OR_TIMEOUT_NOT_ACTIVE; // If 0, we do an error beep at each end of the loop until beep timeout
 
 #define MILLIS_IN_ONE_SECOND 1000
+// Get absolute value of difference of two unsigned values
+#if !defined(uintDifferenceAbs)
+#define uintDifferenceAbs(a, b) ((a >= b) ? a - b : b - a)
+#endif
 
 /*
  * Function declarations
@@ -637,7 +652,8 @@ delay(4000); // To be able to connect Serial monitor after reset or power up and
      */
 #if defined(USE_SERIAL_2004_LCD)
     Serial.println(F("Page switching button is at pin " STR(PAGE_BUTTON_PIN)));
-    Serial.println(F("At long press, CAN Info page is entered and additional debug data is printed as long as button is pressed"));
+    // Use underscores in order not to interfere with plotter output
+    Serial.println(F("At long press, CAN_Info_page is entered and additional_debug_data is printed as_long_as_button_is_pressed"));
 #else
     Serial.println(F("Debug button is at pin " STR(PAGE_BUTTON_PIN)));
     Serial.println(F("Additional debug data is printed as long as button is pressed"));
@@ -1063,7 +1079,7 @@ void handleFrameReceiveTimeout() {
 void printReceivedDataLCD() {
 #if defined(USE_SERIAL_2004_LCD)
 # if !defined(NO_SOC_HISTORY)
-    if (sLCDDisplayPage != PageSOCHistory) { // Do not interfere with plotter output
+    if (sLCDDisplayPage < PageSOCHistory) { // Do not interfere with plotter output
         sCurrentBMS->printJKDynamicInfo(); // Prints newline before SOC[%]=
     }
 # endif

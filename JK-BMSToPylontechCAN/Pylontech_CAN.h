@@ -8,7 +8,6 @@
  * published at https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication
  *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *

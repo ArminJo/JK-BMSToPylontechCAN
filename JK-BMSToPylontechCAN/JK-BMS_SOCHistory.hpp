@@ -11,7 +11,6 @@
  * If ESR + 1 or ESR - 1 deltas are at least 3 smaller than the current value, then the computation is run again with the ESR of the smaller value.
  *
  *  Copyright (C) 2024-2026  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -122,7 +121,8 @@ void updateCompleteEEPROMTo_FF() {
 
 void readBatteryESRfromEEPROM() {
     sBatteryESRMilliohm = eeprom_read_byte(&sBatteryESRMilliohm_EEPROM);
-    if (sBatteryESRMilliohm > 0x30) {
+    if (sBatteryESRMilliohm > 0x30 || sBatteryESRMilliohm < 2) {
+        // ESR cannot be smaller than 2 mOhm, because we use this formula: tCurrentSOCDataPoint.AverageAmpere * (sBatteryESRMilliohm - 1)
         sBatteryESRMilliohm = 10; // initial value, if EEPROM was not initialized
     }
 }
@@ -325,7 +325,7 @@ void readAndPrintSOCData() {
              */
             if (digitalReadFast(DISABLE_ESR_IN_GRAPH_OUTPUT_PIN) != LOW) {
                 /*
-                 * Compute sum of delta values for (sBatteryESRMilliohm + 1) - should be not less than
+                 * Compute sum of delta values for (sBatteryESRMilliohm + 1)
                  */
                 int16_t tVoltageDifferenceToEmpty50MillivoltPlus1 = tVoltageDifferenceToEmpty50Millivolt
                         - (((int16_t) tCurrentSOCDataPoint.AverageAmpere * (sBatteryESRMilliohm + 1)) / 50);
@@ -475,7 +475,8 @@ void readAndPrintSOCData() {
         if (tVoltToEmptyAccumulatedDeltasESR - 3 >= tVoltToEmptyAccumulatedDeltasESRPlus1) {
             setESRMilliohmAndPrintDeltas(tVoltToEmptyAccumulatedDeltasESR, tVoltToEmptyAccumulatedDeltasESRPlus1,
                     sBatteryESRMilliohm + 1);
-        } else if (tVoltToEmptyAccumulatedDeltasESR - 3 >= tVoltToEmptyAccumulatedDeltasESRMinus1) {
+        } else if (tVoltToEmptyAccumulatedDeltasESR - 3 >= tVoltToEmptyAccumulatedDeltasESRMinus1 && sBatteryESRMilliohm >= 2) {
+            // sBatteryESRMilliohm must be >= 2, because we use this formula above: tCurrentSOCDataPoint.AverageAmpere * (sBatteryESRMilliohm - 1)
             setESRMilliohmAndPrintDeltas(tVoltToEmptyAccumulatedDeltasESR, tVoltToEmptyAccumulatedDeltasESRMinus1,
                     sBatteryESRMilliohm - 1);
         } else {
@@ -666,10 +667,15 @@ void writeSOCDataToEEPROMIfSOCChanged() {
         SOCDataPointsInfo.NumberOfSamples = 0;
         SOCDataPointsInfo.lastWrittenBatteryCapacityAsAccumulator10Milliampere =
                 JK_BMS_1.JKComputedData.BatteryCapacityAsAccumulator10MilliAmpere;
-#if defined(ENABLE_MONITORING)
-        // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
-        JK_BMS_1.printCSVLine('#');
-        Serial.println();
+#if defined(ENABLE_MONITORING) && !defined(NO_SOC_HISTORY) && !defined(USE_NO_LCD)
+        if (sLCDDisplayPage < PageSOCHistory) // Do not interfere with plotter output
+#  if defined(ENABLE_MONITORING)
+        {
+            // Special monitoring output to generate capacity to cell voltage graphs e.g. with excel
+            JK_BMS_1.printCSVLine('#');
+            Serial.println();
+        }
+#  endif
 #endif
     }
 

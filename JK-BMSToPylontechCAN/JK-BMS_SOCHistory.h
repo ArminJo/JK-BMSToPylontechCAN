@@ -4,7 +4,6 @@
  * Definitions of the data structures used by JK-BMS_SOCHistory
  *
  *  Copyright (C) 2024-2026  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *

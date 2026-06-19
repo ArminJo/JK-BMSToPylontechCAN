@@ -4,7 +4,6 @@
  * Functions for computing the capacity deltas and their corresponding SOC and voltage deltas
  *
  *  Copyright (C) 2024-2026  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -62,11 +61,13 @@ void printComputedCapacity(uint8_t aCapacityArrayIndex) {
     }
 }
 
-
+/*
+ * Clearing of first array position is done at callers side
+ */
 void checkAndStoreCapacityComputationValues() {
     int8_t tDeltaSOC = JKComputedCapacity[0].StartSOCPercent - JKComputedCapacity[0].EndSOCPercent;
     if (tDeltaSOC <= -40 || 40 <= tDeltaSOC) {
-        // free first array index by moving values direction end
+        // free first array index by moving values to end of array
         memmove(&JKComputedCapacity[1], &JKComputedCapacity[0],
                 sizeof(JKComputedCapacity[0]) * (SIZE_OF_COMPUTED_CAPACITY_ARRAY - 1));
 
@@ -81,12 +82,13 @@ void checkAndStoreCapacityComputationValues() {
  * Compute total capacity based on current and SOC
  *
  * If state is idle and current > 1 A: If current direction is from battery, start discharge computation else start charge computation.
- * If current direction is 5 times wrong, stop computation.
+ * If current direction has changed for 5 times, stop computation.
  * If SOC delta between start and end > 40% store value to array.
+ * => if we have some "small" changes, they will not be stored!
  */
 void fillCapacityInfo() {
     auto tCurrentSOCPercent = JK_BMS_1.JKAllReplyPointer->SOCPercent;
-    auto tBattery10MilliAmpere = JK_BMS_1.JKComputedData.Battery10MilliAmpere;
+    auto tBattery10MilliAmpere = JK_BMS_1.JKComputedData.Battery10MilliAmpere; // int16_t
 
     /*
      * Total capacity computation
@@ -111,12 +113,13 @@ void fillCapacityInfo() {
             // Convert discharge current
             tBattery10MilliAmpere = -tBattery10MilliAmpere;
         }
-        // Add capacity, even the first value with wrong direction
+        // Add to capacity, even the negative values with wrong direction. They must be counted, if e.g. we only have 2 wrong directions in a row.
         sCapacityComputationInfo.Accumulator10Milliampere += tBattery10MilliAmpere;
+
+        uint8_t tDeltaSOC = uintDifferenceAbs(JKComputedCapacity[0].StartSOCPercent, tCurrentSOCPercent);
         /*
-         * Write current data to array. If Capacity < 1, then values are not displayed
+         * If tDeltaSOC >= 1, then write current data to array position 0
          */
-        uint8_t tDeltaSOC = abs(JKComputedCapacity[0].StartSOCPercent - tCurrentSOCPercent);
         if (tDeltaSOC > 1) {
             JKComputedCapacity[0].EndSOCPercent = tCurrentSOCPercent;
             JKComputedCapacity[0].End100MilliVoltToEmpty = JK_BMS_1.JKComputedData.BatteryVoltageDifferenceToEmpty10Millivolt / 10;
@@ -136,6 +139,7 @@ void fillCapacityInfo() {
         }
         /*
          * Check for wrong current direction. 0 mA is no direction :-)
+         * tBattery10MilliAmpere is converted above to positive value for current direction
          */
         if (tBattery10MilliAmpere > 0) {
             sCapacityComputationInfo.WrongDirectionCount = 0;

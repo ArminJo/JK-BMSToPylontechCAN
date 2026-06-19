@@ -4,7 +4,6 @@
  *  Contains declarations for LCD related variables and functions
  *
  *  Copyright (C) 2023-2024  Armin Joachimsmeyer
- *  Email: armin.joachimsmeyer@gmail.com
  *
  *  This file is part of ArduinoUtils https://github.com/ArminJo/JK-BMSToPylontechCAN.
  *
@@ -81,6 +80,7 @@ typedef enum {
 #endif
     DummyPageWrapAround2
 } sPageNummberEnum;
+extern sPageNummberEnum sLCDDisplayPage;
 #define JK_BMS_START_PAGE   PageBigInfo
 
 #define CELL_STATISTICS_COUNTER_MASK 0x04 // must be a multiple of 2 and determines how often one page (min or max) is displayed.

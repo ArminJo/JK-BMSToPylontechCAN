@@ -16,7 +16,6 @@
  *  EasyButton Button0AtPin2(true);
  *
  *  Copyright (C) 2018-2026  Armin Joachimsmeyer
- *  armin.joachimsmeyer@gmail.com
  *
  *  This file is part of EasyButtonAtInt01 https://github.com/ArminJo/EasyButtonAtInt01.
  *
